@@ -72,6 +72,17 @@ def get_trading_days(conn: sqlite3.Connection, calendar_id: str) -> list[date]:
     return [date.fromisoformat(row["session_date"]) for row in rows]
 
 
+def is_trading_day(conn: sqlite3.Connection, calendar_id: str, session_date: date) -> bool:
+    """True only if `session_date` has a TradingSession row for `calendar_id`
+    marked as a trading day. An unpopulated date is treated as non-trading
+    (safe default: skip rather than guess)."""
+    row = conn.execute(
+        "SELECT is_trading_day FROM TradingSession WHERE calendar_id = ? AND session_date = ?",
+        (calendar_id, session_date.isoformat()),
+    ).fetchone()
+    return row is not None and bool(row["is_trading_day"])
+
+
 def insert_price_bar(conn: sqlite3.Connection, bar: PriceBar) -> None:
     if not (bar.open.currency == bar.high.currency == bar.low.currency == bar.close.currency):
         raise ValueError("PriceBar OHLC currencies must match")

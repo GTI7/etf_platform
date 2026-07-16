@@ -11,6 +11,7 @@ from core.market_data.persistence.repository import (
     insert_calendar,
     insert_etf,
     insert_trading_session,
+    is_trading_day,
 )
 
 
@@ -85,3 +86,42 @@ def test_etf_references_calendar(conn: sqlite3.Connection) -> None:
         created_at=datetime.now(timezone.utc),
     )
     insert_etf(conn, etf)  # does not raise
+
+
+def test_is_trading_day_true_for_trading_session(conn: sqlite3.Connection) -> None:
+    calendar_id = "XNYS"
+    insert_calendar(conn, _make_calendar(calendar_id))
+    insert_trading_session(
+        conn,
+        TradingSession(
+            calendar_id=calendar_id,
+            session_date=date(2026, 7, 13),
+            is_trading_day=True,
+            close_time_utc=None,
+        ),
+    )
+
+    assert is_trading_day(conn, calendar_id, date(2026, 7, 13)) is True
+
+
+def test_is_trading_day_false_for_non_trading_session(conn: sqlite3.Connection) -> None:
+    calendar_id = "XNYS"
+    insert_calendar(conn, _make_calendar(calendar_id))
+    insert_trading_session(
+        conn,
+        TradingSession(
+            calendar_id=calendar_id,
+            session_date=date(2026, 7, 14),
+            is_trading_day=False,
+            close_time_utc=None,
+        ),
+    )
+
+    assert is_trading_day(conn, calendar_id, date(2026, 7, 14)) is False
+
+
+def test_is_trading_day_false_for_unpopulated_date(conn: sqlite3.Connection) -> None:
+    calendar_id = "XNYS"
+    insert_calendar(conn, _make_calendar(calendar_id))
+
+    assert is_trading_day(conn, calendar_id, date(2026, 7, 15)) is False

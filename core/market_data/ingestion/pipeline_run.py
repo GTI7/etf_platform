@@ -46,8 +46,12 @@ def run_pipeline(
     try:
         yield ingestion_run_id
     except Exception as exc:
-        # Single transaction: if this fails partway, the run stays exactly
-        # as it was before this block (still 'running'), never half-updated.
+        # The pipeline body may have made partial, uncommitted writes (e.g.
+        # some but not all PriceBar rows) before failing. Discard those
+        # first, so a 'failed' run can never coexist with partial data from
+        # the same attempt -- then record the failure as its own,
+        # deliberately separate, committed transaction.
+        conn.rollback()
         with conn:
             complete_ingestion_run(
                 conn, ingestion_run_id, IngestionStatus.FAILED, clock.now(), error_message=str(exc)
