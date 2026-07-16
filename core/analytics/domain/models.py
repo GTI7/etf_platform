@@ -48,6 +48,29 @@ def serialize_parameters(parameters: dict[str, object]) -> str:
     return json.dumps(parameters, sort_keys=True)
 
 
+def _validate_canonical_parameters(parameters: str) -> None:
+    """Reject a parameters string that isn't exactly what
+    serialize_parameters() would have produced.
+
+    This is what makes UNIQUE(name, version, parameters) actually mean
+    what it says: without it, two logically identical parameter dicts
+    could serialize differently (e.g. different key order) and silently
+    bypass the uniqueness constraint. Enforced at construction, the same
+    way Money validates its own invariants in __post_init__.
+    """
+    if not isinstance(parameters, str):
+        raise TypeError(f"parameters must be a str, got {type(parameters).__name__}")
+    try:
+        parsed = json.loads(parameters)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"parameters is not valid JSON: {parameters!r}") from exc
+    if serialize_parameters(parsed) != parameters:
+        raise ValueError(
+            "parameters must be built with serialize_parameters() "
+            f"(canonical, sort_keys=True form); got {parameters!r}"
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class IndicatorDefinition:
     indicator_definition_id: IndicatorDefinitionId
@@ -55,6 +78,9 @@ class IndicatorDefinition:
     version: int
     parameters: str  # build with serialize_parameters(), never json.dumps() directly
     created_at: datetime
+
+    def __post_init__(self) -> None:
+        _validate_canonical_parameters(self.parameters)
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,6 +112,9 @@ class ScoringProfile:
     version: int
     parameters: str  # build with serialize_parameters(), never json.dumps() directly
     created_at: datetime
+
+    def __post_init__(self) -> None:
+        _validate_canonical_parameters(self.parameters)
 
 
 @dataclass(frozen=True, slots=True)

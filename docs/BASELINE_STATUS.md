@@ -8,10 +8,14 @@ behind individual decisions referenced here.
 
 ## Version / state
 
-**Baseline v1.0.0 — architecture frozen** for its current evidenced scope.
-Recommended git tag: `analytics-engine-baseline-v1.0.0` (see Release
-Recommendation; tagging is a follow-up action, not yet performed as of
-this document).
+**Baseline v0.4.0 — architecture frozen** for its current evidenced scope,
+tagged and committed (superseding this document's earlier draft reference
+to a `v1.0.0`/`analytics-engine-baseline-v1.0.0` naming that was not, in
+the end, how the repository's existing `v0.x.0` tag convention was
+followed). **v0.4.1** is a maintenance-only release on top of it: two
+hardening fixes (explicit transaction configuration, enforced parameter
+canonicalization — see Architectural guarantees below), no architecture
+change, no new capability.
 
 ## Completed phases
 
@@ -62,7 +66,9 @@ no entry point, CLI, API, or scheduler anywhere in the repository.
 
 **Repository responsibility.** Repositories execute SQL and nothing else — they do not commit, and they do not contain business rules (sorting, ranking, or validation logic stays in the domain/orchestration layers). Transaction ownership belongs to orchestration layers (`run_pipeline` and its callers), never to the repository functions themselves.
 
-**Versioning discipline.** A change to a calculation's logic or parameters creates a new `IndicatorDefinition` version or a new `ScoringProfile` version. Historical meaning is never mutated — an existing version's data always means what it meant when it was computed.
+**Explicit transaction configuration (v0.4.1).** Every connection is opened with `isolation_level=""` explicitly (`core/market_data/persistence/database.py`) — behaviorally identical to sqlite3's own default, but now a stated, tested requirement rather than an implicit one. All of the above transactional guarantees are load-bearing on this specific mode; it is no longer possible to lose track of that dependency by reading the code alone.
+
+**Versioning discipline.** A change to a calculation's logic or parameters creates a new `IndicatorDefinition` version or a new `ScoringProfile` version. Historical meaning is never mutated — an existing version's data always means what it meant when it was computed. Since v0.4.1, `IndicatorDefinition.parameters` and `ScoringProfile.parameters` are validated at construction (`__post_init__`) to be exactly the canonical, sort-keys form `serialize_parameters()` produces — not just built that way by convention. Malformed JSON or a non-canonical (but validly parseable) serialization is rejected immediately with `ValueError`, the same pattern `Money` already used for its own invariants.
 
 **Immutable history.** `PriceBar`, `IndicatorValue`, `Score`, and `DimensionScore` are insert-only. This is enforced by SQLite `BEFORE UPDATE`/`BEFORE DELETE` triggers, not just by convention or code discipline.
 
@@ -107,7 +113,7 @@ not before, and not more than the trigger warrants:
 - Two pre-existing Phase 0 guard clauses remain uncovered by any test: `insert_price_bar`'s OHLC-currency-mismatch check and `complete_ingestion_run`'s terminal-status check (`core/market_data/persistence/repository.py:105,193`). Neither is a defect; both are defensive code paths no test has exercised.
 - `Money.__le__`/`__gt__` are implemented but not directly exercised by any test (`core/shared/money.py:48-53`) — `__lt__`/`__ge__`/`__eq__` are, and all four comparisons share one implementation pattern, but this is an honest gap, not an assumption.
 - `migrations.py`'s already-applied-migration skip branch is never exercised, since every test starts from a fresh, unmigrated database.
-- Overall coverage: 123/123 tests passing, 99% line coverage across `core/` (573/580 lines), with every line in every Phase 1-5 module added or extended during this project at 100%.
+- Overall coverage (as of v0.4.1): 133/133 tests passing, with every line in every Phase 1-5 module added or extended during this project, plus both v0.4.1 hardening changes, at 100%.
 - None of the above are introduced by, or specific to, Phase 0-5 of this project — all predate or are orthogonal to this baseline's scope, and none are hidden here.
 
 ## Recommended next action
