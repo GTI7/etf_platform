@@ -38,6 +38,23 @@ def insert_etf(conn: sqlite3.Connection, etf: ETF) -> None:
     )
 
 
+def get_etf(conn: sqlite3.Connection, etf_id: str) -> ETF | None:
+    row = conn.execute(
+        "SELECT etf_id, ticker, name, currency, calendar_id, created_at FROM ETF WHERE etf_id = ?",
+        (etf_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    return ETF(
+        etf_id=row["etf_id"],
+        ticker=row["ticker"],
+        name=row["name"],
+        currency=row["currency"],
+        calendar_id=row["calendar_id"],
+        created_at=datetime.fromisoformat(row["created_at"]),
+    )
+
+
 def insert_calendar(conn: sqlite3.Connection, calendar: Calendar) -> None:
     conn.execute(
         "INSERT INTO Calendar (calendar_id, name, exchange, timezone) VALUES (?, ?, ?, ?)",

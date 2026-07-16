@@ -4,15 +4,19 @@ import json
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
+from enum import Enum
 from typing import NewType
 
 from core.domain.exceptions import DomainError
-from core.shared.ids import ETFId
+from core.shared.ids import ETFId, ScoreId
 
 # Defined locally rather than in core/shared/ids.py: these identify
-# analytics-only entities and have no reuse outside this package.
+# analytics-only entities and have no reuse outside this package. ScoreId
+# itself is NOT defined here -- it was already reserved in
+# core/shared/ids.py since Phase 0, and Score is simply its first user.
 IndicatorDefinitionId = NewType("IndicatorDefinitionId", str)
 IndicatorValueId = NewType("IndicatorValueId", str)
+ScoringProfileId = NewType("ScoringProfileId", str)
 
 
 class InsufficientPriceHistoryError(DomainError):
@@ -25,11 +29,20 @@ class InsufficientPriceHistoryError(DomainError):
     produce a shorter, mislabeled window."""
 
 
+class MissingIndicatorValueError(DomainError):
+    """Raised when a ScoringProfile requires an IndicatorValue (for a given
+    ETF, session, indicator name and version) that has not been computed
+    yet. Same treatment as InsufficientPriceHistoryError: fail loudly
+    inside the pipeline run rather than silently producing a partial or
+    default score."""
+
+
 def serialize_parameters(parameters: dict[str, object]) -> str:
-    """Canonical JSON serialization for IndicatorDefinition.parameters.
+    """Canonical JSON serialization for parameters columns
+    (IndicatorDefinition.parameters, ScoringProfile.parameters).
 
     Always sort_keys=True: two logically identical parameter dicts must
-    always produce the same string, or the UNIQUE(name, version,
+    always produce the same string, or a UNIQUE(name, version,
     parameters) constraint silently stops meaning what it says.
     """
     return json.dumps(parameters, sort_keys=True)
@@ -50,5 +63,44 @@ class IndicatorValue:
     indicator_definition_id: IndicatorDefinitionId
     etf_id: ETFId
     session_date: date
+    value: Decimal
+    computed_at: datetime
+
+
+class Dimension(str, Enum):
+    """The scoring dimensions this reference implementation supports.
+
+    Deliberately a minimal placeholder (two values) proving the scoring
+    engine mechanism -- not a real dimension taxonomy. Adding real
+    dimensions later is a pure data change (new enum members + a migration
+    updating the CHECK constraint), not an architectural one."""
+
+    MOMENTUM = "MOMENTUM"
+    VALUE = "VALUE"
+
+
+@dataclass(frozen=True, slots=True)
+class ScoringProfile:
+    scoring_profile_id: ScoringProfileId
+    name: str
+    version: int
+    parameters: str  # build with serialize_parameters(), never json.dumps() directly
+    created_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class Score:
+    score_id: ScoreId
+    etf_id: ETFId
+    scoring_profile_id: ScoringProfileId
+    session_date: date
+    overall_score: Decimal
+    computed_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class DimensionScore:
+    score_id: ScoreId
+    dimension: Dimension
     value: Decimal
     computed_at: datetime

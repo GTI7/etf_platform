@@ -11,7 +11,14 @@ import sqlite3
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
-from core.analytics.domain.models import IndicatorDefinition, IndicatorValue
+from core.analytics.domain.models import (
+    Dimension,
+    DimensionScore,
+    IndicatorDefinition,
+    IndicatorValue,
+    Score,
+    ScoringProfile,
+)
 
 
 def _iso(dt: datetime) -> str:
@@ -104,6 +111,148 @@ def get_indicator_values(
             indicator_definition_id=row["indicator_definition_id"],
             etf_id=row["etf_id"],
             session_date=date.fromisoformat(row["session_date"]),
+            value=Decimal(row["value"]),
+            computed_at=datetime.fromisoformat(row["computed_at"]),
+        )
+        for row in rows
+    ]
+
+
+def insert_scoring_profile(conn: sqlite3.Connection, profile: ScoringProfile) -> None:
+    conn.execute(
+        """
+        INSERT INTO ScoringProfile (
+            scoring_profile_id, name, version, parameters, created_at
+        ) VALUES (?, ?, ?, ?, ?)
+        """,
+        (
+            profile.scoring_profile_id,
+            profile.name,
+            profile.version,
+            profile.parameters,
+            _iso(profile.created_at),
+        ),
+    )
+
+
+def get_scoring_profile(conn: sqlite3.Connection, name: str, version: int) -> ScoringProfile | None:
+    row = conn.execute(
+        """
+        SELECT scoring_profile_id, name, version, parameters, created_at
+        FROM ScoringProfile
+        WHERE name = ? AND version = ?
+        """,
+        (name, version),
+    ).fetchone()
+    if row is None:
+        return None
+    return ScoringProfile(
+        scoring_profile_id=row["scoring_profile_id"],
+        name=row["name"],
+        version=row["version"],
+        parameters=row["parameters"],
+        created_at=datetime.fromisoformat(row["created_at"]),
+    )
+
+
+def get_score(
+    conn: sqlite3.Connection, etf_id: str, scoring_profile_id: str, session_date: date
+) -> Score | None:
+    row = conn.execute(
+        """
+        SELECT score_id, etf_id, scoring_profile_id, session_date, overall_score, computed_at
+        FROM Score
+        WHERE etf_id = ? AND scoring_profile_id = ? AND session_date = ?
+        """,
+        (etf_id, scoring_profile_id, session_date.isoformat()),
+    ).fetchone()
+    if row is None:
+        return None
+    return Score(
+        score_id=row["score_id"],
+        etf_id=row["etf_id"],
+        scoring_profile_id=row["scoring_profile_id"],
+        session_date=date.fromisoformat(row["session_date"]),
+        overall_score=Decimal(row["overall_score"]),
+        computed_at=datetime.fromisoformat(row["computed_at"]),
+    )
+
+
+def insert_score(conn: sqlite3.Connection, score: Score) -> None:
+    """Idempotent insert, as a defense-in-depth backstop: the primary
+    idempotency mechanism is the orchestration layer calling get_score()
+    before computing anything (see core/analytics/scoring_pipeline.py),
+    so this ON CONFLICT should only ever matter for a genuine race."""
+    conn.execute(
+        """
+        INSERT INTO Score (
+            score_id, etf_id, scoring_profile_id, session_date, overall_score, computed_at
+        ) VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT (etf_id, scoring_profile_id, session_date) DO NOTHING
+        """,
+        (
+            score.score_id,
+            score.etf_id,
+            score.scoring_profile_id,
+            score.session_date.isoformat(),
+            str(score.overall_score),
+            _iso(score.computed_at),
+        ),
+    )
+
+
+def insert_dimension_score(conn: sqlite3.Connection, dimension_score: DimensionScore) -> None:
+    conn.execute(
+        """
+        INSERT INTO DimensionScore (score_id, dimension, value, computed_at)
+        VALUES (?, ?, ?, ?)
+        """,
+        (
+            dimension_score.score_id,
+            dimension_score.dimension.value,
+            str(dimension_score.value),
+            _iso(dimension_score.computed_at),
+        ),
+    )
+
+
+def get_scores_for_session(
+    conn: sqlite3.Connection, scoring_profile_id: str, session_date: date
+) -> list[Score]:
+    """Every Score for the given profile and session, across all ETFs.
+
+    Fetch only -- no ORDER BY expressing rank. Ranking is a business rule
+    and belongs in core/analytics/domain/ranking.py, not in this query."""
+    rows = conn.execute(
+        """
+        SELECT score_id, etf_id, scoring_profile_id, session_date, overall_score, computed_at
+        FROM Score
+        WHERE scoring_profile_id = ? AND session_date = ?
+        """,
+        (scoring_profile_id, session_date.isoformat()),
+    ).fetchall()
+    return [
+        Score(
+            score_id=row["score_id"],
+            etf_id=row["etf_id"],
+            scoring_profile_id=row["scoring_profile_id"],
+            session_date=date.fromisoformat(row["session_date"]),
+            overall_score=Decimal(row["overall_score"]),
+            computed_at=datetime.fromisoformat(row["computed_at"]),
+        )
+        for row in rows
+    ]
+
+
+def get_dimension_scores(conn: sqlite3.Connection, score_id: str) -> list[DimensionScore]:
+    rows = conn.execute(
+        "SELECT score_id, dimension, value, computed_at FROM DimensionScore WHERE score_id = ?",
+        (score_id,),
+    ).fetchall()
+    return [
+        DimensionScore(
+            score_id=row["score_id"],
+            dimension=Dimension(row["dimension"]),
             value=Decimal(row["value"]),
             computed_at=datetime.fromisoformat(row["computed_at"]),
         )

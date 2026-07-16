@@ -15,3 +15,15 @@ def sma(prices: list[Decimal]) -> Decimal:
     if not prices:
         raise ValueError("sma() requires at least one price")
     return sum(prices, Decimal("0")) / Decimal(len(prices))
+
+
+def mean(values: list[Decimal]) -> Decimal:
+    """Arithmetic mean of the given values. Pure, no I/O.
+
+    Separate from sma(): sma is a price-window concept, this is the
+    general-purpose primitive used wherever a plain average of Decimals is
+    needed (e.g. combining dimension scores into an overall score).
+    """
+    if not values:
+        raise ValueError("mean() requires at least one value")
+    return sum(values, Decimal("0")) / Decimal(len(values))
