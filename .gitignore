@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+
+# Test / type-check caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+
+# Editors
+.idea/
+.vscode/
+
+# SQLite databases (never commit real or ephemeral data)
+*.sqlite
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal
