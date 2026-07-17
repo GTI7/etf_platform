@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 
@@ -25,6 +25,17 @@ class MissingScoreError(DomainError):
     None when absent), there is no meaningful analysis to return without
     it, so this fails loudly rather than returning None or a partial
     report."""
+
+
+class InvalidScreeningCriteriaError(DomainError):
+    """Raised when screen_etfs() is given criteria that cannot possibly be
+    evaluated given the other supplied parameters -- a caller
+    configuration error, not a valid "no matches" outcome. Currently:
+    criteria.max_drawdown is set but risk_definition_id is None, so no
+    candidate's max_drawdown could ever be resolved to check against it.
+    Raised before any database work, unlike the per-ETF fail-closed
+    exclusion screen_etfs() applies for individual candidates that lack
+    the data a criterion needs."""
 
 
 def _resolve_dimension_scores(conn: sqlite3.Connection, score_id: str) -> dict[Dimension, Decimal]:
@@ -228,3 +239,148 @@ def generate_etf_analysis_report(
         rank=rank,
         peer_count=len(ranked_peers),
     )
+
+
+@dataclass(frozen=True, slots=True)
+class ETFScreeningCriteria:
+    """Explicit, inspectable screening criteria -- every field maps to a
+    metric the system already computes and exposes on RankedETFReportEntry
+    (overall_score, dimension_scores, max_drawdown). No weighting, no
+    presets: an ETF either satisfies every supplied criterion or it
+    doesn't -- criteria are independent AND conditions, never combined
+    into a new score. This is not composite scoring.
+
+    All criteria are inclusive floors:
+    - min_overall_score: entry.overall_score >= minimum passes.
+    - min_dimension_scores: entry.dimension_scores[dimension] >= minimum
+      passes, per dimension. A dict, not one field per Dimension member,
+      so it generalizes over whatever Dimension currently has (or later
+      gains) without requiring a new field per dimension.
+    - max_drawdown: entry.max_drawdown >= criteria.max_drawdown passes.
+      E.g. criteria.max_drawdown = Decimal("-0.20") allows -0.10, -0.15,
+      -0.20, and rejects -0.25 (a worse decline). Requires
+      risk_definition_id to be supplied to screen_etfs() -- see
+      InvalidScreeningCriteriaError.
+
+    An unset field (None, or an empty dict) applies no constraint at all;
+    ETFScreeningCriteria() with every field left at its default matches
+    every candidate.
+    """
+
+    min_overall_score: Decimal | None = None
+    min_dimension_scores: dict[Dimension, Decimal] = field(default_factory=dict)
+    max_drawdown: Decimal | None = None
+
+
+def _satisfies_screening_criteria(
+    criteria: ETFScreeningCriteria,
+    overall_score: Decimal,
+    dimension_scores: dict[Dimension, Decimal],
+    max_drawdown: Decimal | None,
+) -> bool:
+    """Fail-closed: a criterion that references data this candidate
+    doesn't have (a missing dimension, an unresolved max_drawdown)
+    excludes the candidate -- an unverified criterion is never treated as
+    satisfied."""
+    if criteria.min_overall_score is not None and overall_score < criteria.min_overall_score:
+        return False
+    for dimension, minimum in criteria.min_dimension_scores.items():
+        if dimension not in dimension_scores or dimension_scores[dimension] < minimum:
+            return False
+    if criteria.max_drawdown is not None:
+        if max_drawdown is None or max_drawdown < criteria.max_drawdown:
+            return False
+    return True
+
+
+def screen_etfs(
+    conn: sqlite3.Connection,
+    scoring_profile_id: str,
+    session_date: date,
+    candidate_etf_ids: list[str] | None = None,
+    criteria: ETFScreeningCriteria | None = None,
+    risk_definition_id: str | None = None,
+) -> list[RankedETFReportEntry]:
+    """Rank the candidates (or every ETF with a Score for this profile
+    and session, if candidate_etf_ids is omitted) that satisfy `criteria`,
+    ranked locally among just the survivors -- not the full universe.
+
+    screen_etfs(conn, profile_id, date) with every other parameter
+    omitted is behaviourally equivalent to
+    generate_ranked_etf_report(conn, profile_id, date): no candidate
+    restriction, no filtering, same ranking.
+
+    A screening tool, not a recommendation engine: criteria are always
+    supplied by the caller. Omitting criteria means "no filtering," never
+    "apply built-in default criteria" -- the system never substitutes its
+    own opinion of what's interesting.
+
+    candidate_etf_ids restricts the pool before anything else runs. An id
+    with no Score for this profile/session (whether never scored, or not
+    a real ETF) is simply absent from the result -- not an error.
+
+    Each remaining candidate's dimension_scores/max_drawdown are resolved
+    exactly once via the same _resolve_dimension_scores()/
+    _resolve_max_drawdown() helpers generate_ranked_etf_report() and
+    generate_etf_analysis_report() already use, then reused both for
+    filtering and for building the final entry -- no duplicate
+    resolution.
+
+    Filtering happens strictly before ranking: rank_scores() is called
+    only on the surviving Score objects, so ranks are always local and
+    gapless (1..N among survivors) -- never the candidates' rank within
+    the full universe. Fail-closed per candidate: a criterion referencing
+    data a candidate doesn't have (a missing dimension, an unresolved
+    max_drawdown) excludes that candidate rather than passing it
+    unverified.
+
+    Raises InvalidScreeningCriteriaError if criteria.max_drawdown is set
+    but risk_definition_id is None -- a structurally impossible request
+    (no candidate's max_drawdown could ever be resolved to check against
+    it), checked before any database work, distinct from the per-ETF
+    fail-closed exclusion above.
+
+    Returns an empty list if no candidate satisfies criteria -- a valid,
+    expected screening outcome, not an error, same as
+    generate_ranked_etf_report()'s empty-result precedent.
+    """
+    if criteria is not None and criteria.max_drawdown is not None and risk_definition_id is None:
+        raise InvalidScreeningCriteriaError(
+            "criteria.max_drawdown is set but risk_definition_id is None -- "
+            "no candidate's max_drawdown could be resolved to check against it"
+        )
+
+    scores = get_scores_for_session(conn, scoring_profile_id, session_date)
+    if candidate_etf_ids is not None:
+        candidate_ids = set(candidate_etf_ids)
+        scores = [score for score in scores if score.etf_id in candidate_ids]
+
+    resolved_by_etf: dict[str, tuple[dict[Dimension, Decimal], Decimal | None]] = {}
+    surviving_scores = []
+    for score in scores:
+        dimension_scores = _resolve_dimension_scores(conn, score.score_id)
+        max_drawdown = _resolve_max_drawdown(conn, risk_definition_id, score.etf_id, session_date)
+        if criteria is not None and not _satisfies_screening_criteria(
+            criteria, score.overall_score, dimension_scores, max_drawdown
+        ):
+            continue
+        resolved_by_etf[score.etf_id] = (dimension_scores, max_drawdown)
+        surviving_scores.append(score)
+
+    ranked = rank_scores(surviving_scores)
+    report: list[RankedETFReportEntry] = []
+    for ranked_score in ranked:
+        etf = get_etf(conn, ranked_score.etf_id)
+        dimension_scores, max_drawdown = resolved_by_etf[ranked_score.etf_id]
+        report.append(
+            RankedETFReportEntry(
+                rank=ranked_score.rank,
+                etf_id=ranked_score.etf_id,
+                ticker=etf.ticker,
+                name=etf.name,
+                overall_score=ranked_score.overall_score,
+                dimension_scores=dimension_scores,
+                max_drawdown=max_drawdown,
+            )
+        )
+    return report

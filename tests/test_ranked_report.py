@@ -25,10 +25,13 @@ from core.analytics.persistence.repository import (
 )
 from core.analytics.ranked_report import (
     ETFAnalysisReport,
+    ETFScreeningCriteria,
+    InvalidScreeningCriteriaError,
     MissingScoreError,
     RankedETFReportEntry,
     generate_etf_analysis_report,
     generate_ranked_etf_report,
+    screen_etfs,
 )
 from core.market_data.domain.models import ETF, Calendar
 from core.market_data.persistence.repository import insert_calendar, insert_etf
@@ -474,3 +477,244 @@ def test_generate_etf_analysis_report_single_etf_is_rank_one_of_one(
 
     assert report.rank == 1
     assert report.peer_count == 1
+
+
+def test_screen_etfs_with_no_criteria_matches_generate_ranked_etf_report(
+    conn: sqlite3.Connection,
+) -> None:
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    etf_a = _make_etf(conn, "AAA", "Fund A")
+    etf_b = _make_etf(conn, "BBB", "Fund B")
+    insert_score(conn, _make_score(etf_a, profile, "90"))
+    insert_score(conn, _make_score(etf_b, profile, "70"))
+
+    screened = screen_etfs(conn, profile.scoring_profile_id, SESSION_DATE)
+    ranked = generate_ranked_etf_report(conn, profile.scoring_profile_id, SESSION_DATE)
+
+    assert screened == ranked
+
+
+def test_screen_etfs_candidate_etf_ids_restricts_output(conn: sqlite3.Connection) -> None:
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    etf_a = _make_etf(conn, "AAA", "Fund A")
+    etf_b = _make_etf(conn, "BBB", "Fund B")
+    etf_c = _make_etf(conn, "CCC", "Fund C")
+    insert_score(conn, _make_score(etf_a, profile, "90"))
+    insert_score(conn, _make_score(etf_b, profile, "80"))
+    insert_score(conn, _make_score(etf_c, profile, "70"))
+
+    result = screen_etfs(
+        conn,
+        profile.scoring_profile_id,
+        SESSION_DATE,
+        candidate_etf_ids=[etf_a.etf_id, etf_b.etf_id],
+    )
+
+    assert {entry.etf_id for entry in result} == {etf_a.etf_id, etf_b.etf_id}
+
+
+def test_screen_etfs_candidate_without_score_is_excluded_silently(
+    conn: sqlite3.Connection,
+) -> None:
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    etf_a = _make_etf(conn, "AAA", "Fund A")
+    etf_b = _make_etf(conn, "BBB", "Fund B")  # no Score inserted for this ETF
+    insert_score(conn, _make_score(etf_a, profile, "90"))
+
+    result = screen_etfs(
+        conn,
+        profile.scoring_profile_id,
+        SESSION_DATE,
+        candidate_etf_ids=[etf_a.etf_id, etf_b.etf_id],
+    )
+
+    assert [entry.etf_id for entry in result] == [etf_a.etf_id]
+
+
+def test_screen_etfs_min_overall_score_threshold(conn: sqlite3.Connection) -> None:
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    etf_at_threshold = _make_etf(conn, "ATT", "At Threshold")
+    etf_below_threshold = _make_etf(conn, "BEL", "Below Threshold")
+    insert_score(conn, _make_score(etf_at_threshold, profile, "70"))
+    insert_score(conn, _make_score(etf_below_threshold, profile, "69.99"))
+
+    result = screen_etfs(
+        conn,
+        profile.scoring_profile_id,
+        SESSION_DATE,
+        criteria=ETFScreeningCriteria(min_overall_score=Decimal("70")),
+    )
+
+    assert [entry.etf_id for entry in result] == [etf_at_threshold.etf_id]
+
+
+def test_screen_etfs_min_dimension_scores_excludes_missing_dimension(
+    conn: sqlite3.Connection,
+) -> None:
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    etf_has_dimension = _make_etf(conn, "HAS", "Has Dimension")
+    etf_missing_dimension = _make_etf(conn, "MIS", "Missing Dimension")
+    score_has = _make_score(etf_has_dimension, profile, "80")
+    score_missing = _make_score(etf_missing_dimension, profile, "80")
+    insert_score(conn, score_has)
+    insert_score(conn, score_missing)
+    insert_dimension_score(conn, _make_dimension_score(score_has, Dimension.MOMENTUM, "65"))
+    # etf_missing_dimension: no DimensionScore rows at all.
+
+    result = screen_etfs(
+        conn,
+        profile.scoring_profile_id,
+        SESSION_DATE,
+        criteria=ETFScreeningCriteria(min_dimension_scores={Dimension.MOMENTUM: Decimal("60")}),
+    )
+
+    assert [entry.etf_id for entry in result] == [etf_has_dimension.etf_id]
+
+
+def test_screen_etfs_max_drawdown_threshold(conn: sqlite3.Connection) -> None:
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    risk_definition = _make_risk_definition()
+    insert_indicator_definition(conn, risk_definition)
+    etf_ok = _make_etf(conn, "OKD", "OK Drawdown")
+    etf_worse = _make_etf(conn, "WRS", "Worse Drawdown")
+    etf_missing = _make_etf(conn, "MDD", "Missing Drawdown")
+    insert_score(conn, _make_score(etf_ok, profile, "80"))
+    insert_score(conn, _make_score(etf_worse, profile, "80"))
+    insert_score(conn, _make_score(etf_missing, profile, "80"))
+    insert_indicator_value(conn, _make_indicator_value(risk_definition, etf_ok, "-0.20"))
+    insert_indicator_value(conn, _make_indicator_value(risk_definition, etf_worse, "-0.25"))
+    # etf_missing: no MAX_DRAWDOWN IndicatorValue.
+
+    result = screen_etfs(
+        conn,
+        profile.scoring_profile_id,
+        SESSION_DATE,
+        criteria=ETFScreeningCriteria(max_drawdown=Decimal("-0.20")),
+        risk_definition_id=risk_definition.indicator_definition_id,
+    )
+
+    assert [entry.etf_id for entry in result] == [etf_ok.etf_id]
+
+
+def test_screen_etfs_raises_when_max_drawdown_criteria_supplied_without_risk_definition(
+    conn: sqlite3.Connection,
+) -> None:
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+
+    with pytest.raises(InvalidScreeningCriteriaError):
+        screen_etfs(
+            conn,
+            profile.scoring_profile_id,
+            SESSION_DATE,
+            criteria=ETFScreeningCriteria(max_drawdown=Decimal("-0.20")),
+        )
+
+
+def test_screen_etfs_returns_empty_list_when_no_candidates_match(
+    conn: sqlite3.Connection,
+) -> None:
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    etf = _make_etf(conn, "SPY", "SPDR S&P 500")
+    insert_score(conn, _make_score(etf, profile, "50"))
+
+    result = screen_etfs(
+        conn,
+        profile.scoring_profile_id,
+        SESSION_DATE,
+        criteria=ETFScreeningCriteria(min_overall_score=Decimal("70")),
+    )
+
+    assert result == []
+
+
+def test_screen_etfs_ranks_are_local_to_survivors(conn: sqlite3.Connection) -> None:
+    """Filtering removes the globally-highest-scored ETF from the
+    candidate set (via candidate_etf_ids, not criteria) -- the remaining
+    two must receive clean, gapless local ranks (1, 2), not their rank
+    within the full universe (which would have been 2, 3)."""
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    etf_a = _make_etf(conn, "AAA", "Fund A")  # globally rank 1, excluded as a candidate
+    etf_b = _make_etf(conn, "BBB", "Fund B")
+    etf_c = _make_etf(conn, "CCC", "Fund C")
+    insert_score(conn, _make_score(etf_a, profile, "95"))
+    insert_score(conn, _make_score(etf_b, profile, "80"))
+    insert_score(conn, _make_score(etf_c, profile, "70"))
+
+    result = screen_etfs(
+        conn,
+        profile.scoring_profile_id,
+        SESSION_DATE,
+        candidate_etf_ids=[etf_b.etf_id, etf_c.etf_id],
+    )
+
+    assert [(entry.rank, entry.etf_id) for entry in result] == [
+        (1, etf_b.etf_id),
+        (2, etf_c.etf_id),
+    ]
+
+
+def test_screen_etfs_multiple_criteria_require_all_to_pass(conn: sqlite3.Connection) -> None:
+    """Four ETFs, each failing exactly one of three criteria (or none) --
+    only the one satisfying all three should survive, proving AND
+    semantics rather than any-match-passes."""
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    risk_definition = _make_risk_definition()
+    insert_indicator_definition(conn, risk_definition)
+
+    etf_passes_all = _make_etf(conn, "ALL", "Passes All")
+    etf_fails_score = _make_etf(conn, "FSC", "Fails Score")
+    etf_fails_dimension = _make_etf(conn, "FDM", "Fails Dimension")
+    etf_fails_drawdown = _make_etf(conn, "FDD", "Fails Drawdown")
+
+    score_all = _make_score(etf_passes_all, profile, "80")
+    score_fails_score = _make_score(etf_fails_score, profile, "50")
+    score_fails_dimension = _make_score(etf_fails_dimension, profile, "80")
+    score_fails_drawdown = _make_score(etf_fails_drawdown, profile, "80")
+    for score in (score_all, score_fails_score, score_fails_dimension, score_fails_drawdown):
+        insert_score(conn, score)
+
+    insert_dimension_score(conn, _make_dimension_score(score_all, Dimension.MOMENTUM, "65"))
+    insert_dimension_score(conn, _make_dimension_score(score_fails_score, Dimension.MOMENTUM, "65"))
+    insert_dimension_score(conn, _make_dimension_score(score_fails_dimension, Dimension.MOMENTUM, "40"))
+    insert_dimension_score(conn, _make_dimension_score(score_fails_drawdown, Dimension.MOMENTUM, "65"))
+
+    insert_indicator_value(conn, _make_indicator_value(risk_definition, etf_passes_all, "-0.10"))
+    insert_indicator_value(conn, _make_indicator_value(risk_definition, etf_fails_score, "-0.10"))
+    insert_indicator_value(conn, _make_indicator_value(risk_definition, etf_fails_dimension, "-0.10"))
+    insert_indicator_value(conn, _make_indicator_value(risk_definition, etf_fails_drawdown, "-0.30"))
+
+    criteria = ETFScreeningCriteria(
+        min_overall_score=Decimal("70"),
+        min_dimension_scores={Dimension.MOMENTUM: Decimal("60")},
+        max_drawdown=Decimal("-0.20"),
+    )
+
+    result = screen_etfs(
+        conn,
+        profile.scoring_profile_id,
+        SESSION_DATE,
+        criteria=criteria,
+        risk_definition_id=risk_definition.indicator_definition_id,
+    )
+
+    assert [entry.etf_id for entry in result] == [etf_passes_all.etf_id]
