@@ -29,6 +29,7 @@ from core.analytics.ranked_report import (
     InvalidScreeningCriteriaError,
     MissingScoreError,
     RankedETFReportEntry,
+    compare_etfs,
     generate_etf_analysis_report,
     generate_ranked_etf_report,
     get_top_candidates,
@@ -871,3 +872,139 @@ def test_get_top_candidates_returns_empty_list_when_no_candidates_match(
     )
 
     assert result == []
+
+
+def test_compare_etfs_returns_requested_scored_etfs(conn: sqlite3.Connection) -> None:
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    etf_a = _make_etf(conn, "AAA", "Fund A")
+    etf_b = _make_etf(conn, "BBB", "Fund B")
+    etf_c = _make_etf(conn, "CCC", "Fund C")
+    insert_score(conn, _make_score(etf_a, profile, "90"))
+    insert_score(conn, _make_score(etf_b, profile, "80"))
+    insert_score(conn, _make_score(etf_c, profile, "70"))
+
+    result = compare_etfs(
+        conn,
+        profile.scoring_profile_id,
+        SESSION_DATE,
+        etf_ids=[etf_a.etf_id, etf_b.etf_id, etf_c.etf_id],
+    )
+
+    assert {entry.etf_id for entry in result} == {etf_a.etf_id, etf_b.etf_id, etf_c.etf_id}
+
+
+def test_compare_etfs_ranks_are_local_to_compared_set(conn: sqlite3.Connection) -> None:
+    """Excludes the globally-highest-scored ETF from the compared set --
+    the remaining two must receive clean, gapless local ranks (1, 2), not
+    their rank within the full universe (which would have been 2, 3)."""
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    etf_a = _make_etf(conn, "AAA", "Fund A")  # globally rank 1, not compared
+    etf_b = _make_etf(conn, "BBB", "Fund B")
+    etf_c = _make_etf(conn, "CCC", "Fund C")
+    insert_score(conn, _make_score(etf_a, profile, "95"))
+    insert_score(conn, _make_score(etf_b, profile, "80"))
+    insert_score(conn, _make_score(etf_c, profile, "70"))
+
+    result = compare_etfs(
+        conn,
+        profile.scoring_profile_id,
+        SESSION_DATE,
+        etf_ids=[etf_b.etf_id, etf_c.etf_id],
+    )
+
+    assert [(entry.rank, entry.etf_id) for entry in result] == [
+        (1, etf_b.etf_id),
+        (2, etf_c.etf_id),
+    ]
+
+
+def test_compare_etfs_ordering_matches_screen_etfs(conn: sqlite3.Connection) -> None:
+    """Proves compare_etfs() performs no ranking of its own: its result is
+    exactly what screen_etfs(candidate_etf_ids=etf_ids) already produces,
+    in the same order."""
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    etf_a = _make_etf(conn, "AAA", "Fund A")
+    etf_b = _make_etf(conn, "BBB", "Fund B")
+    etf_c = _make_etf(conn, "CCC", "Fund C")
+    # Inserted out of score order, same precedent as
+    # test_generate_ranked_etf_report_preserves_ranking_order.
+    insert_score(conn, _make_score(etf_c, profile, "80"))
+    insert_score(conn, _make_score(etf_a, profile, "95"))
+    insert_score(conn, _make_score(etf_b, profile, "90"))
+
+    etf_ids = [etf_a.etf_id, etf_b.etf_id, etf_c.etf_id]
+    expected = screen_etfs(conn, profile.scoring_profile_id, SESSION_DATE, candidate_etf_ids=etf_ids)
+    result = compare_etfs(conn, profile.scoring_profile_id, SESSION_DATE, etf_ids=etf_ids)
+
+    assert result == expected
+
+
+def test_compare_etfs_missing_score_is_excluded_silently(conn: sqlite3.Connection) -> None:
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    etf_a = _make_etf(conn, "AAA", "Fund A")
+    etf_b = _make_etf(conn, "BBB", "Fund B")  # no Score inserted for this ETF
+    insert_score(conn, _make_score(etf_a, profile, "90"))
+
+    result = compare_etfs(
+        conn,
+        profile.scoring_profile_id,
+        SESSION_DATE,
+        etf_ids=[etf_a.etf_id, etf_b.etf_id],
+    )
+
+    assert [entry.etf_id for entry in result] == [etf_a.etf_id]
+
+
+def test_compare_etfs_single_etf_is_rank_one_of_one(conn: sqlite3.Connection) -> None:
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    etf = _make_etf(conn, "SPY", "SPDR S&P 500")
+    insert_score(conn, _make_score(etf, profile, "70"))
+
+    [entry] = compare_etfs(conn, profile.scoring_profile_id, SESSION_DATE, etf_ids=[etf.etf_id])
+
+    assert entry.rank == 1
+
+
+def test_compare_etfs_empty_list_returns_empty_list(conn: sqlite3.Connection) -> None:
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+
+    result = compare_etfs(conn, profile.scoring_profile_id, SESSION_DATE, etf_ids=[])
+
+    assert result == []
+
+
+def test_compare_etfs_risk_definition_id_passthrough(conn: sqlite3.Connection) -> None:
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    etf = _make_etf(conn, "SPY", "SPDR S&P 500")
+    risk_definition = _make_risk_definition()
+    insert_indicator_definition(conn, risk_definition)
+    insert_score(conn, _make_score(etf, profile, "70"))
+    insert_indicator_value(conn, _make_indicator_value(risk_definition, etf, "-0.15"))
+
+    without_risk = compare_etfs(conn, profile.scoring_profile_id, SESSION_DATE, etf_ids=[etf.etf_id])
+    [without_risk_entry] = without_risk
+    with_risk = compare_etfs(
+        conn,
+        profile.scoring_profile_id,
+        SESSION_DATE,
+        etf_ids=[etf.etf_id],
+        risk_definition_id=risk_definition.indicator_definition_id,
+    )
+    [with_risk_entry] = with_risk
+
+    assert without_risk_entry.max_drawdown is None
+    assert with_risk_entry.max_drawdown == Decimal("-0.15")

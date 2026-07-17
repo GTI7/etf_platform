@@ -432,3 +432,44 @@ def get_top_candidates(
         risk_definition_id=risk_definition_id,
     )
     return screened[:limit]
+
+
+def compare_etfs(
+    conn: sqlite3.Connection,
+    scoring_profile_id: str,
+    session_date: date,
+    etf_ids: list[str],
+    risk_definition_id: str | None = None,
+) -> list[RankedETFReportEntry]:
+    """The given etf_ids, ranked locally among just themselves -- a named
+    comparison view over screen_etfs(), not a new ranking or scoring
+    method. Equivalent to
+    screen_etfs(conn, scoring_profile_id, session_date,
+    candidate_etf_ids=etf_ids), with no criteria: comparison means "show me
+    these specific ETFs," not "filter a pool," so filtering is deliberately
+    not exposed here -- a caller wanting a filtered comparison already has
+    screen_etfs() directly.
+
+    No length validation: a single etf_id is a valid comparison of one
+    (degenerates to rank 1 of 1, the same precedent
+    generate_etf_analysis_report() already establishes for a lone ETF), and
+    an empty etf_ids list is a valid "compare nothing" request that
+    resolves to [] via screen_etfs()'s existing empty-candidate handling --
+    neither is a structurally invalid input the way get_top_candidates()'s
+    limit <= 0 is, so unlike that function this is pure delegation with no
+    guard clause.
+
+    An etf_id with no Score for this (scoring_profile_id, session_date) is
+    silently excluded -- the same fail-closed-per-candidate behaviour
+    screen_etfs() already applies to candidate_etf_ids, not a new rule.
+    This function does not track or report which requested etf_ids were
+    dropped; a richer response can be considered later if a real consumer
+    needs it.
+    """
+    return screen_etfs(
+        conn,
+        scoring_profile_id,
+        session_date,
+        candidate_etf_ids=etf_ids,
+        risk_definition_id=risk_definition_id,
+    )
