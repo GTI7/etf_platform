@@ -31,6 +31,7 @@ from core.analytics.ranked_report import (
     RankedETFReportEntry,
     generate_etf_analysis_report,
     generate_ranked_etf_report,
+    get_top_candidates,
     screen_etfs,
 )
 from core.market_data.domain.models import ETF, Calendar
@@ -718,3 +719,155 @@ def test_screen_etfs_multiple_criteria_require_all_to_pass(conn: sqlite3.Connect
     )
 
     assert [entry.etf_id for entry in result] == [etf_passes_all.etf_id]
+
+
+def test_get_top_candidates_truncates_to_limit(conn: sqlite3.Connection) -> None:
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    etf_a = _make_etf(conn, "AAA", "Fund A")
+    etf_b = _make_etf(conn, "BBB", "Fund B")
+    etf_c = _make_etf(conn, "CCC", "Fund C")
+    insert_score(conn, _make_score(etf_a, profile, "95"))
+    insert_score(conn, _make_score(etf_b, profile, "90"))
+    insert_score(conn, _make_score(etf_c, profile, "80"))
+
+    result = get_top_candidates(conn, profile.scoring_profile_id, SESSION_DATE, limit=2)
+
+    assert len(result) == 2
+
+
+def test_get_top_candidates_preserves_screen_etfs_ordering(conn: sqlite3.Connection) -> None:
+    """Proves get_top_candidates() performs no ranking of its own: its
+    result is exactly the first N entries of the unbounded screen_etfs()
+    result, in the same order."""
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    etf_a = _make_etf(conn, "AAA", "Fund A")
+    etf_b = _make_etf(conn, "BBB", "Fund B")
+    etf_c = _make_etf(conn, "CCC", "Fund C")
+    # Inserted out of score order, same as
+    # test_generate_ranked_etf_report_preserves_ranking_order.
+    insert_score(conn, _make_score(etf_c, profile, "80"))
+    insert_score(conn, _make_score(etf_a, profile, "95"))
+    insert_score(conn, _make_score(etf_b, profile, "90"))
+
+    unbounded = screen_etfs(conn, profile.scoring_profile_id, SESSION_DATE)
+    result = get_top_candidates(conn, profile.scoring_profile_id, SESSION_DATE, limit=2)
+
+    assert result == unbounded[:2]
+
+
+def test_get_top_candidates_limit_at_survivor_count_returns_all_no_padding(
+    conn: sqlite3.Connection,
+) -> None:
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    etf_a = _make_etf(conn, "AAA", "Fund A")
+    etf_b = _make_etf(conn, "BBB", "Fund B")
+    insert_score(conn, _make_score(etf_a, profile, "90"))
+    insert_score(conn, _make_score(etf_b, profile, "70"))
+
+    result = get_top_candidates(conn, profile.scoring_profile_id, SESSION_DATE, limit=10)
+
+    assert len(result) == 2
+    assert {entry.etf_id for entry in result} == {etf_a.etf_id, etf_b.etf_id}
+
+
+def test_get_top_candidates_candidate_etf_ids_passthrough(conn: sqlite3.Connection) -> None:
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    etf_a = _make_etf(conn, "AAA", "Fund A")
+    etf_b = _make_etf(conn, "BBB", "Fund B")
+    etf_c = _make_etf(conn, "CCC", "Fund C")
+    insert_score(conn, _make_score(etf_a, profile, "90"))
+    insert_score(conn, _make_score(etf_b, profile, "80"))
+    insert_score(conn, _make_score(etf_c, profile, "70"))
+
+    result = get_top_candidates(
+        conn,
+        profile.scoring_profile_id,
+        SESSION_DATE,
+        limit=10,
+        candidate_etf_ids=[etf_a.etf_id, etf_b.etf_id],
+    )
+
+    assert {entry.etf_id for entry in result} == {etf_a.etf_id, etf_b.etf_id}
+
+
+def test_get_top_candidates_criteria_filters_before_limiting(conn: sqlite3.Connection) -> None:
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    etf_at_threshold = _make_etf(conn, "ATT", "At Threshold")
+    etf_below_threshold = _make_etf(conn, "BEL", "Below Threshold")
+    insert_score(conn, _make_score(etf_at_threshold, profile, "70"))
+    insert_score(conn, _make_score(etf_below_threshold, profile, "69.99"))
+
+    result = get_top_candidates(
+        conn,
+        profile.scoring_profile_id,
+        SESSION_DATE,
+        limit=10,
+        criteria=ETFScreeningCriteria(min_overall_score=Decimal("70")),
+    )
+
+    assert [entry.etf_id for entry in result] == [etf_at_threshold.etf_id]
+
+
+def test_get_top_candidates_raises_when_max_drawdown_criteria_supplied_without_risk_definition(
+    conn: sqlite3.Connection,
+) -> None:
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+
+    with pytest.raises(InvalidScreeningCriteriaError):
+        get_top_candidates(
+            conn,
+            profile.scoring_profile_id,
+            SESSION_DATE,
+            limit=10,
+            criteria=ETFScreeningCriteria(max_drawdown=Decimal("-0.20")),
+        )
+
+
+def test_get_top_candidates_rejects_zero_limit(conn: sqlite3.Connection) -> None:
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+
+    with pytest.raises(ValueError):
+        get_top_candidates(conn, profile.scoring_profile_id, SESSION_DATE, limit=0)
+
+
+def test_get_top_candidates_rejects_negative_limit(conn: sqlite3.Connection) -> None:
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+
+    with pytest.raises(ValueError):
+        get_top_candidates(conn, profile.scoring_profile_id, SESSION_DATE, limit=-1)
+
+
+def test_get_top_candidates_returns_empty_list_when_no_candidates_match(
+    conn: sqlite3.Connection,
+) -> None:
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    etf = _make_etf(conn, "SPY", "SPDR S&P 500")
+    insert_score(conn, _make_score(etf, profile, "50"))
+
+    result = get_top_candidates(
+        conn,
+        profile.scoring_profile_id,
+        SESSION_DATE,
+        limit=10,
+        criteria=ETFScreeningCriteria(min_overall_score=Decimal("70")),
+    )
+
+    assert result == []

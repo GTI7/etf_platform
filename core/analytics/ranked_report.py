@@ -384,3 +384,51 @@ def screen_etfs(
             )
         )
     return report
+
+
+def get_top_candidates(
+    conn: sqlite3.Connection,
+    scoring_profile_id: str,
+    session_date: date,
+    limit: int,
+    candidate_etf_ids: list[str] | None = None,
+    criteria: ETFScreeningCriteria | None = None,
+    risk_definition_id: str | None = None,
+) -> list[RankedETFReportEntry]:
+    """The first `limit` entries of screen_etfs()'s result, in the exact
+    order screen_etfs() already produced -- a bounded-size convenience over
+    screening, not a new ranking or scoring method.
+
+    limit is required and has no default: the caller decides how many
+    candidates they want to see. The system never substitutes a preferred
+    shortlist size (e.g. 10) -- omitting this parameter would mean "apply a
+    built-in opinion", which this system never does, the same discipline
+    screen_etfs() already applies to criteria.
+
+    All filtering and ranking is exactly screen_etfs()'s: candidate_etf_ids,
+    criteria, and risk_definition_id are passed through unchanged, and this
+    function performs no additional sorting, re-ranking, or scoring of its
+    own. Truncating to the first `limit` entries never changes an entry's
+    rank value -- rank still reflects its position among all survivors, not
+    its position within the returned shortlist.
+
+    Raises ValueError if limit <= 0 -- a caller configuration error, checked
+    before calling screen_etfs() (and therefore before any database work).
+
+    Returns fewer than `limit` entries if fewer candidates survive
+    screening -- not an error, and never padded: the same
+    fewer-than-expected-is-valid discipline screen_etfs() already applies to
+    an empty result.
+    """
+    if limit <= 0:
+        raise ValueError(f"limit must be positive, got {limit}")
+
+    screened = screen_etfs(
+        conn,
+        scoring_profile_id,
+        session_date,
+        candidate_etf_ids=candidate_etf_ids,
+        criteria=criteria,
+        risk_definition_id=risk_definition_id,
+    )
+    return screened[:limit]
