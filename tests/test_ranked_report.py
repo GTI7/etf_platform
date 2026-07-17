@@ -29,9 +29,11 @@ from core.analytics.ranked_report import (
     InvalidScreeningCriteriaError,
     MissingScoreError,
     RankedETFReportEntry,
+    ScoreHistoryEntry,
     compare_etfs,
     generate_etf_analysis_report,
     generate_ranked_etf_report,
+    get_score_history,
     get_top_candidates,
     screen_etfs,
 )
@@ -1008,3 +1010,116 @@ def test_compare_etfs_risk_definition_id_passthrough(conn: sqlite3.Connection) -
 
     assert without_risk_entry.max_drawdown is None
     assert with_risk_entry.max_drawdown == Decimal("-0.15")
+
+
+def _make_score_on_date(etf: ETF, profile: ScoringProfile, overall_score: str, session_date: date) -> Score:
+    return Score(
+        score_id=uuid.uuid4().hex,
+        etf_id=etf.etf_id,
+        scoring_profile_id=profile.scoring_profile_id,
+        session_date=session_date,
+        overall_score=Decimal(overall_score),
+        computed_at=datetime.now(timezone.utc),
+    )
+
+
+def test_get_score_history_returns_score_history_entries(conn: sqlite3.Connection) -> None:
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    etf = _make_etf(conn, "SPY", "SPDR S&P 500")
+    insert_score(conn, _make_score_on_date(etf, profile, "70", date(2026, 7, 13)))
+    insert_score(conn, _make_score_on_date(etf, profile, "75", date(2026, 7, 14)))
+
+    result = get_score_history(conn, etf.etf_id, profile.scoring_profile_id)
+
+    assert all(isinstance(entry, ScoreHistoryEntry) for entry in result)
+    assert len(result) == 2
+
+
+def test_get_score_history_overall_score_matches_historical_rows(conn: sqlite3.Connection) -> None:
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    etf = _make_etf(conn, "SPY", "SPDR S&P 500")
+    insert_score(conn, _make_score_on_date(etf, profile, "70", date(2026, 7, 13)))
+    insert_score(conn, _make_score_on_date(etf, profile, "75", date(2026, 7, 14)))
+    insert_score(conn, _make_score_on_date(etf, profile, "80", date(2026, 7, 15)))
+
+    result = get_score_history(conn, etf.etf_id, profile.scoring_profile_id)
+
+    assert [(entry.session_date, entry.overall_score) for entry in result] == [
+        (date(2026, 7, 13), Decimal("70")),
+        (date(2026, 7, 14), Decimal("75")),
+        (date(2026, 7, 15), Decimal("80")),
+    ]
+
+
+def test_get_score_history_dimension_scores_match_correct_session(conn: sqlite3.Connection) -> None:
+    """Two historical sessions with different dimension values -- proves
+    dimension_scores is resolved per that entry's own Score.score_id, not
+    accidentally shared or reused across dates."""
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    etf = _make_etf(conn, "SPY", "SPDR S&P 500")
+    score_day1 = _make_score_on_date(etf, profile, "70", date(2026, 7, 13))
+    score_day2 = _make_score_on_date(etf, profile, "75", date(2026, 7, 14))
+    insert_score(conn, score_day1)
+    insert_score(conn, score_day2)
+    insert_dimension_score(conn, _make_dimension_score(score_day1, Dimension.MOMENTUM, "60"))
+    insert_dimension_score(conn, _make_dimension_score(score_day2, Dimension.MOMENTUM, "90"))
+
+    result = get_score_history(conn, etf.etf_id, profile.scoring_profile_id)
+
+    assert [entry.dimension_scores for entry in result] == [
+        {Dimension.MOMENTUM: Decimal("60")},
+        {Dimension.MOMENTUM: Decimal("90")},
+    ]
+
+
+def test_get_score_history_missing_dimension_scores_produce_empty_dict(
+    conn: sqlite3.Connection,
+) -> None:
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    etf = _make_etf(conn, "SPY", "SPDR S&P 500")
+    insert_score(conn, _make_score_on_date(etf, profile, "70", date(2026, 7, 13)))
+    # No DimensionScore rows inserted for this Score.
+
+    [entry] = get_score_history(conn, etf.etf_id, profile.scoring_profile_id)
+
+    assert entry.dimension_scores == {}
+
+
+def test_get_score_history_returns_empty_list_when_no_history(conn: sqlite3.Connection) -> None:
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    etf = _make_etf(conn, "SPY", "SPDR S&P 500")
+    # No Score inserted for this ETF/profile.
+
+    result = get_score_history(conn, etf.etf_id, profile.scoring_profile_id)
+
+    assert result == []
+
+
+def test_get_score_history_date_range_parameters_passed_through(conn: sqlite3.Connection) -> None:
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    etf = _make_etf(conn, "SPY", "SPDR S&P 500")
+    insert_score(conn, _make_score_on_date(etf, profile, "70", date(2026, 7, 13)))
+    insert_score(conn, _make_score_on_date(etf, profile, "75", date(2026, 7, 14)))
+    insert_score(conn, _make_score_on_date(etf, profile, "80", date(2026, 7, 15)))
+
+    result = get_score_history(
+        conn,
+        etf.etf_id,
+        profile.scoring_profile_id,
+        start_date=date(2026, 7, 14),
+        end_date=date(2026, 7, 14),
+    )
+
+    assert [entry.session_date for entry in result] == [date(2026, 7, 14)]

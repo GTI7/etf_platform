@@ -11,6 +11,7 @@ from core.analytics.domain.models import Dimension, DimensionScore, Score, Scori
 from core.analytics.persistence.repository import (
     get_dimension_scores,
     get_score,
+    get_scores_for_etf,
     get_scores_for_session,
     get_scoring_profile,
     insert_dimension_score,
@@ -431,3 +432,184 @@ def test_get_scores_for_session_supports_multiple_etfs(conn: sqlite3.Connection)
     results = get_scores_for_session(conn, profile.scoring_profile_id, session_date)
 
     assert {r.etf_id for r in results} == {etf_a.etf_id, etf_b.etf_id}
+
+
+def test_get_scores_for_etf_returns_multiple_historical_sessions(conn: sqlite3.Connection) -> None:
+    etf = _make_etf(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    for session_date, overall_score in [
+        (date(2026, 7, 13), Decimal("70")),
+        (date(2026, 7, 14), Decimal("75")),
+        (date(2026, 7, 15), Decimal("80")),
+    ]:
+        insert_score(
+            conn,
+            Score(
+                score_id=uuid.uuid4().hex,
+                etf_id=etf.etf_id,
+                scoring_profile_id=profile.scoring_profile_id,
+                session_date=session_date,
+                overall_score=overall_score,
+                computed_at=datetime.now(timezone.utc),
+            ),
+        )
+
+    results = get_scores_for_etf(conn, etf.etf_id, profile.scoring_profile_id)
+
+    assert len(results) == 3
+
+
+def test_get_scores_for_etf_ordered_by_session_date(conn: sqlite3.Connection) -> None:
+    etf = _make_etf(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    # Inserted deliberately out of date order, to prove the result's order
+    # comes from the query's ORDER BY, not insertion order.
+    for session_date in [date(2026, 7, 15), date(2026, 7, 13), date(2026, 7, 14)]:
+        insert_score(
+            conn,
+            Score(
+                score_id=uuid.uuid4().hex,
+                etf_id=etf.etf_id,
+                scoring_profile_id=profile.scoring_profile_id,
+                session_date=session_date,
+                overall_score=Decimal("70"),
+                computed_at=datetime.now(timezone.utc),
+            ),
+        )
+
+    results = get_scores_for_etf(conn, etf.etf_id, profile.scoring_profile_id)
+
+    assert [r.session_date for r in results] == [
+        date(2026, 7, 13),
+        date(2026, 7, 14),
+        date(2026, 7, 15),
+    ]
+
+
+def test_get_scores_for_etf_filters_by_start_date(conn: sqlite3.Connection) -> None:
+    etf = _make_etf(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    for session_date in [date(2026, 7, 13), date(2026, 7, 14), date(2026, 7, 15)]:
+        insert_score(
+            conn,
+            Score(
+                score_id=uuid.uuid4().hex,
+                etf_id=etf.etf_id,
+                scoring_profile_id=profile.scoring_profile_id,
+                session_date=session_date,
+                overall_score=Decimal("70"),
+                computed_at=datetime.now(timezone.utc),
+            ),
+        )
+
+    results = get_scores_for_etf(
+        conn, etf.etf_id, profile.scoring_profile_id, start_date=date(2026, 7, 14)
+    )
+
+    assert [r.session_date for r in results] == [date(2026, 7, 14), date(2026, 7, 15)]
+
+
+def test_get_scores_for_etf_filters_by_end_date(conn: sqlite3.Connection) -> None:
+    etf = _make_etf(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    for session_date in [date(2026, 7, 13), date(2026, 7, 14), date(2026, 7, 15)]:
+        insert_score(
+            conn,
+            Score(
+                score_id=uuid.uuid4().hex,
+                etf_id=etf.etf_id,
+                scoring_profile_id=profile.scoring_profile_id,
+                session_date=session_date,
+                overall_score=Decimal("70"),
+                computed_at=datetime.now(timezone.utc),
+            ),
+        )
+
+    results = get_scores_for_etf(
+        conn, etf.etf_id, profile.scoring_profile_id, end_date=date(2026, 7, 14)
+    )
+
+    assert [r.session_date for r in results] == [date(2026, 7, 13), date(2026, 7, 14)]
+
+
+def test_get_scores_for_etf_isolates_by_etf(conn: sqlite3.Connection) -> None:
+    etf_a = _make_etf(conn)
+    etf_b = _make_second_etf(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    session_date = date(2026, 7, 14)
+    insert_score(
+        conn,
+        Score(
+            score_id=uuid.uuid4().hex,
+            etf_id=etf_a.etf_id,
+            scoring_profile_id=profile.scoring_profile_id,
+            session_date=session_date,
+            overall_score=Decimal("70"),
+            computed_at=datetime.now(timezone.utc),
+        ),
+    )
+    insert_score(
+        conn,
+        Score(
+            score_id=uuid.uuid4().hex,
+            etf_id=etf_b.etf_id,
+            scoring_profile_id=profile.scoring_profile_id,
+            session_date=session_date,
+            overall_score=Decimal("40"),
+            computed_at=datetime.now(timezone.utc),
+        ),
+    )
+
+    results = get_scores_for_etf(conn, etf_a.etf_id, profile.scoring_profile_id)
+
+    assert [r.etf_id for r in results] == [etf_a.etf_id]
+
+
+def test_get_scores_for_etf_isolates_by_scoring_profile(conn: sqlite3.Connection) -> None:
+    etf = _make_etf(conn)
+    profile_a = _make_profile(version=1)
+    profile_b = _make_profile(version=2)
+    insert_scoring_profile(conn, profile_a)
+    insert_scoring_profile(conn, profile_b)
+    session_date = date(2026, 7, 14)
+    insert_score(
+        conn,
+        Score(
+            score_id=uuid.uuid4().hex,
+            etf_id=etf.etf_id,
+            scoring_profile_id=profile_a.scoring_profile_id,
+            session_date=session_date,
+            overall_score=Decimal("70"),
+            computed_at=datetime.now(timezone.utc),
+        ),
+    )
+    insert_score(
+        conn,
+        Score(
+            score_id=uuid.uuid4().hex,
+            etf_id=etf.etf_id,
+            scoring_profile_id=profile_b.scoring_profile_id,
+            session_date=session_date,
+            overall_score=Decimal("40"),
+            computed_at=datetime.now(timezone.utc),
+        ),
+    )
+
+    results = get_scores_for_etf(conn, etf.etf_id, profile_a.scoring_profile_id)
+
+    assert [r.scoring_profile_id for r in results] == [profile_a.scoring_profile_id]
+
+
+def test_get_scores_for_etf_returns_empty_list_when_no_history(conn: sqlite3.Connection) -> None:
+    etf = _make_etf(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+
+    results = get_scores_for_etf(conn, etf.etf_id, profile.scoring_profile_id)
+
+    assert results == []

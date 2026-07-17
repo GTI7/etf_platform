@@ -244,6 +244,44 @@ def get_scores_for_session(
     ]
 
 
+def get_scores_for_etf(
+    conn: sqlite3.Connection,
+    etf_id: str,
+    scoring_profile_id: str,
+    start_date: date | None = None,
+    end_date: date | None = None,
+) -> list[Score]:
+    """Every Score for one ETF/profile, optionally restricted to a
+    session_date range -- the historical counterpart to
+    get_scores_for_session()'s single-session/all-ETFs view.
+
+    Ordered by session_date: unlike get_scores_for_session() (a single
+    session has no inherent order across ETFs), a history is only
+    meaningful in date order.
+    """
+    query = "SELECT score_id, etf_id, scoring_profile_id, session_date, overall_score, computed_at FROM Score WHERE etf_id = ? AND scoring_profile_id = ?"
+    params: list[object] = [etf_id, scoring_profile_id]
+    if start_date is not None:
+        query += " AND session_date >= ?"
+        params.append(start_date.isoformat())
+    if end_date is not None:
+        query += " AND session_date <= ?"
+        params.append(end_date.isoformat())
+    query += " ORDER BY session_date"
+    rows = conn.execute(query, params).fetchall()
+    return [
+        Score(
+            score_id=row["score_id"],
+            etf_id=row["etf_id"],
+            scoring_profile_id=row["scoring_profile_id"],
+            session_date=date.fromisoformat(row["session_date"]),
+            overall_score=Decimal(row["overall_score"]),
+            computed_at=datetime.fromisoformat(row["computed_at"]),
+        )
+        for row in rows
+    ]
+
+
 def get_dimension_scores(conn: sqlite3.Connection, score_id: str) -> list[DimensionScore]:
     rows = conn.execute(
         "SELECT score_id, dimension, value, computed_at FROM DimensionScore WHERE score_id = ?",

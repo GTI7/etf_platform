@@ -10,6 +10,7 @@ from core.analytics.domain.ranking import rank_scores
 from core.analytics.persistence.repository import (
     get_dimension_scores,
     get_indicator_values,
+    get_scores_for_etf,
     get_scores_for_session,
 )
 from core.domain.exceptions import DomainError
@@ -473,3 +474,56 @@ def compare_etfs(
         candidate_etf_ids=etf_ids,
         risk_definition_id=risk_definition_id,
     )
+
+
+@dataclass(frozen=True, slots=True)
+class ScoreHistoryEntry:
+    """One historical score point for an ETF already identified by the
+    caller -- not an independent ETF report. Deliberately excludes
+    etf_id/ticker/name (the caller already supplied etf_id to get this
+    history) and rank/peer_count (there is no peer comparison here, only
+    this ETF's own score over time)."""
+
+    session_date: date
+    overall_score: Decimal
+    dimension_scores: dict[Dimension, Decimal]
+
+
+def get_score_history(
+    conn: sqlite3.Connection,
+    etf_id: str,
+    scoring_profile_id: str,
+    start_date: date | None = None,
+    end_date: date | None = None,
+) -> list[ScoreHistoryEntry]:
+    """The already-computed Score/DimensionScore history for one ETF under
+    one scoring profile, optionally restricted to a session_date range --
+    read-only exposure of existing immutable data, not recalculation,
+    historical ranking, trend analysis, or forecasting.
+
+    Ordering is entirely get_scores_for_etf()'s: this function does not
+    re-sort. No rank_scores() call and no rank field on ScoreHistoryEntry
+    -- history is this ETF's own scores over time, never a peer comparison.
+
+    dimension_scores is resolved per historical Score via the same
+    _resolve_dimension_scores() helper generate_ranked_etf_report(),
+    generate_etf_analysis_report(), and screen_etfs() already use -- no
+    duplicate DimensionScore query logic. A historical Score with no
+    DimensionScore rows yields {} for that entry, not None or an error,
+    the same as every other caller of _resolve_dimension_scores().
+
+    Returns an empty list if no Score exists for this
+    (etf_id, scoring_profile_id) in the requested range -- a valid,
+    expected outcome (e.g. the ETF wasn't scored yet, or the range predates
+    its history), not an error, same as every other empty-result precedent
+    in this module.
+    """
+    scores = get_scores_for_etf(conn, etf_id, scoring_profile_id, start_date, end_date)
+    return [
+        ScoreHistoryEntry(
+            session_date=score.session_date,
+            overall_score=score.overall_score,
+            dimension_scores=_resolve_dimension_scores(conn, score.score_id),
+        )
+        for score in scores
+    ]
