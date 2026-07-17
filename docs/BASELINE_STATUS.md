@@ -1,10 +1,12 @@
 # Analytics Engine Baseline Status
 
 This document is a snapshot, not a proposal. It records the state of the
-project at the end of Phase 5, why that state is a complete, stable pause
-point, and what would have to become true before further implementation is
-justified. See `docs/ARCHITECTURE_DECISIONS.md` for the detailed rationale
-behind individual decisions referenced here.
+project through v0.5.0 (Phase 5's Ranked ETF Report, the v0.4.1 hardening
+release, and the v0.5.0 second-indicator capability release), why each
+pause point was considered complete for its scope, and what would have to
+become true before further implementation is justified. See
+`docs/ARCHITECTURE_DECISIONS.md` for the detailed rationale behind
+individual decisions referenced here.
 
 ## Version / state
 
@@ -15,7 +17,11 @@ the end, how the repository's existing `v0.x.0` tag convention was
 followed). **v0.4.1** is a maintenance-only release on top of it: two
 hardening fixes (explicit transaction configuration, enforced parameter
 canonicalization — see Architectural guarantees below), no architecture
-change, no new capability.
+change, no new capability. **v0.5.0** is the current release: the first
+capability addition after the v0.4.1 baseline — a second concrete
+indicator (RSI), added beside SMA with no changes to persistence,
+scoring, or migrations. Architecture remains exactly as frozen at v0.4.0;
+v0.5.0 adds capability strictly within it.
 
 ## Completed phases
 
@@ -24,15 +30,17 @@ change, no new capability.
 - ✓ Phase 3 — Scoring Engine
 - ✓ Phase 4 — Ranking Engine
 - ✓ Phase 5 — Ranked ETF Report
+- ✓ v0.5.0 — Second Concrete Indicator
 
 | Phase | Capability |
 |---|---|
 | 0 | Foundation: Money, Clock, typed IDs, SQLite/WAL, migrations, raw-data immutability, PipelineState |
 | 1 | Market data: ETF storage, provider abstraction (Yahoo Finance), TradingCalendar-aware ingestion, immutable PriceBar |
-| 2 | Indicators: IndicatorDefinition/IndicatorValue, versioned, immutable, one concrete indicator (SMA) |
+| 2 | Indicators: IndicatorDefinition/IndicatorValue, versioned, immutable, two concrete indicators (SMA, RSI as of v0.5.0) |
 | 3 | Scoring: ScoringProfile/Score/DimensionScore, versioned, immutable, deterministic |
 | 4 | Ranking: cross-ETF Score retrieval, deterministic ranking, stable tie-break, read-only |
 | 5 | Ranked ETF Report: composes Phase 4's pieces into one usable, ETF-identity-resolved report |
+| 0.5.0 | Second Concrete Indicator: `rsi()` calculation and `calculate_rsi()` orchestration added beside SMA; the generic `IndicatorDefinition`/`IndicatorValue` architecture validated against two independent concrete implementations; SMA and RSI coexist and are consumed by scoring identically, with zero scoring-layer changes |
 
 ## Current capabilities
 
@@ -52,10 +60,21 @@ in any single function** — every phase's tests seed the previous stage's
 data directly via repository inserts rather than by calling the previous
 stage's real function. This is the one honest gap in an otherwise coherent
 system: the read side (Phases 4-5) is fully composed into a usable
-deliverable; the write side (Phases 1-3) is not composed at all, and —
-per the Phase 6 review — deliberately not yet, because doing so would
-require an indicator-name dispatch mechanism that cannot be honestly
-generalized from the single concrete indicator (SMA) that exists.
+deliverable; the write side (Phases 1-3, and both indicators as of v0.5.0)
+is not composed at all.
+
+**Multiple concrete indicators are supported.** As of v0.5.0, two
+indicators exist side by side as separate, explicit orchestration
+functions — `calculate_sma()` and `calculate_rsi()` — each computing its
+own `IndicatorDefinition`/`IndicatorValue` pair. Scoring consumes both
+identically: `_resolve_dimension_values()` resolves whichever indicator
+name a `ScoringProfile` references generically, with no branching on
+which indicator it is. This is proof, not assumption, that the generic
+`IndicatorDefinition`/`IndicatorValue` design and scoring's name-based
+resolution both generalize correctly — no indicator-name dispatch
+mechanism and no write-side pipeline composer have been built to get
+here, and neither remains blocked on "can't generalize from one case"
+now that two exist; both simply remain undemonstrated as needed.
 
 Nothing outside the test suite can currently invoke any of this. There is
 no entry point, CLI, API, or scheduler anywhere in the repository.
@@ -76,7 +95,7 @@ no entry point, CLI, API, or scheduler anywhere in the repository.
 
 **Migration discipline.** As of this release, migrations are additive only: `0001`-`0003` are frozen, and every schema change since the first has shipped as a new file. Existing migrations are never rewritten.
 
-**Abstraction discipline.** New abstractions require a second concrete use case, not a plausible first one. Examples already respected: no indicator registry was built before a second indicator existed; no Universe concept was built before a subset-ranking requirement existed; no Portfolio domain was built before a portfolio requirement existed.
+**Abstraction discipline.** New abstractions require a second concrete use case, not a plausible first one. Examples already respected: a second concrete indicator (RSI, v0.5.0) was added *without* introducing an indicator registry or dispatch mechanism — two working implementations were judged insufficient evidence on their own, since `calculate_sma`/`calculate_rsi` simply coexist as explicit functions; no Universe concept was built before a subset-ranking requirement existed; no Portfolio domain was built before a portfolio requirement existed.
 
 ## Deferred capabilities
 
@@ -86,11 +105,11 @@ Not implemented, and why each is deferred rather than simply forgotten:
 - **CLI** — same reason; nothing exists yet that would call it.
 - **Dashboard consumer** — no consumer requirement exists.
 - **Scheduler** — no demonstrated need for automated execution, and it would have nothing coherent to schedule until the write-side composition below exists.
-- **Workflow runner** (write-side ingest→indicator→score composition) — blocked on the indicator registry below; building it now would either hardcode the single existing indicator (SMA) or require inventing a dispatch mechanism generalized from one data point.
+- **Workflow runner** (write-side ingest→indicator→score composition) — not built. Two concrete indicators exist since v0.5.0 (SMA, RSI), so this is no longer blocked on lacking evidence for how multiple indicators would be selected — but no concrete requirement for an automated, composed write pipeline has been demonstrated, so it remains deferred rather than built speculatively.
 - **Portfolio domain** — `PortfolioId`/`HoldingId` have been reserved in `core/shared/ids.py` since Phase 0 but are still unused anywhere; no portfolio requirement has been demonstrated.
 - **Universe filtering** — `UniverseId` has been reserved since Phase 0 but is still unused; no requirement to rank within a named subset has been demonstrated.
 - **Ranking persistence** — rankings are recomputed on demand from immutable `Score` rows; no measured latency or scale problem justifies caching them.
-- **Indicator registry/dispatch** — exactly one concrete indicator (SMA) exists; generalizing a dispatch mechanism from a single case would be premature abstraction, not evidence-based design.
+- **Indicator registry/dispatch** — two concrete indicators exist since v0.5.0 (SMA, RSI), each its own explicit orchestration function (`calculate_sma`, `calculate_rsi`); no caller has needed to select between them dynamically at runtime, so a name→function dispatch mechanism remains unbuilt. Not built speculatively now — the concrete trigger to watch for is a third indicator or an actual dynamic-selection requirement.
 - **Configuration system** — `config/` remains an empty package; nothing yet needs runtime configuration beyond a database path.
 
 ## Activation triggers
@@ -100,8 +119,9 @@ not before, and not more than the trigger warrants:
 
 | Trigger | Justified consequence |
 |---|---|
-| A second real indicator (e.g. SMA + RSI) with an actual calculation requirement | An indicator name→function dispatch mechanism (e.g. `IndicatorCalculatorRegistry`), generalized from two real cases instead of one |
-| A second real indicator existing | Only then, a write-side pipeline composer chaining ingest→indicator(s)→score for one ETF/day |
+| ~~A second real indicator (e.g. SMA + RSI) with an actual calculation requirement~~ — **fired at v0.5.0** (SMA + RSI both exist) | Not, on its own, an indicator name→function dispatch mechanism — two concrete cases were judged insufficient evidence to build one. See below for what would still justify it. |
+| A third real indicator, or a concrete need to select between indicators dynamically at runtime | An indicator name→function dispatch mechanism (e.g. `IndicatorCalculatorRegistry`) |
+| A concrete requirement for automated, composed execution of ingest→indicator→score | A write-side pipeline composer chaining ingest→indicator(s)→score for one ETF/day — no longer blocked on indicator-generalization evidence (two indicators exist since v0.5.0), but still not demonstrated as needed |
 | A named external consumer (API, dashboard, another service) requesting this data | An application-service or API boundary shaped around that consumer's actual needs |
 | A concrete need to score holdings or allocations, not just standalone ETFs | A Portfolio domain, using the already-reserved `PortfolioId`/`HoldingId` |
 | A concrete need to rank within a named subset of ETFs rather than all of them | A Universe concept, using the already-reserved `UniverseId` |
@@ -113,7 +133,7 @@ not before, and not more than the trigger warrants:
 - Two pre-existing Phase 0 guard clauses remain uncovered by any test: `insert_price_bar`'s OHLC-currency-mismatch check and `complete_ingestion_run`'s terminal-status check (`core/market_data/persistence/repository.py:105,193`). Neither is a defect; both are defensive code paths no test has exercised.
 - `Money.__le__`/`__gt__` are implemented but not directly exercised by any test (`core/shared/money.py:48-53`) — `__lt__`/`__ge__`/`__eq__` are, and all four comparisons share one implementation pattern, but this is an honest gap, not an assumption.
 - `migrations.py`'s already-applied-migration skip branch is never exercised, since every test starts from a fresh, unmigrated database.
-- Overall coverage (as of v0.4.1): 133/133 tests passing, with every line in every Phase 1-5 module added or extended during this project, plus both v0.4.1 hardening changes, at 100%.
+- Overall coverage (as of v0.5.0): 145/145 tests passing, with every line in every Phase 1-5 module added or extended during this project, plus both v0.4.1 hardening changes and the v0.5.0 RSI addition, at 100%.
 - None of the above are introduced by, or specific to, Phase 0-5 of this project — all predate or are orthogonal to this baseline's scope, and none are hidden here.
 
 ## Recommended next action

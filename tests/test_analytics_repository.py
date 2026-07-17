@@ -56,6 +56,16 @@ def _make_definition(name: str = "SMA", version: int = 1, window: int = 20) -> I
     )
 
 
+def _make_rsi_definition(version: int = 1, period: int = 14) -> IndicatorDefinition:
+    return IndicatorDefinition(
+        indicator_definition_id=uuid.uuid4().hex,
+        name="RSI",
+        version=version,
+        parameters=serialize_parameters({"period": period}),
+        created_at=datetime.now(timezone.utc),
+    )
+
+
 def test_insert_and_get_indicator_definition(conn: sqlite3.Connection) -> None:
     definition = _make_definition()
     insert_indicator_definition(conn, definition)
@@ -198,3 +208,36 @@ def test_get_indicator_values_filters_by_date_range(conn: sqlite3.Connection) ->
     )
 
     assert [v.session_date for v in values] == [date(2026, 7, 13)]
+
+
+def test_rsi_indicator_value_round_trip_preserves_decimal_precision(
+    conn: sqlite3.Connection,
+) -> None:
+    etf = _make_etf(conn)
+    definition = _make_rsi_definition()
+    insert_indicator_definition(conn, definition)
+    value = IndicatorValue(
+        indicator_value_id=uuid.uuid4().hex,
+        indicator_definition_id=definition.indicator_definition_id,
+        etf_id=etf.etf_id,
+        session_date=date(2026, 7, 14),
+        value=Decimal("66.666666667"),
+        computed_at=datetime.now(timezone.utc),
+    )
+
+    insert_indicator_value(conn, value)
+
+    [fetched] = get_indicator_values(conn, definition.indicator_definition_id, etf.etf_id)
+    assert fetched == value
+
+
+def test_sma_and_rsi_indicator_definitions_coexist_independently(conn: sqlite3.Connection) -> None:
+    sma_definition = _make_definition()
+    rsi_definition = _make_rsi_definition()
+
+    insert_indicator_definition(conn, sma_definition)
+    insert_indicator_definition(conn, rsi_definition)  # does not raise
+
+    assert sma_definition.indicator_definition_id != rsi_definition.indicator_definition_id
+    assert get_indicator_definition(conn, "SMA", 1) == sma_definition
+    assert get_indicator_definition(conn, "RSI", 1) == rsi_definition

@@ -91,6 +91,16 @@ def _make_indicator_definition(name: str = "SMA", version: int = 1) -> Indicator
     )
 
 
+def _make_rsi_indicator_definition(version: int = 1) -> IndicatorDefinition:
+    return IndicatorDefinition(
+        indicator_definition_id=uuid.uuid4().hex,
+        name="RSI",
+        version=version,
+        parameters=serialize_parameters({"period": 14}),
+        created_at=datetime.now(timezone.utc),
+    )
+
+
 def _make_profile(name: str = "REFERENCE", version: int = 1) -> ScoringProfile:
     return ScoringProfile(
         scoring_profile_id=uuid.uuid4().hex,
@@ -327,3 +337,46 @@ def test_calculation_failure_rolls_back_partial_write(
         "SELECT status FROM IngestionRun WHERE pipeline_name = ?", (pipeline_name,)
     ).fetchone()["status"]
     assert status == "failed"
+
+
+def test_scoring_profile_using_sma_and_rsi_together_succeeds_unmodified(
+    conn: sqlite3.Connection,
+) -> None:
+    """The whole point of Milestone A: calculate_score()/_resolve_dimension_values()
+    are completely unmodified by adding a second indicator. Scoring already
+    resolves indicators generically by name+version, so a profile mixing
+    SMA (MOMENTUM) and RSI (VALUE) must "just work" with zero scoring code
+    changes -- this is the strongest proof that the architecture
+    generalizes, not just that a second calculation function exists."""
+    etf = _make_etf_with_trading_day(conn, SESSION_DATE)
+    sma_definition = _make_indicator_definition(name="SMA")
+    rsi_definition = _make_rsi_indicator_definition()
+    insert_indicator_definition(conn, sma_definition)
+    insert_indicator_definition(conn, rsi_definition)
+    _seed_indicator_value(conn, sma_definition, etf.etf_id, "70")
+    _seed_indicator_value(conn, rsi_definition, etf.etf_id, "65")
+    profile = ScoringProfile(
+        scoring_profile_id=uuid.uuid4().hex,
+        name="MIXED",
+        version=1,
+        parameters=serialize_parameters(
+            {
+                "dimensions": {
+                    "MOMENTUM": {"indicator_name": "SMA", "indicator_version": 1},
+                    "VALUE": {"indicator_name": "RSI", "indicator_version": 1},
+                }
+            }
+        ),
+        created_at=datetime.now(timezone.utc),
+    )
+    insert_scoring_profile(conn, profile)
+    clock = FixedClock(datetime(2026, 7, 14, 21, 0, tzinfo=timezone.utc))
+
+    calculate_score(conn, clock, etf, profile, SESSION_DATE)
+
+    score = get_score(conn, etf.etf_id, profile.scoring_profile_id, SESSION_DATE)
+    assert score is not None
+    assert score.overall_score == Decimal("67.5")  # mean(70, 65)
+
+    dimension_scores = {ds.dimension: ds.value for ds in get_dimension_scores(conn, score.score_id)}
+    assert dimension_scores == {Dimension.MOMENTUM: Decimal("70"), Dimension.VALUE: Decimal("65")}

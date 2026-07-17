@@ -13,7 +13,7 @@ from core.analytics.domain.models import (
     InsufficientPriceHistoryError,
     serialize_parameters,
 )
-from core.analytics.indicator_calculation import calculate_sma
+from core.analytics.indicator_calculation import calculate_rsi, calculate_sma
 from core.analytics.persistence.repository import get_indicator_values, insert_indicator_definition
 from core.market_data.domain.models import ETF, Calendar, PriceBar, TradingSession
 from core.market_data.persistence.repository import (
@@ -87,8 +87,23 @@ def _make_definition(window: int = 3) -> IndicatorDefinition:
     )
 
 
+def _make_rsi_definition(period: int = 3) -> IndicatorDefinition:
+    return IndicatorDefinition(
+        indicator_definition_id=uuid.uuid4().hex,
+        name="RSI",
+        version=1,
+        parameters=serialize_parameters({"period": period}),
+        created_at=datetime.now(timezone.utc),
+    )
+
+
 # Thu 2026-07-16, Fri 2026-07-17, [weekend], Mon 2026-07-20.
 TRADING_DAYS = [date(2026, 7, 16), date(2026, 7, 17), date(2026, 7, 20)]
+
+# One extra day before TRADING_DAYS: rsi(period=3) needs period+1 = 4
+# closes, one more trading day than sma(window=3) needs for the same
+# window size.
+RSI_TRADING_DAYS = [date(2026, 7, 15), *TRADING_DAYS]
 
 
 def test_calculate_sma_uses_trading_days_not_calendar_days(conn: sqlite3.Connection) -> None:
@@ -233,3 +248,79 @@ def test_calculation_failure_rolls_back_partial_write(
         "SELECT status FROM IngestionRun WHERE pipeline_name = ?", (pipeline_name,)
     ).fetchone()["status"]
     assert status == "failed"
+
+
+def test_calculate_rsi_is_idempotent_on_rerun(conn: sqlite3.Connection) -> None:
+    etf = _make_etf_with_trading_days(conn, RSI_TRADING_DAYS)
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 15), "100")
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 16), "103")
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 17), "106")
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 20), "109")
+    definition = _make_rsi_definition(period=3)
+    insert_indicator_definition(conn, definition)
+    clock = FixedClock(datetime(2026, 7, 20, 21, 0, tzinfo=timezone.utc))
+
+    for _ in range(3):
+        calculate_rsi(conn, clock, etf, definition, date(2026, 7, 20))
+
+    values = get_indicator_values(conn, definition.indicator_definition_id, etf.etf_id)
+    assert len(values) == 1
+    assert values[0].value == Decimal("100")  # all gains -> RSI 100
+
+
+def test_calculate_rsi_partial_write_rolls_back_on_failure(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Same rollback guarantee proven for calculate_sma, checked
+    independently for calculate_rsi -- reusing run_pipeline unmodified is
+    not something to assume without its own test for this function too."""
+    import core.analytics.indicator_calculation as indicator_calculation
+
+    etf = _make_etf_with_trading_days(conn, RSI_TRADING_DAYS)
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 15), "100")
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 16), "103")
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 17), "106")
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 20), "109")
+    definition = _make_rsi_definition(period=3)
+    insert_indicator_definition(conn, definition)
+    clock = FixedClock(datetime(2026, 7, 20, 21, 0, tzinfo=timezone.utc))
+
+    real_insert = indicator_calculation.insert_indicator_value
+
+    def _insert_then_fail(conn_: sqlite3.Connection, value: object) -> None:
+        real_insert(conn_, value)
+        raise RuntimeError("simulated failure after a successful write")
+
+    monkeypatch.setattr(indicator_calculation, "insert_indicator_value", _insert_then_fail)
+
+    with pytest.raises(RuntimeError):
+        calculate_rsi(conn, clock, etf, definition, date(2026, 7, 20))
+
+    assert get_indicator_values(conn, definition.indicator_definition_id, etf.etf_id) == []
+    pipeline_name = f"indicator:RSI:v1:{etf.ticker}"
+    assert get_last_successful_pipeline_date(conn, pipeline_name) is None
+    status = conn.execute(
+        "SELECT status FROM IngestionRun WHERE pipeline_name = ?", (pipeline_name,)
+    ).fetchone()["status"]
+    assert status == "failed"
+
+
+def test_sma_and_rsi_calculated_for_same_etf_and_date(conn: sqlite3.Connection) -> None:
+    etf = _make_etf_with_trading_days(conn, RSI_TRADING_DAYS)
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 15), "100")
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 16), "103")
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 17), "106")
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 20), "109")
+    sma_definition = _make_definition(window=3)
+    rsi_definition = _make_rsi_definition(period=3)
+    insert_indicator_definition(conn, sma_definition)
+    insert_indicator_definition(conn, rsi_definition)
+    clock = FixedClock(datetime(2026, 7, 20, 21, 0, tzinfo=timezone.utc))
+
+    calculate_sma(conn, clock, etf, sma_definition, date(2026, 7, 20))
+    calculate_rsi(conn, clock, etf, rsi_definition, date(2026, 7, 20))
+
+    [sma_value] = get_indicator_values(conn, sma_definition.indicator_definition_id, etf.etf_id)
+    [rsi_value] = get_indicator_values(conn, rsi_definition.indicator_definition_id, etf.etf_id)
+    assert sma_value.value == Decimal("106")  # (103+106+109)/3
+    assert rsi_value.value == Decimal("100")  # all gains over the 4 closes

@@ -27,3 +27,37 @@ def mean(values: list[Decimal]) -> Decimal:
     if not values:
         raise ValueError("mean() requires at least one value")
     return sum(values, Decimal("0")) / Decimal(len(values))
+
+
+def rsi(closes: list[Decimal]) -> Decimal:
+    """Relative Strength Index: a bounded [0, 100] momentum oscillator.
+
+    Reference/simplified variant: average gain and average loss are each a
+    plain arithmetic mean over the window (not Wilder's exponential
+    smoothing). Input is period+1 consecutive closing prices,
+    oldest-to-newest -- N deltas require N+1 raw prices, one more than
+    sma() needs for the same window size. Pure, no I/O.
+
+    Zero-average-loss convention (defined explicitly, not left ambiguous):
+    - avg_loss == 0 and avg_gain > 0  -> RSI = 100 (all gains)
+    - avg_loss == 0 and avg_gain == 0 -> RSI = 50  (flat, no change at all)
+
+    0 <= RSI <= 100 always holds: RS = avg_gain / avg_loss is never
+    negative (gains and losses are each clamped to >= 0 before averaging),
+    so 100 / (1 + RS) is always in (0, 100], and RSI = 100 - that term is
+    always in [0, 100).
+    """
+    if len(closes) < 2:
+        raise ValueError("rsi() requires at least 2 prices")
+    gains: list[Decimal] = []
+    losses: list[Decimal] = []
+    for previous, current in zip(closes, closes[1:]):
+        delta = current - previous
+        gains.append(max(delta, Decimal("0")))
+        losses.append(max(-delta, Decimal("0")))
+    avg_gain = mean(gains)
+    avg_loss = mean(losses)
+    if avg_loss == 0:
+        return Decimal("100") if avg_gain > 0 else Decimal("50")
+    rs = avg_gain / avg_loss
+    return Decimal("100") - (Decimal("100") / (Decimal("1") + rs))
