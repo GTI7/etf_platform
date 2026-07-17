@@ -390,6 +390,31 @@ def test_sma_and_rsi_calculated_for_same_etf_and_date(conn: sqlite3.Connection) 
     assert rsi_value.value == Decimal("100")  # all gains over the 4 closes
 
 
+def test_calculate_drawdown_is_a_noop_on_non_trading_day(conn: sqlite3.Connection) -> None:
+    """Same guarantee proven for calculate_sma()/calculate_rsi() above,
+    checked independently for calculate_drawdown()."""
+    etf = _make_etf_with_trading_days(conn, TRADING_DAYS)
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 16), "30")
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 17), "20")
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 20), "10")
+    non_trading_day = date(2026, 7, 18)  # Saturday, inside TRADING_DAYS' span
+    insert_trading_session(
+        conn,
+        TradingSession(
+            calendar_id=CALENDAR_ID, session_date=non_trading_day, is_trading_day=False, close_time_utc=None
+        ),
+    )
+    definition = _make_drawdown_definition(window=3)
+    insert_indicator_definition(conn, definition)
+    clock = FixedClock(datetime(2026, 7, 18, 21, 0, tzinfo=timezone.utc))
+
+    calculate_drawdown(conn, clock, etf, definition, non_trading_day)
+
+    assert get_indicator_values(conn, definition.indicator_definition_id, etf.etf_id) == []
+    pipeline_name = f"indicator:MAX_DRAWDOWN:v1:{etf.ticker}"
+    assert get_last_successful_pipeline_date(conn, pipeline_name) == non_trading_day
+
+
 def test_calculate_drawdown_uses_trading_days_not_calendar_days(conn: sqlite3.Connection) -> None:
     """SMA-style window semantics: window=3 needs exactly 3 raw prices (not
     period+1 like RSI), and the weekend gap in TRADING_DAYS must be

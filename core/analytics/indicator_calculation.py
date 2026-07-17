@@ -154,11 +154,14 @@ def calculate_drawdown(
     trading sessions on the ETF's calendar ending at session_date -- SMA's
     window semantics, not RSI's period+1 (drawdown needs raw price levels
     to track peak-vs-trough, not deltas, so it needs exactly `window`
-    prices, the same as calculate_sma()). One call is one atomic pipeline
-    run: the IndicatorValue insert, run completion, and watermark advance
-    commit or roll back together, per run_pipeline's transaction boundary.
-    Idempotent: rerunning for the same (definition, etf, session_date) is
-    a no-op insert.
+    prices, the same as calculate_sma()). A session_date that is not
+    itself a trading day on the ETF's calendar is a no-op success, the
+    same non-trading-day guard calculate_sma()/calculate_rsi() apply --
+    see calculate_sma()'s docstring for why. One call is one atomic
+    pipeline run: the IndicatorValue insert, run completion, and
+    watermark advance commit or roll back together, per run_pipeline's
+    transaction boundary. Idempotent: rerunning for the same (definition,
+    etf, session_date) is a no-op insert.
 
     A comparison metric only: independent of SMA/RSI, not wired into
     run_write_pipeline() or run_write_pipeline_for_etfs() -- it remains a
@@ -168,6 +171,9 @@ def calculate_drawdown(
     window = json.loads(definition.parameters)["window"]
     pipeline_name = indicator_pipeline_name(definition.name, definition.version, etf.ticker)
     with run_pipeline(conn, clock, pipeline_name, session_date) as ingestion_run_id:
+        if not is_trading_day(conn, etf.calendar_id, session_date):
+            return ingestion_run_id
+
         window_dates = _resolve_trading_window(conn, etf.calendar_id, session_date, window)
         prices = _load_close_prices(conn, etf.etf_id, window_dates)
         value = max_drawdown(prices)
