@@ -1,15 +1,36 @@
 # experiments/
 
-Scripts in this directory are **experiment runners**, not production
-code:
+This directory holds two different kinds of scripts, neither of them
+production code:
 
-- They are **not** part of the `etf` CLI (`etf update`, `etf status`,
-  `etf analyze`) and are not installed, scheduled, or shipped as part
-  of the platform.
-- They do not modify `core/`, `adapters/`, database models, migrations,
-  or scoring logic. They only call existing application services
-  (e.g. `core.analytics.write_pipeline.run_write_pipeline_for_etfs`)
-  exactly as those services already exist.
+- **Research runners** (e.g. `daily_etf_universe_update.py`) -- collect
+  real ETF scoring history over time. Safe to run daily/on a schedule.
+  Produce a factual research summary as output.
+- **Setup utilities** (e.g. `seed_trading_calendar.py`) -- populate
+  one-time or occasionally-refreshed prerequisite data (data the
+  research runners and the platform's write pipeline require to exist,
+  but do not themselves generate) and then are done. Never scheduled,
+  never collect research history, produce a factual setup summary as
+  output. `seed_trading_calendar.py` belongs here rather than in a new
+  top-level directory because it exists for exactly one reason -- to
+  satisfy `daily_etf_universe_update.py`'s own documented trading-
+  calendar prerequisite below -- and because as of this writing it is
+  the only script of its kind; a dedicated directory for "setup
+  utilities" would be structure built ahead of a second concrete need,
+  the same abstraction this project consistently declines to build
+  early elsewhere (see `docs/ARCHITECTURE_DECISIONS.md` and
+  `docs/BASELINE_STATUS.md`'s "Abstraction discipline").
+
+Both kinds of script share the same boundary rules:
+
+- Neither is part of the `etf` CLI (`etf update`, `etf status`, `etf
+  analyze`, `etf rank`, `etf compare`, `etf history`) and neither is
+  installed, scheduled, or shipped as part of the platform.
+- Neither modifies `core/`, `adapters/`, database models, migrations,
+  or scoring logic. Both only call existing application/repository
+  functions (e.g. `core.analytics.write_pipeline.run_write_pipeline_for_etfs`,
+  `core.market_data.persistence.repository.insert_trading_session`)
+  exactly as those functions already exist.
 - No new CLI commands, config framework, scheduler, or UI are added by
   anything in this directory.
 
@@ -75,9 +96,8 @@ it belongs to the platform, not to an experiment script:
   corrected.
 
 So: populate a real `Calendar` and its `TradingSession` rows for
-`CALENDAR_ID` before running this script. How you do that is outside
-this script's scope -- this directory does not add a platform seeding
-mechanism, since none currently exists.
+`CALENDAR_ID` before running this script. `seed_trading_calendar.py`,
+also in this directory, does exactly that -- see below.
 
 ### Cold-start history requirement
 
@@ -100,3 +120,43 @@ To restate plainly: this script is not `etf update`, `etf status`, or
 `core/` or `adapters/` depends on it or is changed by it. It exists
 solely to run the platform's existing pipeline over a realistic ETF
 universe and collect real operational history for future review.
+
+## seed_trading_calendar.py
+
+A **setup utility**, not a research runner: it populates real,
+exchange-accurate `Calendar`/`TradingSession` rows -- the prerequisite
+`daily_etf_universe_update.py` above documents and refuses to invent
+itself -- and produces no ETF scoring history of its own.
+
+Run it once before the first research run against a fresh database, or
+occasionally afterward to extend calendar coverage further into the
+future:
+
+```
+python experiments/seed_trading_calendar.py
+```
+
+It requires the `exchange_calendars` package, which is **not**
+installed by any part of this platform:
+
+```
+pip install exchange_calendars
+```
+
+This is a documented, tool-local dependency only. `core/` and
+`adapters/` have zero third-party runtime dependencies, and installing
+this package does not change that -- nothing outside this one file
+imports it, and it is never added to any project-wide dependency
+declaration. If you never run this script, you never need it installed.
+
+Idempotent, same discipline as every other script in this directory:
+re-running it (to extend coverage, or against an already-seeded
+database) never fails on "already exists" and never duplicates rows.
+It uses the same `experiments_etf_universe.db` file at the repo root
+that `daily_etf_universe_update.py` uses by default, so a normal
+first-time sequence is:
+
+```
+python experiments/seed_trading_calendar.py
+python experiments/daily_etf_universe_update.py
+```
