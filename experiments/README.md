@@ -1,27 +1,42 @@
 # experiments/
 
-This directory holds two different kinds of scripts, neither of them
+This directory holds three different kinds of scripts, none of them
 production code:
 
-- **Research runners** (e.g. `daily_etf_universe_update.py`) -- collect
+- **Research runners** (e.g. `daily_etf_universe_update.py`) -- *produce*
   real ETF scoring history over time. Safe to run daily/on a schedule.
   Produce a factual research summary as output.
-- **Setup utilities** (e.g. `seed_trading_calendar.py`) -- populate
-  one-time or occasionally-refreshed prerequisite data (data the
-  research runners and the platform's write pipeline require to exist,
-  but do not themselves generate) and then are done. Never scheduled,
-  never collect research history, produce a factual setup summary as
-  output. `seed_trading_calendar.py` belongs here rather than in a new
-  top-level directory because it exists for exactly one reason -- to
-  satisfy `daily_etf_universe_update.py`'s own documented trading-
-  calendar prerequisite below -- and because as of this writing it is
-  the only script of its kind; a dedicated directory for "setup
-  utilities" would be structure built ahead of a second concrete need,
-  the same abstraction this project consistently declines to build
-  early elsewhere (see `docs/ARCHITECTURE_DECISIONS.md` and
-  `docs/BASELINE_STATUS.md`'s "Abstraction discipline").
+- **Setup utilities** (e.g. `seed_trading_calendar.py`,
+  `backfill_price_history.py`) -- populate one-time or occasionally-
+  refreshed prerequisite data (data the research runners and the
+  platform's write pipeline require to exist, but do not themselves
+  generate) and then are done. Never scheduled, never collect or
+  interpret research history, produce a factual setup summary as
+  output.
+- **Research analysis scripts** (e.g. `validate_scoring_signal.py`) --
+  *consume* history the research runners already produced and ask
+  whether it means anything (e.g. does a ranking correlate with
+  subsequent returns). Produce a factual research finding, explicitly
+  disclosing its own sample size and limitations -- never a
+  recommendation, never a claim of proof.
 
-Both kinds of script share the same boundary rules:
+None of these three categories gets its own top-level directory or
+dedicated subdirectory. Each new script that doesn't fit the existing
+two categories has, so far, been exactly one script -- a dedicated
+directory or module per category would be structure built ahead of a
+second concrete need, the same abstraction this project consistently
+declines to build early elsewhere (see `docs/ARCHITECTURE_DECISIONS.md`
+and `docs/BASELINE_STATUS.md`'s "Abstraction discipline"). The same
+reasoning applies to `core/`: none of the price-acquisition or
+signal-research logic in this directory was added to `core/` either --
+see each script's own module docstring for why, but in short: every
+function these scripts need (`DataProvider.fetch_daily_bars()` with a
+real date range, `insert_price_bar()`, `generate_ranked_etf_report()`
+for a past date, `daily_etf_universe_update.run(session_date=...)`)
+already existed, unmodified, before either script was written. Nothing
+new was needed in `core/` to build them.
+
+All three kinds of script share the same boundary rules:
 
 - Neither is part of the `etf` CLI (`etf update`, `etf status`, `etf
   analyze`, `etf rank`, `etf compare`, `etf history`) and neither is
@@ -160,3 +175,81 @@ first-time sequence is:
 python experiments/seed_trading_calendar.py
 python experiments/daily_etf_universe_update.py
 ```
+
+## backfill_price_history.py
+
+A **setup utility**, not a research runner and not the daily
+production pipeline. `daily_etf_universe_update.py`'s own pipeline
+ingests one session-day per run, by design -- correct for daily
+production use, far too slow (one HTTP request per ETF per day) to
+build up months or years of history without risking the kind of
+provider rate-limiting this project has already hit for real (see
+`core/market_data/providers/yahoo_finance.py`'s v0.15.1/v0.15.2 fixes).
+
+This script solves that with zero new machinery: it calls the
+platform's existing `DataProvider.fetch_daily_bars(ticker, start, end)`
+directly with a real date range -- one request per ETF for the whole
+range -- and inserts each bar via the existing `insert_price_bar()`
+repository function. Single responsibility: price bars only. It does
+not calculate indicators or scores, does not seed a calendar, and does
+not modify ingestion logic or introduce a provider abstraction.
+
+Requires ETF rows to already exist (run `daily_etf_universe_update.py`
+at least once first) -- this script does not register ETFs; a ticker
+with no ETF row is reported as skipped, not created.
+
+Run it with:
+
+```
+python experiments/backfill_price_history.py
+```
+
+Idempotent: existing `PriceBar` rows are read once per ETF before
+fetching, and only genuinely new dates from the provider response are
+inserted. No new dependency -- it uses the same `YahooFinanceProvider`
+the rest of the platform already uses.
+
+## validate_scoring_signal.py
+
+A **research analysis script**, explicitly not called backtesting, a
+validation framework, or a signal engine -- see its own module
+docstring for why "backtesting" is the wrong word here (it would imply
+trade simulation, which this platform has never had and doesn't gain
+now). It asks exactly one question:
+
+> Over this historical period, did higher-ranked ETFs have different
+> subsequent returns than lower-ranked ETFs?
+
+It reuses `daily_etf_universe_update.run(session_date=...)` and
+`generate_ranked_etf_report()` unmodified -- both already work
+correctly for historical dates, with no change needed. The only new
+code is a private `forward_return()` calculation (pure, `Decimal`, no
+database access, same discipline as
+`core.analytics.domain.calculations.max_drawdown()`) and the
+loop/aggregation logic that composes the above into one factual
+report. Nothing here is published as a reusable interface.
+
+Deliberately minimal scope: one scoring profile, one ETF universe, one
+fixed forward-return horizon, a top-k vs. bottom-k bucket comparison.
+No benchmark comparison, no multiple horizons, no parameter sweep, no
+persistence of results, no CLI command -- all explicitly out of scope
+for this first version.
+
+Requires `backfill_price_history.py` (above) to have already provided
+real price depth covering the requested period plus the forward-return
+horizon beyond it; without that, most or all historical dates will
+have no Score yet and this script will factually report very few or
+zero observed ranking dates.
+
+Run it with:
+
+```
+python experiments/validate_scoring_signal.py
+```
+
+The report always discloses its own sample size and limitations
+(observations are not independent, one historical regime only,
+survivorship bias in the ETF universe) and ends with an explicit
+disclaimer that it does not confirm, validate, or prove predictive
+value -- no recommendation, no ranking judgment, no investment advice.
+No new dependency.
