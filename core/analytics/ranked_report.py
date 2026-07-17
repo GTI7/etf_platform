@@ -12,8 +12,44 @@ from core.analytics.persistence.repository import (
     get_indicator_values,
     get_scores_for_session,
 )
+from core.domain.exceptions import DomainError
 from core.market_data.persistence.repository import get_etf
 from core.shared.ids import ETFId
+
+
+class MissingScoreError(DomainError):
+    """Raised when generate_etf_analysis_report() is asked to analyse an
+    ETF that has no Score for the given (scoring_profile_id,
+    session_date). A Score is the one required precondition for a
+    single-ETF analysis -- unlike max_drawdown (optional, resolves to
+    None when absent), there is no meaningful analysis to return without
+    it, so this fails loudly rather than returning None or a partial
+    report."""
+
+
+def _resolve_dimension_scores(conn: sqlite3.Connection, score_id: str) -> dict[Dimension, Decimal]:
+    """The per-dimension breakdown behind one Score's overall_score."""
+    return {
+        dimension_score.dimension: dimension_score.value
+        for dimension_score in get_dimension_scores(conn, score_id)
+    }
+
+
+def _resolve_max_drawdown(
+    conn: sqlite3.Connection,
+    risk_definition_id: str | None,
+    etf_id: str,
+    session_date: date,
+) -> Decimal | None:
+    """max_drawdown for one ETF/session, or None if risk_definition_id is
+    omitted, or if supplied but no MAX_DRAWDOWN IndicatorValue exists yet
+    -- never an error, since risk is an optional comparison metric."""
+    if risk_definition_id is None:
+        return None
+    risk_values = get_indicator_values(
+        conn, risk_definition_id, etf_id, start_date=session_date, end_date=session_date
+    )
+    return risk_values[0].value if risk_values else None
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,21 +125,8 @@ def generate_ranked_etf_report(
     report: list[RankedETFReportEntry] = []
     for ranked_score in ranked:
         etf = get_etf(conn, ranked_score.etf_id)
-        dimension_scores = {
-            dimension_score.dimension: dimension_score.value
-            for dimension_score in get_dimension_scores(conn, score_id_by_etf[ranked_score.etf_id])
-        }
-        max_drawdown: Decimal | None = None
-        if risk_definition_id is not None:
-            risk_values = get_indicator_values(
-                conn,
-                risk_definition_id,
-                ranked_score.etf_id,
-                start_date=session_date,
-                end_date=session_date,
-            )
-            if risk_values:
-                max_drawdown = risk_values[0].value
+        dimension_scores = _resolve_dimension_scores(conn, score_id_by_etf[ranked_score.etf_id])
+        max_drawdown = _resolve_max_drawdown(conn, risk_definition_id, ranked_score.etf_id, session_date)
         report.append(
             RankedETFReportEntry(
                 rank=ranked_score.rank,
@@ -116,3 +139,92 @@ def generate_ranked_etf_report(
             )
         )
     return report
+
+
+@dataclass(frozen=True, slots=True)
+class ETFAnalysisReport:
+    """A complete, single-ETF analysis for one (scoring_profile_id,
+    session_date) pair.
+
+    Deliberately context-carrying, not a permanent property of the ETF:
+    analysis_date and scoring_profile_id are included because the same
+    etf_id analysed under a different profile, or on a different session,
+    can produce a different report -- a score is only meaningful together
+    with the methodology and date that produced it.
+
+    dimension_scores and max_drawdown follow the exact same resolution
+    and None-handling as RankedETFReportEntry (see
+    generate_ranked_etf_report() for the shared behaviour -- both are
+    built on the same underlying helpers).
+
+    rank/peer_count describe this ETF's position among every other ETF
+    with a Score for the same (scoring_profile_id, session_date),
+    computed via the same rank_scores() the multi-ETF report uses -- not
+    a separate ranking rule."""
+
+    etf_id: ETFId
+    ticker: str
+    name: str
+    analysis_date: date
+    scoring_profile_id: str
+    overall_score: Decimal
+    dimension_scores: dict[Dimension, Decimal]
+    max_drawdown: Decimal | None
+    rank: int
+    peer_count: int
+
+
+def generate_etf_analysis_report(
+    conn: sqlite3.Connection,
+    etf_id: str,
+    scoring_profile_id: str,
+    session_date: date,
+    risk_definition_id: str | None = None,
+) -> ETFAnalysisReport:
+    """A complete analysis of exactly one ETF for one (scoring_profile_id,
+    session_date) pair: identity, overall_score, the per-dimension
+    breakdown behind it, an optional risk metric, and this ETF's position
+    among its peers for the same profile/session.
+
+    Read-only, additive: does not modify generate_ranked_etf_report()'s
+    behaviour, reuses the same private helpers it uses, and reuses
+    get_scores_for_session()/rank_scores() for the peer-ranking context
+    rather than introducing a new repository query -- the same data
+    get_scores_for_session() already fetches also answers "does this ETF
+    have a Score at all" for the required-Score check below.
+
+    Raises MissingScoreError if no Score exists for this
+    (etf_id, scoring_profile_id, session_date) -- a Score is the one
+    required precondition for a single-ETF analysis; this fails loudly
+    rather than returning None or a partial report, the same discipline
+    InsufficientPriceHistoryError/MissingIndicatorValueError already use
+    elsewhere for a missing required precondition. This is unlike
+    max_drawdown, which is optional and resolves to None when absent.
+    """
+    peer_scores = get_scores_for_session(conn, scoring_profile_id, session_date)
+    own_score = next((score for score in peer_scores if score.etf_id == etf_id), None)
+    if own_score is None:
+        raise MissingScoreError(
+            f"No Score for etf_id={etf_id!r}, scoring_profile_id={scoring_profile_id!r}, "
+            f"session_date={session_date}"
+        )
+
+    etf = get_etf(conn, etf_id)
+    dimension_scores = _resolve_dimension_scores(conn, own_score.score_id)
+    max_drawdown = _resolve_max_drawdown(conn, risk_definition_id, etf_id, session_date)
+
+    ranked_peers = rank_scores(peer_scores)
+    rank = next(ranked.rank for ranked in ranked_peers if ranked.etf_id == etf_id)
+
+    return ETFAnalysisReport(
+        etf_id=etf.etf_id,
+        ticker=etf.ticker,
+        name=etf.name,
+        analysis_date=session_date,
+        scoring_profile_id=scoring_profile_id,
+        overall_score=own_score.overall_score,
+        dimension_scores=dimension_scores,
+        max_drawdown=max_drawdown,
+        rank=rank,
+        peer_count=len(ranked_peers),
+    )
