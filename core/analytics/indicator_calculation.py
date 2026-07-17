@@ -13,6 +13,7 @@ from core.market_data.domain.models import ETF
 from core.market_data.ingestion.pipeline_run import run_pipeline
 from core.market_data.persistence.repository import get_price_bars, get_trading_days
 from core.shared.clock import Clock
+from core.shared.pipeline_names import indicator_pipeline_name
 
 
 def _resolve_trading_window(
@@ -72,7 +73,7 @@ def calculate_sma(
     for the same (definition, etf, session_date) is a no-op insert.
     """
     window = json.loads(definition.parameters)["window"]
-    pipeline_name = f"indicator:{definition.name}:v{definition.version}:{etf.ticker}"
+    pipeline_name = indicator_pipeline_name(definition.name, definition.version, etf.ticker)
     with run_pipeline(conn, clock, pipeline_name, session_date) as ingestion_run_id:
         window_dates = _resolve_trading_window(conn, etf.calendar_id, session_date, window)
         prices = _load_close_prices(conn, etf.etf_id, window_dates)
@@ -110,7 +111,7 @@ def calculate_rsi(
     etf, session_date) is a no-op insert.
     """
     period = json.loads(definition.parameters)["period"]
-    pipeline_name = f"indicator:{definition.name}:v{definition.version}:{etf.ticker}"
+    pipeline_name = indicator_pipeline_name(definition.name, definition.version, etf.ticker)
     with run_pipeline(conn, clock, pipeline_name, session_date) as ingestion_run_id:
         window_dates = _resolve_trading_window(conn, etf.calendar_id, session_date, period + 1)
         prices = _load_close_prices(conn, etf.etf_id, window_dates)
@@ -152,7 +153,7 @@ def calculate_drawdown(
     independently before write-pipeline composition ever wired them in.
     """
     window = json.loads(definition.parameters)["window"]
-    pipeline_name = f"indicator:{definition.name}:v{definition.version}:{etf.ticker}"
+    pipeline_name = indicator_pipeline_name(definition.name, definition.version, etf.ticker)
     with run_pipeline(conn, clock, pipeline_name, session_date) as ingestion_run_id:
         window_dates = _resolve_trading_window(conn, etf.calendar_id, session_date, window)
         prices = _load_close_prices(conn, etf.etf_id, window_dates)

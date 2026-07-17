@@ -4,6 +4,7 @@ from datetime import date
 
 from core.analytics.ranked_report import ETFAnalysisReport
 from core.analytics.write_pipeline import WritePipelineResult
+from core.market_data.domain.models import IngestionRun
 
 
 def format_etf_analysis_report(report: ETFAnalysisReport) -> str:
@@ -59,4 +60,45 @@ def format_update_result(ticker: str, session_date: date, result: WritePipelineR
         f"RSI run: {result.rsi_run_id}",
         f"Score run: {result.score_run_id}",
     ]
+    return "\n".join(lines)
+
+
+def _format_run(run: IngestionRun | None) -> list[str]:
+    """One pipeline stage's most recent run, indented under its own label
+    -- every value comes directly from the IngestionRun already resolved
+    by the caller; nothing here calculates or interprets anything."""
+    if run is None:
+        return ["  No run recorded"]
+    completed_at = run.completed_at.isoformat() if run.completed_at is not None else "N/A"
+    error_message = run.error_message if run.error_message is not None else "none"
+    return [
+        f"  Status: {run.status.value}",
+        f"  Pipeline date: {run.pipeline_date.isoformat()}",
+        f"  Started at: {run.started_at.isoformat()}",
+        f"  Completed at: {completed_at}",
+        f"  Error: {error_message}",
+    ]
+
+
+def format_status(
+    ticker: str,
+    price_ingestion_run: IngestionRun | None,
+    sma_run: IngestionRun | None,
+    rsi_run: IngestionRun | None,
+    score_run: IngestionRun | None,
+) -> str:
+    """Plain-text rendering of the four write-pipeline stages' most recent
+    runs for one ETF. Every value printed comes directly from the
+    IngestionRun the caller already resolved for each stage -- nothing
+    here calculates, interprets, or summarizes anything, including
+    whether the reported states are 'good' or 'bad'."""
+    lines = [f"Ticker: {ticker}"]
+    for label, run in [
+        ("Price ingestion", price_ingestion_run),
+        ("SMA", sma_run),
+        ("RSI", rsi_run),
+        ("Score", score_run),
+    ]:
+        lines.append(f"{label}:")
+        lines.extend(_format_run(run))
     return "\n".join(lines)

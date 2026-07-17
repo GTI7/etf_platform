@@ -5,9 +5,11 @@ from datetime import date, datetime, timezone
 
 import pytest
 
+from core.market_data.domain.models import IngestionStatus
 from core.market_data.ingestion.pipeline_run import run_pipeline
 from core.market_data.persistence.repository import (
     get_last_successful_pipeline_date,
+    get_latest_ingestion_run,
     get_pipeline_state,
 )
 from core.shared.clock import FixedClock
@@ -104,3 +106,70 @@ def test_watermark_does_not_regress_on_out_of_order_backfill(conn: sqlite3.Conne
         pass
 
     assert get_last_successful_pipeline_date(conn, PIPELINE_NAME) == date(2026, 7, 14)
+
+
+def test_get_latest_ingestion_run_returns_none_when_no_run_exists(
+    conn: sqlite3.Connection,
+) -> None:
+    assert get_latest_ingestion_run(conn, PIPELINE_NAME) is None
+
+
+def test_get_latest_ingestion_run_returns_successful_run(conn: sqlite3.Connection) -> None:
+    clock = FixedClock(datetime(2026, 7, 14, tzinfo=timezone.utc))
+
+    with run_pipeline(conn, clock, PIPELINE_NAME, date(2026, 7, 14)):
+        pass
+
+    run = get_latest_ingestion_run(conn, PIPELINE_NAME)
+    assert run is not None
+    assert run.pipeline_name == PIPELINE_NAME
+    assert run.pipeline_date == date(2026, 7, 14)
+    assert run.status == IngestionStatus.SUCCESS
+    assert run.completed_at is not None
+    assert run.error_message is None
+
+
+def test_get_latest_ingestion_run_returns_failed_run_with_error_message(
+    conn: sqlite3.Connection,
+) -> None:
+    clock = FixedClock(datetime(2026, 7, 14, tzinfo=timezone.utc))
+
+    with pytest.raises(RuntimeError):
+        with run_pipeline(conn, clock, PIPELINE_NAME, date(2026, 7, 14)):
+            raise RuntimeError("boom")
+
+    run = get_latest_ingestion_run(conn, PIPELINE_NAME)
+    assert run is not None
+    assert run.status == IngestionStatus.FAILED
+    assert run.error_message == "boom"
+
+
+def test_get_latest_ingestion_run_returns_most_recently_started_attempt(
+    conn: sqlite3.Connection,
+) -> None:
+    """A later out-of-order backfill run for an earlier session_date is
+    still the most recently *started* attempt -- get_latest_ingestion_run
+    must reflect that, not the latest pipeline_date processed."""
+    clock = FixedClock(datetime(2026, 7, 14, tzinfo=timezone.utc))
+    with run_pipeline(conn, clock, PIPELINE_NAME, date(2026, 7, 14)):
+        pass
+
+    backfill_clock = FixedClock(datetime(2026, 7, 15, tzinfo=timezone.utc))
+    with run_pipeline(conn, backfill_clock, PIPELINE_NAME, date(2026, 7, 10)):
+        pass
+
+    run = get_latest_ingestion_run(conn, PIPELINE_NAME)
+    assert run is not None
+    assert run.pipeline_date == date(2026, 7, 10)
+    assert run.started_at == datetime(2026, 7, 15, tzinfo=timezone.utc)
+
+
+def test_get_latest_ingestion_run_isolates_by_pipeline_name(conn: sqlite3.Connection) -> None:
+    clock = FixedClock(datetime(2026, 7, 14, tzinfo=timezone.utc))
+    with run_pipeline(conn, clock, "daily_price_ingestion", date(2026, 7, 14)):
+        pass
+
+    assert get_latest_ingestion_run(conn, "daily_macro_ingestion") is None
+    other_run = get_latest_ingestion_run(conn, "daily_price_ingestion")
+    assert other_run is not None
+    assert other_run.pipeline_name == "daily_price_ingestion"

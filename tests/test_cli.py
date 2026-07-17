@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from adapters.cli.formatting import format_etf_analysis_report, format_update_result
+from adapters.cli.formatting import format_etf_analysis_report, format_status, format_update_result
 from adapters.cli.main import main
 from core.analytics.domain.models import (
     Dimension,
@@ -25,7 +25,7 @@ from core.analytics.persistence.repository import (
 )
 from core.analytics.ranked_report import ETFAnalysisReport
 from core.analytics.write_pipeline import WritePipelineResult
-from core.market_data.domain.models import ETF, Calendar, PriceBar, TradingSession
+from core.market_data.domain.models import ETF, Calendar, IngestionRun, IngestionStatus, PriceBar, TradingSession
 from core.market_data.persistence.database import connect
 from core.market_data.persistence.migrations import run_migrations
 from core.market_data.persistence.repository import (
@@ -650,3 +650,249 @@ def test_format_update_result_reports_skipped_ingestion_factually() -> None:
     output = format_update_result("SPY", UPDATE_SESSION_DATE, result)
 
     assert "Price ingestion run: skipped (price data already present)" in output
+
+
+# ---------------------------------------------------------------------------
+# etf status
+# ---------------------------------------------------------------------------
+
+
+def _status_argv(db_path: Path) -> list[str]:
+    return [
+        "status",
+        "--ticker",
+        TICKER,
+        "--sma-name",
+        SMA_NAME,
+        "--sma-version",
+        str(SMA_VERSION),
+        "--rsi-name",
+        RSI_NAME,
+        "--rsi-version",
+        str(RSI_VERSION),
+        "--profile-name",
+        PROFILE_NAME,
+        "--profile-version",
+        str(PROFILE_VERSION),
+        "--db-path",
+        str(db_path),
+    ]
+
+
+def test_status_reports_no_run_recorded_before_any_update(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_update_fixture(db_path)
+
+    exit_code = main(_status_argv(db_path))
+
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert out.count("No run recorded") == 4
+
+
+def test_status_reports_success_after_a_successful_update(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_update_fixture(db_path)
+    clock = FixedClock(datetime(2026, 7, 14, 21, 0, tzinfo=timezone.utc))
+    provider = _FakeProvider(
+        [
+            ProviderPriceBar(
+                session_date=UPDATE_SESSION_DATE,
+                open=Decimal("103"),
+                high=Decimal("103"),
+                low=Decimal("103"),
+                close=Decimal("103"),
+                volume=1000,
+                currency="USD",
+            )
+        ]
+    )
+    update_exit_code = main(_update_argv(db_path), clock=clock, provider=provider)
+    assert update_exit_code == 0
+    capsys.readouterr()  # discard update's own output
+
+    exit_code = main(_status_argv(db_path))
+
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert out.count("Status: success") == 4
+    assert "Pipeline date: 2026-07-14" in out
+    assert "Error: none" in out
+
+
+def test_status_reports_failure_after_a_failed_update(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_update_fixture(db_path)
+    update_exit_code = main(
+        _update_argv(db_path),
+        clock=FixedClock(datetime(2026, 7, 14, tzinfo=timezone.utc)),
+        provider=_FailingProvider(),
+    )
+    assert update_exit_code != 0
+    capsys.readouterr()  # discard update's own output
+
+    exit_code = main(_status_argv(db_path))
+
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert "Status: failed" in out
+    assert "upstream is down" in out
+
+
+def test_status_ticker_not_found_returns_nonzero(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_update_fixture(db_path)
+    argv = _status_argv(db_path)
+    argv[argv.index("--ticker") + 1] = "DOES-NOT-EXIST"
+
+    exit_code = main(argv)
+
+    assert exit_code != 0
+    err = capsys.readouterr().err
+    assert err.strip() == "No ETF found for ticker DOES-NOT-EXIST"
+
+
+def test_status_sma_definition_not_found_returns_nonzero(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_update_fixture(db_path)
+    argv = _status_argv(db_path)
+    argv[argv.index("--sma-name") + 1] = "NOT-A-DEFINITION"
+
+    exit_code = main(argv)
+
+    assert exit_code != 0
+    err = capsys.readouterr().err
+    assert "No indicator definition found" in err
+
+
+def test_status_rsi_definition_not_found_returns_nonzero(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_update_fixture(db_path)
+    argv = _status_argv(db_path)
+    argv[argv.index("--rsi-name") + 1] = "NOT-A-DEFINITION"
+
+    exit_code = main(argv)
+
+    assert exit_code != 0
+    err = capsys.readouterr().err
+    assert "No indicator definition found" in err
+
+
+def test_status_profile_not_found_returns_nonzero(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_update_fixture(db_path)
+    argv = _status_argv(db_path)
+    argv[argv.index("--profile-name") + 1] = "NOT-A-PROFILE"
+
+    exit_code = main(argv)
+
+    assert exit_code != 0
+    err = capsys.readouterr().err
+    assert "No scoring profile found" in err
+
+
+def test_status_invalid_sma_version_exits_nonzero(tmp_path: Path) -> None:
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_update_fixture(db_path)
+    argv = _status_argv(db_path)
+    argv[argv.index("--sma-version") + 1] = "not-an-int"
+
+    with pytest.raises(SystemExit) as exc_info:
+        main(argv)
+
+    assert exc_info.value.code != 0
+
+
+def test_status_missing_required_argument_exits_nonzero(tmp_path: Path) -> None:
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_update_fixture(db_path)
+
+    with pytest.raises(SystemExit) as exc_info:
+        main(["status", "--ticker", TICKER])  # missing every other required flag
+
+    assert exc_info.value.code != 0
+
+
+def test_status_output_contains_no_forbidden_wording(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_update_fixture(db_path)
+
+    exit_code = main(_status_argv(db_path))
+    assert exit_code == 0
+
+    out = capsys.readouterr().out.lower()
+    forbidden = [
+        "recommend",
+        "buy",
+        "sell",
+        "best",
+        "worst",
+        "should",
+        "good",
+        "bad",
+        "strong",
+        "weak",
+    ]
+    for word in forbidden:
+        assert word not in out
+
+
+def test_format_status_contains_only_supplied_run_fields() -> None:
+    run = IngestionRun(
+        ingestion_run_id="run-1",
+        pipeline_name="price_ingestion:SPY",
+        pipeline_date=date(2026, 7, 14),
+        status=IngestionStatus.SUCCESS,
+        started_at=datetime(2026, 7, 14, 21, 0, tzinfo=timezone.utc),
+        completed_at=datetime(2026, 7, 14, 21, 0, 5, tzinfo=timezone.utc),
+        error_message=None,
+    )
+
+    output = format_status("SPY", run, run, run, run)
+
+    assert "Ticker: SPY" in output
+    assert "Price ingestion:" in output
+    assert "SMA:" in output
+    assert "RSI:" in output
+    assert "Score:" in output
+    assert output.count("Status: success") == 4
+    assert "Error: none" in output
+
+
+def test_format_status_reports_no_run_recorded_factually() -> None:
+    output = format_status("SPY", None, None, None, None)
+
+    assert output.count("No run recorded") == 4
+
+
+def test_format_status_reports_failed_run_error_message() -> None:
+    run = IngestionRun(
+        ingestion_run_id="run-1",
+        pipeline_name="price_ingestion:SPY",
+        pipeline_date=date(2026, 7, 14),
+        status=IngestionStatus.FAILED,
+        started_at=datetime(2026, 7, 14, 21, 0, tzinfo=timezone.utc),
+        completed_at=datetime(2026, 7, 14, 21, 0, 5, tzinfo=timezone.utc),
+        error_message="upstream is down",
+    )
+
+    output = format_status("SPY", run, None, None, None)
+
+    assert "Status: failed" in output
+    assert "Error: upstream is down" in output

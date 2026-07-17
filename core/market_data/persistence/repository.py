@@ -220,6 +220,43 @@ def complete_ingestion_run(
     )
 
 
+def get_latest_ingestion_run(conn: sqlite3.Connection, pipeline_name: str) -> IngestionRun | None:
+    """The most recently started IngestionRun for pipeline_name, regardless
+    of status -- the read-side counterpart to start_ingestion_run()/
+    complete_ingestion_run(), which already write every attempt (running,
+    success, or failed) but had no query to read one back until now.
+
+    Ordered by started_at, not pipeline_date: this answers "what happened
+    on the most recent execution attempt", which for an out-of-order
+    backfill run is not the same question as "the latest session_date this
+    pipeline has ever processed".
+    """
+    row = conn.execute(
+        """
+        SELECT ingestion_run_id, pipeline_name, pipeline_date, status,
+               started_at, completed_at, error_message
+        FROM IngestionRun
+        WHERE pipeline_name = ?
+        ORDER BY started_at DESC
+        LIMIT 1
+        """,
+        (pipeline_name,),
+    ).fetchone()
+    if row is None:
+        return None
+    return IngestionRun(
+        ingestion_run_id=row["ingestion_run_id"],
+        pipeline_name=row["pipeline_name"],
+        pipeline_date=date.fromisoformat(row["pipeline_date"]),
+        status=IngestionStatus(row["status"]),
+        started_at=datetime.fromisoformat(row["started_at"]),
+        completed_at=(
+            datetime.fromisoformat(row["completed_at"]) if row["completed_at"] is not None else None
+        ),
+        error_message=row["error_message"],
+    )
+
+
 def advance_pipeline_watermark(
     conn: sqlite3.Connection,
     pipeline_name: str,

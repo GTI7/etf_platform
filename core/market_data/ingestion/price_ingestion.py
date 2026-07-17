@@ -10,6 +10,7 @@ from core.market_data.persistence.repository import insert_price_bar, is_trading
 from core.market_data.providers.base import DataProvider
 from core.shared.clock import Clock
 from core.shared.money import Money
+from core.shared.pipeline_names import price_ingestion_pipeline_name
 
 
 def ingest_daily_prices(
@@ -29,7 +30,7 @@ def ingest_daily_prices(
     run completion, watermark advance) commits or rolls back together as a
     single unit, per run_pipeline's transaction boundary.
     """
-    pipeline_name = f"price_ingestion:{etf.ticker}"
+    pipeline_name = price_ingestion_pipeline_name(etf.ticker)
     with run_pipeline(conn, clock, pipeline_name, session_date) as ingestion_run_id:
         if is_trading_day(conn, etf.calendar_id, session_date):
             provider_bars = provider.fetch_daily_bars(etf.ticker, session_date, session_date)

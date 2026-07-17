@@ -25,6 +25,7 @@ from core.market_data.domain.models import ETF
 from core.market_data.ingestion.pipeline_run import run_pipeline
 from core.market_data.persistence.repository import is_trading_day
 from core.shared.clock import Clock
+from core.shared.pipeline_names import scoring_pipeline_name
 
 
 def _resolve_dimension_values(
@@ -92,7 +93,7 @@ def calculate_score(
     watermark advance commit or roll back together, per run_pipeline's
     transaction boundary.
     """
-    pipeline_name = f"scoring:{profile.name}:v{profile.version}:{etf.ticker}"
+    pipeline_name = scoring_pipeline_name(profile.name, profile.version, etf.ticker)
     with run_pipeline(conn, clock, pipeline_name, session_date) as ingestion_run_id:
         if not is_trading_day(conn, etf.calendar_id, session_date):
             return ingestion_run_id
