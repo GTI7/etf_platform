@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import date, datetime, time, timezone
@@ -78,6 +79,21 @@ class YahooFinanceProvider:
         self, ticker: str, start_date: date, end_date: date
     ) -> list[ProviderPriceBar]:
         url = _build_url(ticker, start_date, end_date)
-        raw = self._fetch(url)
-        payload = json.loads(raw)
+        try:
+            raw = self._fetch(url)
+        except urllib.error.URLError as exc:
+            # Covers HTTPError too (a URLError subclass) -- any transport-level
+            # failure (rate limiting, DNS, connection refused, ...) is exactly
+            # the "upstream error response" case ProviderError already exists
+            # for; this only translates the exception type, never swallows it.
+            raise ProviderError(f"Yahoo Finance request failed: {exc}") from exc
+
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            # E.g. an HTML rate-limit/CAPTCHA page returned instead of JSON --
+            # a malformed upstream response, the other case ProviderError's
+            # docstring already names.
+            raise ProviderError(f"Yahoo Finance returned invalid JSON: {exc}") from exc
+
         return _parse_chart_response(payload)

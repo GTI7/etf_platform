@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import urllib.error
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
@@ -81,6 +82,46 @@ def test_fetch_daily_bars_raises_on_empty_result() -> None:
     provider = YahooFinanceProvider(fetch=fake_fetch)
 
     with pytest.raises(ProviderError):
+        provider.fetch_daily_bars("SPY", date(2026, 7, 13), date(2026, 7, 13))
+
+
+def test_fetch_daily_bars_translates_url_error_into_provider_error() -> None:
+    """A transport-level failure (DNS, connection refused, ...) must reach
+    the caller as ProviderError, never as a raw urllib exception."""
+
+    def failing_fetch(url: str) -> bytes:
+        raise urllib.error.URLError("connection refused")
+
+    provider = YahooFinanceProvider(fetch=failing_fetch)
+
+    with pytest.raises(ProviderError, match="Yahoo Finance request failed"):
+        provider.fetch_daily_bars("SPY", date(2026, 7, 13), date(2026, 7, 13))
+
+
+def test_fetch_daily_bars_translates_http_error_into_provider_error() -> None:
+    """HTTPError (e.g. a 429 rate-limit response) is a URLError subclass --
+    it must be translated the same way as any other transport failure."""
+
+    def failing_fetch(url: str) -> bytes:
+        raise urllib.error.HTTPError(url, 429, "Too Many Requests", hdrs=None, fp=None)
+
+    provider = YahooFinanceProvider(fetch=failing_fetch)
+
+    with pytest.raises(ProviderError, match="Yahoo Finance request failed"):
+        provider.fetch_daily_bars("SPY", date(2026, 7, 13), date(2026, 7, 13))
+
+
+def test_fetch_daily_bars_translates_invalid_json_into_provider_error() -> None:
+    """An upstream response that isn't valid JSON (e.g. an HTML rate-limit
+    or CAPTCHA page) must also reach the caller as ProviderError, never as
+    a raw json.JSONDecodeError."""
+
+    def fake_fetch(url: str) -> bytes:
+        return b"<html>not json</html>"
+
+    provider = YahooFinanceProvider(fetch=fake_fetch)
+
+    with pytest.raises(ProviderError, match="Yahoo Finance returned invalid JSON"):
         provider.fetch_daily_bars("SPY", date(2026, 7, 13), date(2026, 7, 13))
 
 
