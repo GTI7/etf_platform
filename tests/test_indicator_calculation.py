@@ -136,6 +136,60 @@ def test_calculate_sma_uses_trading_days_not_calendar_days(conn: sqlite3.Connect
     assert get_last_successful_pipeline_date(conn, pipeline_name) == date(2026, 7, 20)
 
 
+def test_calculate_sma_is_a_noop_on_non_trading_day(conn: sqlite3.Connection) -> None:
+    """Same guarantee proven for calculate_score() (see
+    test_scoring_pipeline.py), checked here for calculate_sma(): a
+    session_date that is not a trading day must not silently resolve a
+    window ending at the prior real trading day and store a duplicate
+    value under the non-trading date."""
+    etf = _make_etf_with_trading_days(conn, TRADING_DAYS)
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 16), "10")
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 17), "20")
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 20), "30")
+    non_trading_day = date(2026, 7, 18)  # Saturday, inside TRADING_DAYS' span
+    insert_trading_session(
+        conn,
+        TradingSession(
+            calendar_id=CALENDAR_ID, session_date=non_trading_day, is_trading_day=False, close_time_utc=None
+        ),
+    )
+    definition = _make_definition(window=3)
+    insert_indicator_definition(conn, definition)
+    clock = FixedClock(datetime(2026, 7, 18, 21, 0, tzinfo=timezone.utc))
+
+    calculate_sma(conn, clock, etf, definition, non_trading_day)
+
+    assert get_indicator_values(conn, definition.indicator_definition_id, etf.etf_id) == []
+    pipeline_name = f"indicator:SMA:v1:{etf.ticker}"
+    assert get_last_successful_pipeline_date(conn, pipeline_name) == non_trading_day
+
+
+def test_calculate_rsi_is_a_noop_on_non_trading_day(conn: sqlite3.Connection) -> None:
+    """Same guarantee proven for calculate_sma() above, checked
+    independently for calculate_rsi()."""
+    etf = _make_etf_with_trading_days(conn, RSI_TRADING_DAYS)
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 15), "100")
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 16), "103")
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 17), "106")
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 20), "109")
+    non_trading_day = date(2026, 7, 18)  # Saturday, inside RSI_TRADING_DAYS' span
+    insert_trading_session(
+        conn,
+        TradingSession(
+            calendar_id=CALENDAR_ID, session_date=non_trading_day, is_trading_day=False, close_time_utc=None
+        ),
+    )
+    definition = _make_rsi_definition(period=3)
+    insert_indicator_definition(conn, definition)
+    clock = FixedClock(datetime(2026, 7, 18, 21, 0, tzinfo=timezone.utc))
+
+    calculate_rsi(conn, clock, etf, definition, non_trading_day)
+
+    assert get_indicator_values(conn, definition.indicator_definition_id, etf.etf_id) == []
+    pipeline_name = f"indicator:RSI:v1:{etf.ticker}"
+    assert get_last_successful_pipeline_date(conn, pipeline_name) == non_trading_day
+
+
 def test_calculate_sma_raises_when_too_few_trading_days(conn: sqlite3.Connection) -> None:
     etf = _make_etf_with_trading_days(conn, [date(2026, 7, 16), date(2026, 7, 17)])  # only 2
     _insert_bar(conn, etf.etf_id, date(2026, 7, 16), "10")

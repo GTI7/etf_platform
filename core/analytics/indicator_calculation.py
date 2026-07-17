@@ -11,7 +11,7 @@ from core.analytics.domain.models import IndicatorDefinition, IndicatorValue, In
 from core.analytics.persistence.repository import insert_indicator_value
 from core.market_data.domain.models import ETF
 from core.market_data.ingestion.pipeline_run import run_pipeline
-from core.market_data.persistence.repository import get_price_bars, get_trading_days
+from core.market_data.persistence.repository import get_price_bars, get_trading_days, is_trading_day
 from core.shared.clock import Clock
 from core.shared.pipeline_names import indicator_pipeline_name
 
@@ -67,14 +67,23 @@ def calculate_sma(
 
     TradingCalendar-aware: the window is `definition.parameters["window"]`
     trading sessions on the ETF's calendar ending at session_date, never
-    calendar days. One call is one atomic pipeline run: the IndicatorValue
-    insert, run completion, and watermark advance commit or roll back
-    together, per run_pipeline's transaction boundary. Idempotent: rerunning
-    for the same (definition, etf, session_date) is a no-op insert.
+    calendar days. A session_date that is not itself a trading day on the
+    ETF's calendar is a no-op success -- there is nothing to compute for a
+    date the market wasn't open -- the same discipline ingest_daily_prices()
+    and calculate_score() already apply; without this guard, session_date
+    would still resolve a window ending at the prior real trading day and
+    silently store a duplicate value under a non-trading date. One call is
+    one atomic pipeline run: the IndicatorValue insert, run completion, and
+    watermark advance commit or roll back together, per run_pipeline's
+    transaction boundary. Idempotent: rerunning for the same (definition,
+    etf, session_date) is a no-op insert.
     """
     window = json.loads(definition.parameters)["window"]
     pipeline_name = indicator_pipeline_name(definition.name, definition.version, etf.ticker)
     with run_pipeline(conn, clock, pipeline_name, session_date) as ingestion_run_id:
+        if not is_trading_day(conn, etf.calendar_id, session_date):
+            return ingestion_run_id
+
         window_dates = _resolve_trading_window(conn, etf.calendar_id, session_date, window)
         prices = _load_close_prices(conn, etf.etf_id, window_dates)
         value = sma(prices)
@@ -103,16 +112,20 @@ def calculate_rsi(
     produce `definition.parameters["period"]` deltas, so the window
     resolved here is one trading session longer than calculate_sma()'s
     equivalent window for the same period -- everything else (window
-    resolution, price loading, transaction boundary, idempotency) reuses
-    the exact same machinery calculate_sma() already uses. One call is one
-    atomic pipeline run: the IndicatorValue insert, run completion, and
-    watermark advance commit or roll back together, per run_pipeline's
-    transaction boundary. Idempotent: rerunning for the same (definition,
-    etf, session_date) is a no-op insert.
+    resolution, price loading, transaction boundary, idempotency, and the
+    same non-trading-day no-op guard calculate_sma() applies -- see its
+    docstring) reuses the exact same machinery calculate_sma() already
+    uses. One call is one atomic pipeline run: the IndicatorValue insert,
+    run completion, and watermark advance commit or roll back together,
+    per run_pipeline's transaction boundary. Idempotent: rerunning for the
+    same (definition, etf, session_date) is a no-op insert.
     """
     period = json.loads(definition.parameters)["period"]
     pipeline_name = indicator_pipeline_name(definition.name, definition.version, etf.ticker)
     with run_pipeline(conn, clock, pipeline_name, session_date) as ingestion_run_id:
+        if not is_trading_day(conn, etf.calendar_id, session_date):
+            return ingestion_run_id
+
         window_dates = _resolve_trading_window(conn, etf.calendar_id, session_date, period + 1)
         prices = _load_close_prices(conn, etf.etf_id, window_dates)
         value = rsi(prices)
