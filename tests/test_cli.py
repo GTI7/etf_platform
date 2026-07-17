@@ -7,7 +7,13 @@ from pathlib import Path
 
 import pytest
 
-from adapters.cli.formatting import format_etf_analysis_report, format_status, format_update_result
+from adapters.cli.formatting import (
+    format_etf_analysis_report,
+    format_ranked_report,
+    format_score_history,
+    format_status,
+    format_update_result,
+)
 from adapters.cli.main import main
 from core.analytics.domain.models import (
     Dimension,
@@ -18,17 +24,26 @@ from core.analytics.domain.models import (
     serialize_parameters,
 )
 from core.analytics.persistence.repository import (
+    get_scoring_profile,
     insert_dimension_score,
     insert_indicator_definition,
     insert_score,
     insert_scoring_profile,
 )
-from core.analytics.ranked_report import ETFAnalysisReport
+from core.analytics.ranked_report import (
+    ETFAnalysisReport,
+    RankedETFReportEntry,
+    ScoreHistoryEntry,
+    compare_etfs,
+    generate_ranked_etf_report,
+    get_score_history,
+)
 from core.analytics.write_pipeline import WritePipelineResult
 from core.market_data.domain.models import ETF, Calendar, IngestionRun, IngestionStatus, PriceBar, TradingSession
 from core.market_data.persistence.database import connect
 from core.market_data.persistence.migrations import run_migrations
 from core.market_data.persistence.repository import (
+    get_etf_by_ticker,
     insert_calendar,
     insert_etf,
     insert_price_bar,
@@ -44,6 +59,18 @@ TICKER = "SPY"
 PROFILE_NAME = "REFERENCE"
 PROFILE_VERSION = 1
 SESSION_DATE = date(2026, 7, 14)
+FORBIDDEN_WORDS = [
+    "recommend",
+    "buy",
+    "sell",
+    "best",
+    "worst",
+    "should",
+    "good",
+    "bad",
+    "strong",
+    "weak",
+]
 
 
 def _seed(db_path: Path, *, with_score: bool = True) -> None:
@@ -896,3 +923,967 @@ def test_format_status_reports_failed_run_error_message() -> None:
 
     assert "Status: failed" in output
     assert "Error: upstream is down" in output
+
+
+# ---------------------------------------------------------------------------
+# etf rank / etf compare (shared fixture: three ETFs, one session date)
+# ---------------------------------------------------------------------------
+
+RANK_TICKER_A = "SPY"
+RANK_TICKER_B = "QQQ"
+RANK_TICKER_C = "VTI"
+RANK_SESSION_DATE = date(2026, 7, 14)
+
+
+def _seed_ranked_fixture(db_path: Path) -> None:
+    """Three ETFs, each with a Score for the same scoring profile/session
+    date, with distinct overall_score values so ranking order is
+    unambiguous in assertions."""
+    conn = connect(db_path)
+    try:
+        run_migrations(conn, MIGRATIONS_DIR)
+        insert_calendar(
+            conn,
+            Calendar(
+                calendar_id=CALENDAR_ID,
+                name="New York Stock Exchange",
+                exchange="NYSE",
+                timezone="America/New_York",
+            ),
+        )
+        profile = ScoringProfile(
+            scoring_profile_id=uuid.uuid4().hex,
+            name=PROFILE_NAME,
+            version=PROFILE_VERSION,
+            parameters=serialize_parameters(
+                {"dimensions": {"MOMENTUM": {"indicator_name": "SMA", "indicator_version": 1}}}
+            ),
+            created_at=datetime.now(timezone.utc),
+        )
+        insert_scoring_profile(conn, profile)
+
+        for ticker, name, score_value in [
+            (RANK_TICKER_A, "SPDR S&P 500", Decimal("80")),
+            (RANK_TICKER_B, "Invesco QQQ Trust", Decimal("95")),
+            (RANK_TICKER_C, "Vanguard Total Stock Market", Decimal("60")),
+        ]:
+            etf = ETF(
+                etf_id=uuid.uuid4().hex,
+                ticker=ticker,
+                name=name,
+                currency="USD",
+                calendar_id=CALENDAR_ID,
+                created_at=datetime.now(timezone.utc),
+            )
+            insert_etf(conn, etf)
+            score = Score(
+                score_id=uuid.uuid4().hex,
+                etf_id=etf.etf_id,
+                scoring_profile_id=profile.scoring_profile_id,
+                session_date=RANK_SESSION_DATE,
+                overall_score=score_value,
+                computed_at=datetime.now(timezone.utc),
+            )
+            insert_score(conn, score)
+            insert_dimension_score(
+                conn,
+                DimensionScore(
+                    score_id=score.score_id,
+                    dimension=Dimension.MOMENTUM,
+                    value=score_value,
+                    computed_at=datetime.now(timezone.utc),
+                ),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def test_rank_success_prints_ranked_report(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_ranked_fixture(db_path)
+
+    exit_code = main(
+        [
+            "rank",
+            "--date",
+            RANK_SESSION_DATE.isoformat(),
+            "--profile-name",
+            PROFILE_NAME,
+            "--profile-version",
+            str(PROFILE_VERSION),
+            "--db-path",
+            str(db_path),
+        ]
+    )
+
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert "Rank 1: QQQ" in out
+    assert "Rank 2: SPY" in out
+    assert "Rank 3: VTI" in out
+    assert "Overall score: 95" in out
+
+
+def test_rank_profile_not_found_returns_nonzero(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_ranked_fixture(db_path)
+
+    exit_code = main(
+        [
+            "rank",
+            "--date",
+            RANK_SESSION_DATE.isoformat(),
+            "--profile-name",
+            "NOT-A-PROFILE",
+            "--profile-version",
+            "1",
+            "--db-path",
+            str(db_path),
+        ]
+    )
+
+    assert exit_code != 0
+    err = capsys.readouterr().err
+    assert "No scoring profile found" in err
+
+
+def test_rank_no_scores_for_date_prints_factual_empty_message(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_ranked_fixture(db_path)
+
+    exit_code = main(
+        [
+            "rank",
+            "--date",
+            "2099-01-01",
+            "--profile-name",
+            PROFILE_NAME,
+            "--profile-version",
+            str(PROFILE_VERSION),
+            "--db-path",
+            str(db_path),
+        ]
+    )
+
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert "No ranked scores found for this profile and session date." in out
+
+
+def test_rank_invalid_date_exits_nonzero(tmp_path: Path) -> None:
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_ranked_fixture(db_path)
+
+    with pytest.raises(SystemExit) as exc_info:
+        main(
+            [
+                "rank",
+                "--date",
+                "not-a-date",
+                "--profile-name",
+                PROFILE_NAME,
+                "--profile-version",
+                str(PROFILE_VERSION),
+                "--db-path",
+                str(db_path),
+            ]
+        )
+
+    assert exc_info.value.code != 0
+
+
+def test_rank_invalid_profile_version_exits_nonzero(tmp_path: Path) -> None:
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_ranked_fixture(db_path)
+
+    with pytest.raises(SystemExit) as exc_info:
+        main(
+            [
+                "rank",
+                "--date",
+                RANK_SESSION_DATE.isoformat(),
+                "--profile-name",
+                PROFILE_NAME,
+                "--profile-version",
+                "not-an-int",
+                "--db-path",
+                str(db_path),
+            ]
+        )
+
+    assert exc_info.value.code != 0
+
+
+def test_rank_missing_required_argument_exits_nonzero(tmp_path: Path) -> None:
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_ranked_fixture(db_path)
+
+    with pytest.raises(SystemExit) as exc_info:
+        main(["rank", "--date", RANK_SESSION_DATE.isoformat()])  # missing profile-name/version/db-path
+
+    assert exc_info.value.code != 0
+
+
+def test_rank_risk_name_without_risk_version_returns_nonzero(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_ranked_fixture(db_path)
+
+    exit_code = main(
+        [
+            "rank",
+            "--date",
+            RANK_SESSION_DATE.isoformat(),
+            "--profile-name",
+            PROFILE_NAME,
+            "--profile-version",
+            str(PROFILE_VERSION),
+            "--risk-name",
+            "MAX_DRAWDOWN",
+            "--db-path",
+            str(db_path),
+        ]
+    )
+
+    assert exit_code != 0
+    err = capsys.readouterr().err
+    assert "Both --risk-name and --risk-version are required together" in err
+
+
+def test_rank_unknown_risk_definition_returns_nonzero(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_ranked_fixture(db_path)
+
+    exit_code = main(
+        [
+            "rank",
+            "--date",
+            RANK_SESSION_DATE.isoformat(),
+            "--profile-name",
+            PROFILE_NAME,
+            "--profile-version",
+            str(PROFILE_VERSION),
+            "--risk-name",
+            "MAX_DRAWDOWN",
+            "--risk-version",
+            "1",
+            "--db-path",
+            str(db_path),
+        ]
+    )
+
+    assert exit_code != 0
+    err = capsys.readouterr().err
+    assert "No indicator definition found" in err
+
+
+def test_rank_output_contains_no_forbidden_wording(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_ranked_fixture(db_path)
+
+    exit_code = main(
+        [
+            "rank",
+            "--date",
+            RANK_SESSION_DATE.isoformat(),
+            "--profile-name",
+            PROFILE_NAME,
+            "--profile-version",
+            str(PROFILE_VERSION),
+            "--db-path",
+            str(db_path),
+        ]
+    )
+    assert exit_code == 0
+
+    out = capsys.readouterr().out.lower()
+    for word in FORBIDDEN_WORDS:
+        assert word not in out
+
+
+def test_rank_cli_output_matches_direct_core_function_call(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Wiring check only: the CLI must not reformat, reorder, or reinterpret
+    what generate_ranked_etf_report() already produced."""
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_ranked_fixture(db_path)
+
+    exit_code = main(
+        [
+            "rank",
+            "--date",
+            RANK_SESSION_DATE.isoformat(),
+            "--profile-name",
+            PROFILE_NAME,
+            "--profile-version",
+            str(PROFILE_VERSION),
+            "--db-path",
+            str(db_path),
+        ]
+    )
+    assert exit_code == 0
+    cli_out = capsys.readouterr().out
+
+    conn = connect(db_path)
+    try:
+        profile = get_scoring_profile(conn, PROFILE_NAME, PROFILE_VERSION)
+        direct_report = generate_ranked_etf_report(conn, profile.scoring_profile_id, RANK_SESSION_DATE)
+    finally:
+        conn.close()
+
+    expected = format_ranked_report("Ranked ETF report", RANK_SESSION_DATE, direct_report)
+    assert cli_out.strip() == expected.strip()
+
+
+# ---------------------------------------------------------------------------
+# etf compare
+# ---------------------------------------------------------------------------
+
+
+def test_compare_success_prints_comparison_result(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_ranked_fixture(db_path)
+
+    exit_code = main(
+        [
+            "compare",
+            RANK_TICKER_A,
+            RANK_TICKER_B,
+            "--date",
+            RANK_SESSION_DATE.isoformat(),
+            "--profile-name",
+            PROFILE_NAME,
+            "--profile-version",
+            str(PROFILE_VERSION),
+            "--db-path",
+            str(db_path),
+        ]
+    )
+
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert "ETF comparison: SPY, QQQ" in out
+    assert "Rank 1: QQQ" in out
+    assert "Rank 2: SPY" in out
+    assert "VTI" not in out  # not requested -- compare_etfs() ranks only the requested set
+
+
+def test_compare_accepts_zero_tickers(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """compare_etfs([]) is documented as a valid 'compare nothing' request
+    -- the CLI must not reject it, per the design review."""
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_ranked_fixture(db_path)
+
+    exit_code = main(
+        [
+            "compare",
+            "--date",
+            RANK_SESSION_DATE.isoformat(),
+            "--profile-name",
+            PROFILE_NAME,
+            "--profile-version",
+            str(PROFILE_VERSION),
+            "--db-path",
+            str(db_path),
+        ]
+    )
+
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert "ETF comparison: (no tickers)" in out
+    assert "No ranked scores found for this profile and session date." in out
+
+
+def test_compare_accepts_one_ticker(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """A single ticker is a valid comparison of one, per compare_etfs()'s
+    own documented precedent -- the CLI must not reject it."""
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_ranked_fixture(db_path)
+
+    exit_code = main(
+        [
+            "compare",
+            RANK_TICKER_A,
+            "--date",
+            RANK_SESSION_DATE.isoformat(),
+            "--profile-name",
+            PROFILE_NAME,
+            "--profile-version",
+            str(PROFILE_VERSION),
+            "--db-path",
+            str(db_path),
+        ]
+    )
+
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert "Rank 1: SPY" in out
+
+
+def test_compare_ticker_not_found_returns_nonzero(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_ranked_fixture(db_path)
+
+    exit_code = main(
+        [
+            "compare",
+            "DOES-NOT-EXIST",
+            "--date",
+            RANK_SESSION_DATE.isoformat(),
+            "--profile-name",
+            PROFILE_NAME,
+            "--profile-version",
+            str(PROFILE_VERSION),
+            "--db-path",
+            str(db_path),
+        ]
+    )
+
+    assert exit_code != 0
+    err = capsys.readouterr().err
+    assert err.strip() == "No ETF found for ticker DOES-NOT-EXIST"
+
+
+def test_compare_profile_not_found_returns_nonzero(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_ranked_fixture(db_path)
+
+    exit_code = main(
+        [
+            "compare",
+            RANK_TICKER_A,
+            "--date",
+            RANK_SESSION_DATE.isoformat(),
+            "--profile-name",
+            "NOT-A-PROFILE",
+            "--profile-version",
+            "1",
+            "--db-path",
+            str(db_path),
+        ]
+    )
+
+    assert exit_code != 0
+    err = capsys.readouterr().err
+    assert "No scoring profile found" in err
+
+
+def test_compare_missing_required_argument_exits_nonzero(tmp_path: Path) -> None:
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_ranked_fixture(db_path)
+
+    with pytest.raises(SystemExit) as exc_info:
+        main(["compare", RANK_TICKER_A])  # missing date/profile-name/profile-version/db-path
+
+    assert exc_info.value.code != 0
+
+
+def test_compare_invalid_date_exits_nonzero(tmp_path: Path) -> None:
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_ranked_fixture(db_path)
+
+    with pytest.raises(SystemExit) as exc_info:
+        main(
+            [
+                "compare",
+                RANK_TICKER_A,
+                "--date",
+                "not-a-date",
+                "--profile-name",
+                PROFILE_NAME,
+                "--profile-version",
+                str(PROFILE_VERSION),
+                "--db-path",
+                str(db_path),
+            ]
+        )
+
+    assert exc_info.value.code != 0
+
+
+def test_compare_output_contains_no_forbidden_wording(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_ranked_fixture(db_path)
+
+    exit_code = main(
+        [
+            "compare",
+            RANK_TICKER_A,
+            RANK_TICKER_B,
+            "--date",
+            RANK_SESSION_DATE.isoformat(),
+            "--profile-name",
+            PROFILE_NAME,
+            "--profile-version",
+            str(PROFILE_VERSION),
+            "--db-path",
+            str(db_path),
+        ]
+    )
+    assert exit_code == 0
+
+    out = capsys.readouterr().out.lower()
+    for word in FORBIDDEN_WORDS:
+        assert word not in out
+
+
+def test_compare_cli_output_matches_direct_core_function_call(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Wiring check only: the CLI must not reformat, reorder, or reinterpret
+    what compare_etfs() already produced."""
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_ranked_fixture(db_path)
+
+    exit_code = main(
+        [
+            "compare",
+            RANK_TICKER_A,
+            RANK_TICKER_B,
+            "--date",
+            RANK_SESSION_DATE.isoformat(),
+            "--profile-name",
+            PROFILE_NAME,
+            "--profile-version",
+            str(PROFILE_VERSION),
+            "--db-path",
+            str(db_path),
+        ]
+    )
+    assert exit_code == 0
+    cli_out = capsys.readouterr().out
+
+    conn = connect(db_path)
+    try:
+        profile = get_scoring_profile(conn, PROFILE_NAME, PROFILE_VERSION)
+        etf_a = get_etf_by_ticker(conn, RANK_TICKER_A)
+        etf_b = get_etf_by_ticker(conn, RANK_TICKER_B)
+        direct_report = compare_etfs(
+            conn, profile.scoring_profile_id, RANK_SESSION_DATE, [etf_a.etf_id, etf_b.etf_id]
+        )
+    finally:
+        conn.close()
+
+    expected = format_ranked_report(
+        f"ETF comparison: {RANK_TICKER_A}, {RANK_TICKER_B}", RANK_SESSION_DATE, direct_report
+    )
+    assert cli_out.strip() == expected.strip()
+
+
+# ---------------------------------------------------------------------------
+# etf history
+# ---------------------------------------------------------------------------
+
+HISTORY_DATE_1 = date(2026, 7, 10)
+HISTORY_DATE_2 = date(2026, 7, 14)
+
+
+def _seed_history_fixture(db_path: Path) -> None:
+    """One ETF with two Scores on two different session dates, under the
+    same scoring profile -- enough to exercise get_score_history()'s
+    ordering and optional date-range parameters."""
+    conn = connect(db_path)
+    try:
+        run_migrations(conn, MIGRATIONS_DIR)
+        insert_calendar(
+            conn,
+            Calendar(
+                calendar_id=CALENDAR_ID,
+                name="New York Stock Exchange",
+                exchange="NYSE",
+                timezone="America/New_York",
+            ),
+        )
+        etf = ETF(
+            etf_id=uuid.uuid4().hex,
+            ticker=TICKER,
+            name="SPDR S&P 500",
+            currency="USD",
+            calendar_id=CALENDAR_ID,
+            created_at=datetime.now(timezone.utc),
+        )
+        insert_etf(conn, etf)
+        profile = ScoringProfile(
+            scoring_profile_id=uuid.uuid4().hex,
+            name=PROFILE_NAME,
+            version=PROFILE_VERSION,
+            parameters=serialize_parameters(
+                {"dimensions": {"MOMENTUM": {"indicator_name": "SMA", "indicator_version": 1}}}
+            ),
+            created_at=datetime.now(timezone.utc),
+        )
+        insert_scoring_profile(conn, profile)
+        for session_date, score_value in [(HISTORY_DATE_1, Decimal("70")), (HISTORY_DATE_2, Decimal("80"))]:
+            score = Score(
+                score_id=uuid.uuid4().hex,
+                etf_id=etf.etf_id,
+                scoring_profile_id=profile.scoring_profile_id,
+                session_date=session_date,
+                overall_score=score_value,
+                computed_at=datetime.now(timezone.utc),
+            )
+            insert_score(conn, score)
+            insert_dimension_score(
+                conn,
+                DimensionScore(
+                    score_id=score.score_id,
+                    dimension=Dimension.MOMENTUM,
+                    value=score_value,
+                    computed_at=datetime.now(timezone.utc),
+                ),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def test_history_success_prints_score_history(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_history_fixture(db_path)
+
+    exit_code = main(
+        [
+            "history",
+            "--ticker",
+            TICKER,
+            "--profile-name",
+            PROFILE_NAME,
+            "--profile-version",
+            str(PROFILE_VERSION),
+            "--db-path",
+            str(db_path),
+        ]
+    )
+
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert "Ticker: SPY" in out
+    assert "Session date: 2026-07-10" in out
+    assert "Overall score: 70" in out
+    assert "Session date: 2026-07-14" in out
+    assert "Overall score: 80" in out
+
+
+def test_history_date_range_restricts_results(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_history_fixture(db_path)
+
+    exit_code = main(
+        [
+            "history",
+            "--ticker",
+            TICKER,
+            "--profile-name",
+            PROFILE_NAME,
+            "--profile-version",
+            str(PROFILE_VERSION),
+            "--start-date",
+            HISTORY_DATE_2.isoformat(),
+            "--db-path",
+            str(db_path),
+        ]
+    )
+
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert "2026-07-10" not in out
+    assert "Session date: 2026-07-14" in out
+
+
+def test_history_ticker_not_found_returns_nonzero(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_history_fixture(db_path)
+
+    exit_code = main(
+        [
+            "history",
+            "--ticker",
+            "DOES-NOT-EXIST",
+            "--profile-name",
+            PROFILE_NAME,
+            "--profile-version",
+            str(PROFILE_VERSION),
+            "--db-path",
+            str(db_path),
+        ]
+    )
+
+    assert exit_code != 0
+    err = capsys.readouterr().err
+    assert err.strip() == "No ETF found for ticker DOES-NOT-EXIST"
+
+
+def test_history_profile_not_found_returns_nonzero(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_history_fixture(db_path)
+
+    exit_code = main(
+        [
+            "history",
+            "--ticker",
+            TICKER,
+            "--profile-name",
+            "NOT-A-PROFILE",
+            "--profile-version",
+            "1",
+            "--db-path",
+            str(db_path),
+        ]
+    )
+
+    assert exit_code != 0
+    err = capsys.readouterr().err
+    assert "No scoring profile found" in err
+
+
+def test_history_no_scores_prints_factual_empty_message(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_history_fixture(db_path)
+
+    exit_code = main(
+        [
+            "history",
+            "--ticker",
+            TICKER,
+            "--profile-name",
+            PROFILE_NAME,
+            "--profile-version",
+            str(PROFILE_VERSION),
+            "--start-date",
+            "2099-01-01",
+            "--db-path",
+            str(db_path),
+        ]
+    )
+
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert "No score history found for this ticker and profile." in out
+
+
+def test_history_invalid_start_date_exits_nonzero(tmp_path: Path) -> None:
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_history_fixture(db_path)
+
+    with pytest.raises(SystemExit) as exc_info:
+        main(
+            [
+                "history",
+                "--ticker",
+                TICKER,
+                "--profile-name",
+                PROFILE_NAME,
+                "--profile-version",
+                str(PROFILE_VERSION),
+                "--start-date",
+                "not-a-date",
+                "--db-path",
+                str(db_path),
+            ]
+        )
+
+    assert exc_info.value.code != 0
+
+
+def test_history_missing_required_argument_exits_nonzero(tmp_path: Path) -> None:
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_history_fixture(db_path)
+
+    with pytest.raises(SystemExit) as exc_info:
+        main(["history", "--ticker", TICKER])  # missing profile-name/version/db-path
+
+    assert exc_info.value.code != 0
+
+
+def test_history_output_contains_no_forbidden_wording(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_history_fixture(db_path)
+
+    exit_code = main(
+        [
+            "history",
+            "--ticker",
+            TICKER,
+            "--profile-name",
+            PROFILE_NAME,
+            "--profile-version",
+            str(PROFILE_VERSION),
+            "--db-path",
+            str(db_path),
+        ]
+    )
+    assert exit_code == 0
+
+    out = capsys.readouterr().out.lower()
+    for word in FORBIDDEN_WORDS:
+        assert word not in out
+
+
+def test_history_cli_output_matches_direct_core_function_call(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Wiring check only: the CLI must not reformat, reorder, or reinterpret
+    what get_score_history() already produced."""
+    db_path = tmp_path / "etf_platform_test.db"
+    _seed_history_fixture(db_path)
+
+    exit_code = main(
+        [
+            "history",
+            "--ticker",
+            TICKER,
+            "--profile-name",
+            PROFILE_NAME,
+            "--profile-version",
+            str(PROFILE_VERSION),
+            "--db-path",
+            str(db_path),
+        ]
+    )
+    assert exit_code == 0
+    cli_out = capsys.readouterr().out
+
+    conn = connect(db_path)
+    try:
+        etf = get_etf_by_ticker(conn, TICKER)
+        profile = get_scoring_profile(conn, PROFILE_NAME, PROFILE_VERSION)
+        direct_history = get_score_history(conn, etf.etf_id, profile.scoring_profile_id)
+    finally:
+        conn.close()
+
+    expected = format_score_history(TICKER, direct_history)
+    assert cli_out.strip() == expected.strip()
+
+
+# ---------------------------------------------------------------------------
+# format_ranked_report / format_score_history
+# ---------------------------------------------------------------------------
+
+
+def test_format_ranked_report_contains_only_entry_fields() -> None:
+    entries = [
+        RankedETFReportEntry(
+            rank=1,
+            etf_id="etf-1",
+            ticker="QQQ",
+            name="Invesco QQQ Trust",
+            overall_score=Decimal("95"),
+            dimension_scores={Dimension.MOMENTUM: Decimal("95"), Dimension.VALUE: Decimal("60")},
+            max_drawdown=Decimal("-0.08"),
+        ),
+    ]
+
+    output = format_ranked_report("Ranked ETF report", date(2026, 7, 14), entries)
+
+    assert "Ranked ETF report" in output
+    assert "Session date: 2026-07-14" in output
+    assert "Rank 1: QQQ (Invesco QQQ Trust)" in output
+    assert "Overall score: 95" in output
+    assert "MOMENTUM: 95" in output
+    assert "VALUE: 60" in output
+    assert "Max drawdown: -0.08" in output
+
+
+def test_format_ranked_report_handles_missing_dimension_scores_and_max_drawdown() -> None:
+    entries = [
+        RankedETFReportEntry(
+            rank=1,
+            etf_id="etf-1",
+            ticker="SPY",
+            name="SPDR S&P 500",
+            overall_score=Decimal("80"),
+            dimension_scores={},
+            max_drawdown=None,
+        ),
+    ]
+
+    output = format_ranked_report("Ranked ETF report", date(2026, 7, 14), entries)
+
+    assert "Dimension scores: none" in output
+    assert "Max drawdown: N/A" in output
+
+
+def test_format_ranked_report_empty_entries_prints_factual_message() -> None:
+    output = format_ranked_report("Ranked ETF report", date(2026, 7, 14), [])
+
+    assert "No ranked scores found for this profile and session date." in output
+
+
+def test_format_ranked_report_header_distinguishes_rank_from_compare() -> None:
+    rank_output = format_ranked_report("Ranked ETF report", date(2026, 7, 14), [])
+    compare_output = format_ranked_report("ETF comparison: SPY, QQQ", date(2026, 7, 14), [])
+
+    assert "Ranked ETF report" in rank_output
+    assert "ETF comparison: SPY, QQQ" in compare_output
+    assert "ETF comparison" not in rank_output
+    assert "Ranked ETF report" not in compare_output
+
+
+def test_format_score_history_contains_only_entry_fields() -> None:
+    entries = [
+        ScoreHistoryEntry(
+            session_date=date(2026, 7, 10),
+            overall_score=Decimal("70"),
+            dimension_scores={Dimension.MOMENTUM: Decimal("70")},
+        ),
+        ScoreHistoryEntry(
+            session_date=date(2026, 7, 14),
+            overall_score=Decimal("80"),
+            dimension_scores={Dimension.MOMENTUM: Decimal("80")},
+        ),
+    ]
+
+    output = format_score_history("SPY", entries)
+
+    assert "Ticker: SPY" in output
+    assert "Session date: 2026-07-10" in output
+    assert "Overall score: 70" in output
+    assert "Session date: 2026-07-14" in output
+    assert "Overall score: 80" in output
+
+
+def test_format_score_history_handles_missing_dimension_scores() -> None:
+    entries = [
+        ScoreHistoryEntry(session_date=date(2026, 7, 14), overall_score=Decimal("80"), dimension_scores={}),
+    ]
+
+    output = format_score_history("SPY", entries)
+
+    assert "Dimension scores: none" in output
+
+
+def test_format_score_history_empty_entries_prints_factual_message() -> None:
+    output = format_score_history("SPY", [])
+
+    assert "No score history found for this ticker and profile." in output

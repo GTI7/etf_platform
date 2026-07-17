@@ -54,3 +54,62 @@ score for one session date -- using the existing write pipeline. Re-running
 it for a date that's already been processed is safe (each stage is
 idempotent). Every identifier is required -- there are no defaults, no
 "latest" behavior, and no automatic selection.
+
+## Ranking, comparing, and history
+
+These three commands expose existing read-only research capabilities from
+`core/analytics/ranked_report.py` -- they perform no calculation, ranking,
+or scoring of their own; they only retrieve and format what has already
+been computed. Like every other command, every identifier is required --
+there is no default scoring profile and no "latest date" selection.
+
+### Ranked report
+
+```
+python -m adapters.cli.main rank \
+  --date <session_date> \
+  --profile-name <name> --profile-version <version> \
+  --db-path <db_path> \
+  [--risk-name <name> --risk-version <version>]
+```
+
+Prints every ETF with a Score for one scoring profile and session date,
+ranked, using the existing `generate_ranked_etf_report()`. `--risk-name`/
+`--risk-version` are optional and only enable `max_drawdown` display in
+the output; omitting them omits `max_drawdown`, exactly as the underlying
+function already does.
+
+### Comparison
+
+```
+python -m adapters.cli.main compare <ticker> [<ticker> ...] \
+  --date <session_date> \
+  --profile-name <name> --profile-version <version> \
+  --db-path <db_path> \
+  [--risk-name <name> --risk-version <version>]
+```
+
+Prints the given tickers, ranked locally among just themselves, using the
+existing `compare_etfs()`. Zero or one ticker is a valid comparison, the
+same as `compare_etfs()` itself -- neither is rejected.
+
+### Score history
+
+```
+python -m adapters.cli.main history \
+  --ticker <ticker> \
+  --profile-name <name> --profile-version <version> \
+  --db-path <db_path> \
+  [--start-date <date>] [--end-date <date>]
+```
+
+Prints one ETF's own Score history under one scoring profile, using the
+existing `get_score_history()`. `--start-date`/`--end-date` are optional;
+omitting either omits that bound, exactly as the underlying function
+already does.
+
+These commands are research and analysis tools only: they never rank,
+screen, or compare toward a recommendation, and their output never states
+what is "best," "worst," or should be bought or sold -- the same
+no-investment-advice boundary every other command in this platform
+already holds.

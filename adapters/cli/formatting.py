@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from core.analytics.ranked_report import ETFAnalysisReport
+from core.analytics.ranked_report import ETFAnalysisReport, RankedETFReportEntry, ScoreHistoryEntry
 from core.analytics.write_pipeline import WritePipelineResult
 from core.market_data.domain.models import IngestionRun
 
@@ -78,6 +78,84 @@ def _format_run(run: IngestionRun | None) -> list[str]:
         f"  Completed at: {completed_at}",
         f"  Error: {error_message}",
     ]
+
+
+def format_ranked_report(header: str, session_date: date, entries: list[RankedETFReportEntry]) -> str:
+    """Plain-text rendering of a list of RankedETFReportEntry.
+
+    Shared by `etf rank` (the full ranking, from generate_ranked_etf_report())
+    and `etf compare` (a named subset, from compare_etfs()) -- both return
+    the same entry type, so `header` is the only thing distinguishing the
+    two callers' output; nothing else here differs by caller.
+
+    Every value printed comes directly from a field already on each entry
+    -- nothing here calculates, interprets, or summarizes anything,
+    including which entry is first. `rank` is printed because it is
+    already a field on the entry (screen_etfs()/compare_etfs() rank
+    locally among survivors, not within the full universe -- this
+    formatter does not know or care which; it prints whatever rank the
+    entry already carries).
+
+    An empty `entries` list is a valid, expected outcome (no Score yet for
+    this profile/session, or no candidate survived) -- printed as an
+    explicit factual line, never silently producing empty output.
+    """
+    lines = [header, f"Session date: {session_date.isoformat()}"]
+
+    if not entries:
+        lines.append("")
+        lines.append("No ranked scores found for this profile and session date.")
+        return "\n".join(lines)
+
+    for entry in entries:
+        lines.append("")
+        lines.append(f"Rank {entry.rank}: {entry.ticker} ({entry.name})")
+        lines.append(f"  Overall score: {entry.overall_score}")
+        if entry.dimension_scores:
+            lines.append("  Dimension scores:")
+            for dimension in sorted(entry.dimension_scores, key=lambda d: d.value):
+                lines.append(f"    {dimension.value}: {entry.dimension_scores[dimension]}")
+        else:
+            lines.append("  Dimension scores: none")
+        max_drawdown = entry.max_drawdown if entry.max_drawdown is not None else "N/A"
+        lines.append(f"  Max drawdown: {max_drawdown}")
+
+    return "\n".join(lines)
+
+
+def format_score_history(ticker: str, entries: list[ScoreHistoryEntry]) -> str:
+    """Plain-text rendering of one ETF's own score history under one
+    scoring profile, from get_score_history().
+
+    No rank, no peer comparison -- ScoreHistoryEntry carries neither (this
+    is one ETF's own scores over time, not a comparison against others).
+    Every value printed comes directly from a field already on each entry
+    -- nothing here calculates, interprets, or summarizes anything,
+    including any trend across dates.
+
+    An empty `entries` list is a valid, expected outcome (no Score yet for
+    this ETF/profile, or none in the requested date range) -- printed as
+    an explicit factual line, never silently producing empty output.
+    """
+    lines = [f"Ticker: {ticker}"]
+
+    if not entries:
+        lines.append("")
+        lines.append("No score history found for this ticker and profile.")
+        return "\n".join(lines)
+
+    for entry in entries:
+        lines.append("")
+        lines.append(f"Session date: {entry.session_date.isoformat()}")
+        lines.append(f"  Overall score: {entry.overall_score}")
+        if entry.dimension_scores:
+            lines.append("  Dimension scores:")
+            for dimension in sorted(entry.dimension_scores, key=lambda d: d.value):
+                lines.append(f"    {dimension.value}: {entry.dimension_scores[dimension]}")
+        else:
+            lines.append("  Dimension scores: none")
+
+    return "\n".join(lines)
 
 
 def format_status(
