@@ -12,6 +12,7 @@ from core.market_data.ingestion.price_ingestion import ingest_daily_prices
 from core.market_data.persistence.repository import get_price_bars
 from core.market_data.providers.base import DataProvider
 from core.shared.clock import Clock
+from core.shared.ids import ETFId
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,3 +89,56 @@ def run_write_pipeline(
         rsi_run_id=rsi_run_id,
         score_run_id=score_run_id,
     )
+
+
+def run_write_pipeline_for_etfs(
+    conn: sqlite3.Connection,
+    clock: Clock,
+    provider: DataProvider,
+    etfs: list[ETF],
+    session_date: date,
+    sma_definition: IndicatorDefinition,
+    rsi_definition: IndicatorDefinition,
+    scoring_profile: ScoringProfile,
+) -> dict[ETFId, WritePipelineResult | Exception]:
+    """Run run_write_pipeline() once per ETF in `etfs`, for the same
+    session and the same SMA/RSI/scoring methodology.
+
+    Orchestration only -- no SQL, no calculation logic, and no
+    transaction of its own; run_write_pipeline() is called unmodified and
+    remains the only thing this function delegates to. Sequential, in
+    list order.
+
+    Isolated per-ETF failure handling, unlike run_write_pipeline()'s own
+    fail-fast behavior: the four stages *within* one ETF's pipeline are
+    causally dependent (scoring needs indicator values, indicators need
+    ingested prices), so failing fast there is correct. Across ETFs there
+    is no such dependency -- one ETF's data has no bearing on another's --
+    so a failure processing one ETF is caught and recorded, and execution
+    continues with the rest rather than abandoning the whole batch.
+
+    By the time an exception propagates out of run_write_pipeline() for a
+    given ETF, run_pipeline's own except branch has already rolled back
+    that ETF's partial writes and committed its failure record as its own
+    transaction -- the connection is left clean, so no cleanup is needed
+    here before moving to the next ETF. run_pipeline remains the only
+    transaction owner at every layer; this function never opens one of
+    its own, and a failure on one ETF never touches another's
+    already-committed data.
+    """
+    results: dict[ETFId, WritePipelineResult | Exception] = {}
+    for etf in etfs:
+        try:
+            results[etf.etf_id] = run_write_pipeline(
+                conn,
+                clock,
+                provider,
+                etf,
+                session_date,
+                sma_definition,
+                rsi_definition,
+                scoring_profile,
+            )
+        except Exception as exc:
+            results[etf.etf_id] = exc
+    return results

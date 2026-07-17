@@ -5,8 +5,9 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
+from core.analytics.domain.models import Dimension
 from core.analytics.domain.ranking import rank_scores
-from core.analytics.persistence.repository import get_scores_for_session
+from core.analytics.persistence.repository import get_dimension_scores, get_scores_for_session
 from core.market_data.persistence.repository import get_etf
 from core.shared.ids import ETFId
 
@@ -15,13 +16,20 @@ from core.shared.ids import ETFId
 class RankedETFReportEntry:
     """One ranked ETF, resolved for display -- no persistence identity
     (no score_id, scoring_profile_id, session_date, or computed_at): just
-    what a consumer of the report needs to see."""
+    what a consumer of the report needs to see.
+
+    dimension_scores exposes the same per-dimension values overall_score
+    was already computed from (e.g. {MOMENTUM: ..., VALUE: ...}) -- the
+    comparison-by-independent-method view, alongside the existing blended
+    figure. No new scoring methodology: rank_scores() and overall_score
+    are computed exactly as before."""
 
     rank: int
     etf_id: ETFId
     ticker: str
     name: str
     overall_score: Decimal
+    dimension_scores: dict[Dimension, Decimal]
 
 
 def generate_ranked_etf_report(
@@ -46,12 +54,22 @@ def generate_ranked_etf_report(
     Deterministic: for a fixed database state, the same
     (scoring_profile_id, session_date) always produces the same report in
     the same order, inherited from rank_scores()'s own determinism.
+
+    dimension_scores is resolved via the original Score.score_id --
+    rank_scores() deliberately drops it (RankedScore carries no
+    persistence identity), so a score_id lookup keyed by etf_id is built
+    from `scores` before ranking discards it.
     """
     scores = get_scores_for_session(conn, scoring_profile_id, session_date)
+    score_id_by_etf = {score.etf_id: score.score_id for score in scores}
     ranked = rank_scores(scores)
     report: list[RankedETFReportEntry] = []
     for ranked_score in ranked:
         etf = get_etf(conn, ranked_score.etf_id)
+        dimension_scores = {
+            dimension_score.dimension: dimension_score.value
+            for dimension_score in get_dimension_scores(conn, score_id_by_etf[ranked_score.etf_id])
+        }
         report.append(
             RankedETFReportEntry(
                 rank=ranked_score.rank,
@@ -59,6 +77,7 @@ def generate_ranked_etf_report(
                 ticker=etf.ticker,
                 name=etf.name,
                 overall_score=ranked_score.overall_score,
+                dimension_scores=dimension_scores,
             )
         )
     return report

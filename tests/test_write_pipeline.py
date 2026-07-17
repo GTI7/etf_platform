@@ -23,7 +23,12 @@ from core.analytics.persistence.repository import (
     insert_indicator_definition,
     insert_scoring_profile,
 )
-from core.analytics.write_pipeline import WritePipelineResult, run_write_pipeline
+from core.analytics.ranked_report import generate_ranked_etf_report
+from core.analytics.write_pipeline import (
+    WritePipelineResult,
+    run_write_pipeline,
+    run_write_pipeline_for_etfs,
+)
 from core.market_data.domain.models import ETF, Calendar, PriceBar, TradingSession
 from core.market_data.persistence.repository import (
     get_last_successful_pipeline_date,
@@ -153,6 +158,41 @@ class _FailingProvider:
 
     def fetch_daily_bars(self, ticker: str, start_date: date, end_date: date) -> list[ProviderPriceBar]:
         raise ProviderError("upstream is down")
+
+
+def _make_etfs(conn: sqlite3.Connection, tickers: list[str], trading_days: list[date]) -> list[ETF]:
+    """Multiple ETFs sharing one calendar -- Calendar/TradingSession rows
+    are inserted once, then one ETF per ticker (each PriceBar/IndicatorValue/
+    Score row is etf_id-scoped, so callers still seed per-ETF history)."""
+    insert_calendar(
+        conn,
+        Calendar(
+            calendar_id=CALENDAR_ID,
+            name="New York Stock Exchange",
+            exchange="NYSE",
+            timezone="America/New_York",
+        ),
+    )
+    for day in trading_days:
+        insert_trading_session(
+            conn,
+            TradingSession(
+                calendar_id=CALENDAR_ID, session_date=day, is_trading_day=True, close_time_utc=None
+            ),
+        )
+    etfs = []
+    for ticker in tickers:
+        etf = ETF(
+            etf_id=uuid.uuid4().hex,
+            ticker=ticker,
+            name=f"{ticker} Fund",
+            currency="USD",
+            calendar_id=CALENDAR_ID,
+            created_at=datetime.now(timezone.utc),
+        )
+        insert_etf(conn, etf)
+        etfs.append(etf)
+    return etfs
 
 
 def _seed_standard_fixture(
@@ -471,3 +511,123 @@ def test_run_write_pipeline_rolls_back_scoring_only_when_scoring_fails(
         "SELECT status FROM IngestionRun WHERE pipeline_name = ?", (pipeline_name,)
     ).fetchone()["status"]
     assert status == "failed"
+
+
+def test_run_write_pipeline_for_etfs_processes_all_etfs_successfully(
+    conn: sqlite3.Connection,
+) -> None:
+    etfs = _make_etfs(conn, ["AAA", "BBB"], [PRIOR_DAY, SESSION_DATE])
+    for etf in etfs:
+        _insert_bar(conn, etf.etf_id, PRIOR_DAY, "100")
+    sma_definition = _make_sma_definition(window=1)
+    rsi_definition = _make_rsi_definition(period=1)
+    insert_indicator_definition(conn, sma_definition)
+    insert_indicator_definition(conn, rsi_definition)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    provider = _FakeProvider("fake", [_provider_bar(SESSION_DATE, "103")])
+    clock = FixedClock(datetime(2026, 7, 17, 21, 0, tzinfo=timezone.utc))
+
+    results = run_write_pipeline_for_etfs(
+        conn, clock, provider, etfs, SESSION_DATE, sma_definition, rsi_definition, profile
+    )
+
+    assert set(results.keys()) == {etf.etf_id for etf in etfs}
+    for etf in etfs:
+        assert isinstance(results[etf.etf_id], WritePipelineResult)
+
+    report = generate_ranked_etf_report(conn, profile.scoring_profile_id, SESSION_DATE)
+    assert {entry.etf_id for entry in report} == {etf.etf_id for etf in etfs}
+
+
+def test_run_write_pipeline_for_etfs_isolates_failure_and_continues(
+    conn: sqlite3.Connection,
+) -> None:
+    """ETF A succeeds, ETF B fails (a legitimate InsufficientPriceHistoryError
+    from RSI, since B's PRIOR_DAY history is deliberately not seeded), ETF C
+    -- processed after B -- still succeeds. Proves the batch continues past
+    a failure rather than stopping, and that the failure is isolated to B."""
+    etf_a, etf_b, etf_c = _make_etfs(conn, ["AAA", "BBB", "CCC"], [PRIOR_DAY, SESSION_DATE])
+    _insert_bar(conn, etf_a.etf_id, PRIOR_DAY, "100")
+    # etf_b: PRIOR_DAY intentionally left unseeded -- RSI(period=1) needs it.
+    _insert_bar(conn, etf_c.etf_id, PRIOR_DAY, "100")
+    sma_definition = _make_sma_definition(window=1)
+    rsi_definition = _make_rsi_definition(period=1)
+    insert_indicator_definition(conn, sma_definition)
+    insert_indicator_definition(conn, rsi_definition)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    provider = _FakeProvider("fake", [_provider_bar(SESSION_DATE, "103")])
+    clock = FixedClock(datetime(2026, 7, 17, 21, 0, tzinfo=timezone.utc))
+
+    results = run_write_pipeline_for_etfs(
+        conn,
+        clock,
+        provider,
+        [etf_a, etf_b, etf_c],
+        SESSION_DATE,
+        sma_definition,
+        rsi_definition,
+        profile,
+    )
+
+    assert isinstance(results[etf_a.etf_id], WritePipelineResult)
+    assert isinstance(results[etf_b.etf_id], InsufficientPriceHistoryError)
+    assert isinstance(results[etf_c.etf_id], WritePipelineResult)
+
+    # A and C data exists despite B's failure.
+    assert get_score(conn, etf_a.etf_id, profile.scoring_profile_id, SESSION_DATE) is not None
+    assert get_score(conn, etf_c.etf_id, profile.scoring_profile_id, SESSION_DATE) is not None
+
+    # B's ingestion still committed (it succeeded before RSI failed on B),
+    # but B never reached scoring.
+    assert len(get_price_bars(conn, etf_b.etf_id, start_date=SESSION_DATE, end_date=SESSION_DATE)) == 1
+    assert get_score(conn, etf_b.etf_id, profile.scoring_profile_id, SESSION_DATE) is None
+
+
+def test_run_write_pipeline_for_etfs_is_idempotent_across_repeated_calls(
+    conn: sqlite3.Connection,
+) -> None:
+    etfs = _make_etfs(conn, ["AAA", "BBB"], [PRIOR_DAY, SESSION_DATE])
+    for etf in etfs:
+        _insert_bar(conn, etf.etf_id, PRIOR_DAY, "100")
+    sma_definition = _make_sma_definition(window=1)
+    rsi_definition = _make_rsi_definition(period=1)
+    insert_indicator_definition(conn, sma_definition)
+    insert_indicator_definition(conn, rsi_definition)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    provider = _FakeProvider("fake", [_provider_bar(SESSION_DATE, "103")])
+    clock = FixedClock(datetime(2026, 7, 17, 21, 0, tzinfo=timezone.utc))
+
+    for _ in range(2):
+        run_write_pipeline_for_etfs(
+            conn, clock, provider, etfs, SESSION_DATE, sma_definition, rsi_definition, profile
+        )
+
+    for etf in etfs:
+        assert len(get_price_bars(conn, etf.etf_id, start_date=SESSION_DATE, end_date=SESSION_DATE)) == 1
+        assert len(get_indicator_values(conn, sma_definition.indicator_definition_id, etf.etf_id)) == 1
+        assert len(get_indicator_values(conn, rsi_definition.indicator_definition_id, etf.etf_id)) == 1
+        row = conn.execute(
+            "SELECT COUNT(*) AS n FROM Score WHERE etf_id = ? AND scoring_profile_id = ? AND session_date = ?",
+            (etf.etf_id, profile.scoring_profile_id, SESSION_DATE.isoformat()),
+        ).fetchone()
+        assert row["n"] == 1
+
+
+def test_run_write_pipeline_for_etfs_with_empty_list_returns_empty_dict(
+    conn: sqlite3.Connection,
+) -> None:
+    sma_definition = _make_sma_definition(window=1)
+    rsi_definition = _make_rsi_definition(period=1)
+    profile = _make_profile()
+    provider = _FakeProvider("fake", bars=[])
+    clock = FixedClock(datetime(2026, 7, 17, 21, 0, tzinfo=timezone.utc))
+
+    results = run_write_pipeline_for_etfs(
+        conn, clock, provider, [], SESSION_DATE, sma_definition, rsi_definition, profile
+    )
+
+    assert results == {}
+    assert provider.calls == []

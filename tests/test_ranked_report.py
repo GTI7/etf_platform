@@ -5,8 +5,12 @@ import uuid
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
-from core.analytics.domain.models import Score, ScoringProfile, serialize_parameters
-from core.analytics.persistence.repository import insert_score, insert_scoring_profile
+from core.analytics.domain.models import Dimension, DimensionScore, Score, ScoringProfile, serialize_parameters
+from core.analytics.persistence.repository import (
+    insert_dimension_score,
+    insert_score,
+    insert_scoring_profile,
+)
 from core.analytics.ranked_report import RankedETFReportEntry, generate_ranked_etf_report
 from core.market_data.domain.models import ETF, Calendar
 from core.market_data.persistence.repository import insert_calendar, insert_etf
@@ -63,6 +67,15 @@ def _make_score(etf: ETF, profile: ScoringProfile, overall_score: str) -> Score:
     )
 
 
+def _make_dimension_score(score: Score, dimension: Dimension, value: str) -> DimensionScore:
+    return DimensionScore(
+        score_id=score.score_id,
+        dimension=dimension,
+        value=Decimal(value),
+        computed_at=datetime.now(timezone.utc),
+    )
+
+
 def test_generate_ranked_etf_report_basic(conn: sqlite3.Connection) -> None:
     _make_calendar(conn)
     profile = _make_profile()
@@ -115,6 +128,7 @@ def test_generate_ranked_etf_report_resolves_etf_identity(conn: sqlite3.Connecti
         ticker="SPY",
         name="SPDR S&P 500",
         overall_score=Decimal("70"),
+        dimension_scores={},  # no DimensionScore rows seeded in this test
     )
 
 
@@ -143,3 +157,40 @@ def test_generate_ranked_etf_report_is_deterministic(conn: sqlite3.Connection) -
     second = generate_ranked_etf_report(conn, profile.scoring_profile_id, SESSION_DATE)
 
     assert first == second
+
+
+def test_generate_ranked_etf_report_exposes_dimension_scores(conn: sqlite3.Connection) -> None:
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    etf = _make_etf(conn, "SPY", "SPDR S&P 500")
+    score = _make_score(etf, profile, "80")
+    insert_score(conn, score)
+    insert_dimension_score(conn, _make_dimension_score(score, Dimension.MOMENTUM, "90"))
+    insert_dimension_score(conn, _make_dimension_score(score, Dimension.VALUE, "70"))
+
+    [entry] = generate_ranked_etf_report(conn, profile.scoring_profile_id, SESSION_DATE)
+
+    assert entry.dimension_scores == {
+        Dimension.MOMENTUM: Decimal("90"),
+        Dimension.VALUE: Decimal("70"),
+    }
+    # overall_score is untouched -- still whatever Score.overall_score already was,
+    # not recomputed from dimension_scores.
+    assert entry.overall_score == Decimal("80")
+
+
+def test_generate_ranked_etf_report_dimension_scores_single_dimension(
+    conn: sqlite3.Connection,
+) -> None:
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    etf = _make_etf(conn, "SPY", "SPDR S&P 500")
+    score = _make_score(etf, profile, "70")
+    insert_score(conn, score)
+    insert_dimension_score(conn, _make_dimension_score(score, Dimension.MOMENTUM, "70"))
+
+    [entry] = generate_ranked_etf_report(conn, profile.scoring_profile_id, SESSION_DATE)
+
+    assert entry.dimension_scores == {Dimension.MOMENTUM: Decimal("70")}
