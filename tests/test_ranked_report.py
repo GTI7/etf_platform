@@ -5,9 +5,19 @@ import uuid
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
-from core.analytics.domain.models import Dimension, DimensionScore, Score, ScoringProfile, serialize_parameters
+from core.analytics.domain.models import (
+    Dimension,
+    DimensionScore,
+    IndicatorDefinition,
+    IndicatorValue,
+    Score,
+    ScoringProfile,
+    serialize_parameters,
+)
 from core.analytics.persistence.repository import (
     insert_dimension_score,
+    insert_indicator_definition,
+    insert_indicator_value,
     insert_score,
     insert_scoring_profile,
 )
@@ -76,6 +86,27 @@ def _make_dimension_score(score: Score, dimension: Dimension, value: str) -> Dim
     )
 
 
+def _make_risk_definition() -> IndicatorDefinition:
+    return IndicatorDefinition(
+        indicator_definition_id=uuid.uuid4().hex,
+        name="MAX_DRAWDOWN",
+        version=1,
+        parameters=serialize_parameters({"window": 20}),
+        created_at=datetime.now(timezone.utc),
+    )
+
+
+def _make_indicator_value(definition: IndicatorDefinition, etf: ETF, value: str) -> IndicatorValue:
+    return IndicatorValue(
+        indicator_value_id=uuid.uuid4().hex,
+        indicator_definition_id=definition.indicator_definition_id,
+        etf_id=etf.etf_id,
+        session_date=SESSION_DATE,
+        value=Decimal(value),
+        computed_at=datetime.now(timezone.utc),
+    )
+
+
 def test_generate_ranked_etf_report_basic(conn: sqlite3.Connection) -> None:
     _make_calendar(conn)
     profile = _make_profile()
@@ -129,6 +160,7 @@ def test_generate_ranked_etf_report_resolves_etf_identity(conn: sqlite3.Connecti
         name="SPDR S&P 500",
         overall_score=Decimal("70"),
         dimension_scores={},  # no DimensionScore rows seeded in this test
+        max_drawdown=None,  # risk_definition_id omitted
     )
 
 
@@ -194,3 +226,104 @@ def test_generate_ranked_etf_report_dimension_scores_single_dimension(
     [entry] = generate_ranked_etf_report(conn, profile.scoring_profile_id, SESSION_DATE)
 
     assert entry.dimension_scores == {Dimension.MOMENTUM: Decimal("70")}
+
+
+def test_generate_ranked_etf_report_max_drawdown_omitted_by_default(
+    conn: sqlite3.Connection,
+) -> None:
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    etf = _make_etf(conn, "SPY", "SPDR S&P 500")
+    risk_definition = _make_risk_definition()
+    insert_indicator_definition(conn, risk_definition)
+    insert_score(conn, _make_score(etf, profile, "70"))
+    insert_indicator_value(conn, _make_indicator_value(risk_definition, etf, "-0.15"))
+
+    # risk_definition_id not passed -- max_drawdown must be None even
+    # though a MAX_DRAWDOWN IndicatorValue exists for this ETF/session.
+    [entry] = generate_ranked_etf_report(conn, profile.scoring_profile_id, SESSION_DATE)
+
+    assert entry.max_drawdown is None
+
+
+def test_generate_ranked_etf_report_max_drawdown_populated_when_definition_supplied(
+    conn: sqlite3.Connection,
+) -> None:
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    etf = _make_etf(conn, "SPY", "SPDR S&P 500")
+    risk_definition = _make_risk_definition()
+    insert_indicator_definition(conn, risk_definition)
+    insert_score(conn, _make_score(etf, profile, "70"))
+    insert_indicator_value(conn, _make_indicator_value(risk_definition, etf, "-0.15"))
+
+    [entry] = generate_ranked_etf_report(
+        conn,
+        profile.scoring_profile_id,
+        SESSION_DATE,
+        risk_definition_id=risk_definition.indicator_definition_id,
+    )
+
+    assert entry.max_drawdown == Decimal("-0.15")
+
+
+def test_generate_ranked_etf_report_max_drawdown_missing_value_returns_none(
+    conn: sqlite3.Connection,
+) -> None:
+    """risk_definition_id supplied, but no MAX_DRAWDOWN IndicatorValue has
+    been computed yet for this ETF/session -- must not fail, must return
+    None for that entry."""
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    etf = _make_etf(conn, "SPY", "SPDR S&P 500")
+    risk_definition = _make_risk_definition()
+    insert_indicator_definition(conn, risk_definition)
+    insert_score(conn, _make_score(etf, profile, "70"))
+    # No IndicatorValue inserted for risk_definition/etf.
+
+    [entry] = generate_ranked_etf_report(
+        conn,
+        profile.scoring_profile_id,
+        SESSION_DATE,
+        risk_definition_id=risk_definition.indicator_definition_id,
+    )
+
+    assert entry.max_drawdown is None
+
+
+def test_generate_ranked_etf_report_max_drawdown_independent_per_etf(
+    conn: sqlite3.Connection,
+) -> None:
+    """Multiple ETFs in one report each show their own drawdown value,
+    including one ETF that has none computed at all."""
+    _make_calendar(conn)
+    profile = _make_profile()
+    insert_scoring_profile(conn, profile)
+    etf_a = _make_etf(conn, "AAA", "Fund A")
+    etf_b = _make_etf(conn, "BBB", "Fund B")
+    etf_c = _make_etf(conn, "CCC", "Fund C")
+    risk_definition = _make_risk_definition()
+    insert_indicator_definition(conn, risk_definition)
+    insert_score(conn, _make_score(etf_a, profile, "90"))
+    insert_score(conn, _make_score(etf_b, profile, "80"))
+    insert_score(conn, _make_score(etf_c, profile, "70"))
+    insert_indicator_value(conn, _make_indicator_value(risk_definition, etf_a, "-0.05"))
+    insert_indicator_value(conn, _make_indicator_value(risk_definition, etf_b, "-0.30"))
+    # etf_c: no MAX_DRAWDOWN IndicatorValue -- expect None.
+
+    report = generate_ranked_etf_report(
+        conn,
+        profile.scoring_profile_id,
+        SESSION_DATE,
+        risk_definition_id=risk_definition.indicator_definition_id,
+    )
+
+    max_drawdown_by_etf = {entry.etf_id: entry.max_drawdown for entry in report}
+    assert max_drawdown_by_etf == {
+        etf_a.etf_id: Decimal("-0.05"),
+        etf_b.etf_id: Decimal("-0.30"),
+        etf_c.etf_id: None,
+    }

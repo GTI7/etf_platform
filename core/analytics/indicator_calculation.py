@@ -6,7 +6,7 @@ import uuid
 from datetime import date
 from decimal import Decimal
 
-from core.analytics.domain.calculations import rsi, sma
+from core.analytics.domain.calculations import max_drawdown, rsi, sma
 from core.analytics.domain.models import IndicatorDefinition, IndicatorValue, InsufficientPriceHistoryError
 from core.analytics.persistence.repository import insert_indicator_value
 from core.market_data.domain.models import ETF
@@ -115,6 +115,48 @@ def calculate_rsi(
         window_dates = _resolve_trading_window(conn, etf.calendar_id, session_date, period + 1)
         prices = _load_close_prices(conn, etf.etf_id, window_dates)
         value = rsi(prices)
+        indicator_value = IndicatorValue(
+            indicator_value_id=uuid.uuid4().hex,
+            indicator_definition_id=definition.indicator_definition_id,
+            etf_id=etf.etf_id,
+            session_date=session_date,
+            value=value,
+            computed_at=clock.now(),
+        )
+        insert_indicator_value(conn, indicator_value)
+    return ingestion_run_id
+
+
+def calculate_drawdown(
+    conn: sqlite3.Connection,
+    clock: Clock,
+    etf: ETF,
+    definition: IndicatorDefinition,
+    session_date: date,
+) -> str:
+    """Compute and store one MAX_DRAWDOWN IndicatorValue for one ETF and session.
+
+    TradingCalendar-aware: the window is `definition.parameters["window"]`
+    trading sessions on the ETF's calendar ending at session_date -- SMA's
+    window semantics, not RSI's period+1 (drawdown needs raw price levels
+    to track peak-vs-trough, not deltas, so it needs exactly `window`
+    prices, the same as calculate_sma()). One call is one atomic pipeline
+    run: the IndicatorValue insert, run completion, and watermark advance
+    commit or roll back together, per run_pipeline's transaction boundary.
+    Idempotent: rerunning for the same (definition, etf, session_date) is
+    a no-op insert.
+
+    A comparison metric only: independent of SMA/RSI, not wired into
+    run_write_pipeline() or run_write_pipeline_for_etfs() -- it remains a
+    separately-callable indicator, the same way SMA and RSI existed
+    independently before write-pipeline composition ever wired them in.
+    """
+    window = json.loads(definition.parameters)["window"]
+    pipeline_name = f"indicator:{definition.name}:v{definition.version}:{etf.ticker}"
+    with run_pipeline(conn, clock, pipeline_name, session_date) as ingestion_run_id:
+        window_dates = _resolve_trading_window(conn, etf.calendar_id, session_date, window)
+        prices = _load_close_prices(conn, etf.etf_id, window_dates)
+        value = max_drawdown(prices)
         indicator_value = IndicatorValue(
             indicator_value_id=uuid.uuid4().hex,
             indicator_definition_id=definition.indicator_definition_id,

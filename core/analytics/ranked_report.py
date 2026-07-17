@@ -7,7 +7,11 @@ from decimal import Decimal
 
 from core.analytics.domain.models import Dimension
 from core.analytics.domain.ranking import rank_scores
-from core.analytics.persistence.repository import get_dimension_scores, get_scores_for_session
+from core.analytics.persistence.repository import (
+    get_dimension_scores,
+    get_indicator_values,
+    get_scores_for_session,
+)
 from core.market_data.persistence.repository import get_etf
 from core.shared.ids import ETFId
 
@@ -22,7 +26,13 @@ class RankedETFReportEntry:
     was already computed from (e.g. {MOMENTUM: ..., VALUE: ...}) -- the
     comparison-by-independent-method view, alongside the existing blended
     figure. No new scoring methodology: rank_scores() and overall_score
-    are computed exactly as before."""
+    are computed exactly as before.
+
+    max_drawdown is a comparison metric only -- not a scoring dimension,
+    not part of overall_score, and has no bearing on rank. None when
+    generate_ranked_etf_report()'s risk_definition_id is omitted, or when
+    supplied but no MAX_DRAWDOWN IndicatorValue exists yet for this
+    ETF/session."""
 
     rank: int
     etf_id: ETFId
@@ -30,10 +40,14 @@ class RankedETFReportEntry:
     name: str
     overall_score: Decimal
     dimension_scores: dict[Dimension, Decimal]
+    max_drawdown: Decimal | None
 
 
 def generate_ranked_etf_report(
-    conn: sqlite3.Connection, scoring_profile_id: str, session_date: date
+    conn: sqlite3.Connection,
+    scoring_profile_id: str,
+    session_date: date,
+    risk_definition_id: str | None = None,
 ) -> list[RankedETFReportEntry]:
     """Compose the existing Phase 4 pieces into one usable ranked report:
     get_scores_for_session() -> rank_scores() -> get_etf(), resolving each
@@ -59,6 +73,15 @@ def generate_ranked_etf_report(
     rank_scores() deliberately drops it (RankedScore carries no
     persistence identity), so a score_id lookup keyed by etf_id is built
     from `scores` before ranking discards it.
+
+    max_drawdown is resolved only when risk_definition_id is supplied --
+    it is a comparison metric entirely independent of scoring: it plays no
+    part in `scores`, rank_scores(), or overall_score, and has no bearing
+    on ranking order. When omitted (the default), every entry's
+    max_drawdown is None -- existing callers are unaffected. When
+    supplied, it is resolved per ETF via the already-existing
+    get_indicator_values(); an ETF with no MAX_DRAWDOWN IndicatorValue yet
+    for this session gets None for that entry specifically, not an error.
     """
     scores = get_scores_for_session(conn, scoring_profile_id, session_date)
     score_id_by_etf = {score.etf_id: score.score_id for score in scores}
@@ -70,6 +93,17 @@ def generate_ranked_etf_report(
             dimension_score.dimension: dimension_score.value
             for dimension_score in get_dimension_scores(conn, score_id_by_etf[ranked_score.etf_id])
         }
+        max_drawdown: Decimal | None = None
+        if risk_definition_id is not None:
+            risk_values = get_indicator_values(
+                conn,
+                risk_definition_id,
+                ranked_score.etf_id,
+                start_date=session_date,
+                end_date=session_date,
+            )
+            if risk_values:
+                max_drawdown = risk_values[0].value
         report.append(
             RankedETFReportEntry(
                 rank=ranked_score.rank,
@@ -78,6 +112,7 @@ def generate_ranked_etf_report(
                 name=etf.name,
                 overall_score=ranked_score.overall_score,
                 dimension_scores=dimension_scores,
+                max_drawdown=max_drawdown,
             )
         )
     return report

@@ -61,3 +61,25 @@ def rsi(closes: list[Decimal]) -> Decimal:
         return Decimal("100") if avg_gain > 0 else Decimal("50")
     rs = avg_gain / avg_loss
     return Decimal("100") - (Decimal("100") / (Decimal("1") + rs))
+
+
+def max_drawdown(prices: list[Decimal]) -> Decimal:
+    """The largest peak-to-trough fractional decline within `prices`.
+
+    Convention (defined explicitly, same discipline as rsi()'s zero-loss
+    case): Decimal("0") means no drawdown occurred -- prices never fell
+    below a prior peak; Decimal("-0.20") means a 20% decline from the
+    previous peak. Tracks a running peak across the window, not just the
+    first or global price, so a decline-recovery-decline pattern is
+    measured correctly at each trough relative to the peak that preceded
+    it, not just the window's single highest price. Always <= 0. Pure, no
+    I/O, same style as sma()/rsi().
+    """
+    if not prices:
+        raise ValueError("max_drawdown() requires at least one price")
+    peak = prices[0]
+    worst = Decimal("0")
+    for price in prices:
+        peak = max(peak, price)
+        worst = min(worst, (price - peak) / peak)
+    return worst

@@ -13,7 +13,7 @@ from core.analytics.domain.models import (
     InsufficientPriceHistoryError,
     serialize_parameters,
 )
-from core.analytics.indicator_calculation import calculate_rsi, calculate_sma
+from core.analytics.indicator_calculation import calculate_drawdown, calculate_rsi, calculate_sma
 from core.analytics.persistence.repository import get_indicator_values, insert_indicator_definition
 from core.market_data.domain.models import ETF, Calendar, PriceBar, TradingSession
 from core.market_data.persistence.repository import (
@@ -93,6 +93,16 @@ def _make_rsi_definition(period: int = 3) -> IndicatorDefinition:
         name="RSI",
         version=1,
         parameters=serialize_parameters({"period": period}),
+        created_at=datetime.now(timezone.utc),
+    )
+
+
+def _make_drawdown_definition(window: int = 3) -> IndicatorDefinition:
+    return IndicatorDefinition(
+        indicator_definition_id=uuid.uuid4().hex,
+        name="MAX_DRAWDOWN",
+        version=1,
+        parameters=serialize_parameters({"window": window}),
         created_at=datetime.now(timezone.utc),
     )
 
@@ -324,3 +334,136 @@ def test_sma_and_rsi_calculated_for_same_etf_and_date(conn: sqlite3.Connection) 
     [rsi_value] = get_indicator_values(conn, rsi_definition.indicator_definition_id, etf.etf_id)
     assert sma_value.value == Decimal("106")  # (103+106+109)/3
     assert rsi_value.value == Decimal("100")  # all gains over the 4 closes
+
+
+def test_calculate_drawdown_uses_trading_days_not_calendar_days(conn: sqlite3.Connection) -> None:
+    """SMA-style window semantics: window=3 needs exactly 3 raw prices (not
+    period+1 like RSI), and the weekend gap in TRADING_DAYS must be
+    skipped, not treated as missing trading history."""
+    etf = _make_etf_with_trading_days(conn, TRADING_DAYS)
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 16), "30")
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 17), "20")
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 20), "10")
+    definition = _make_drawdown_definition(window=3)
+    insert_indicator_definition(conn, definition)
+    clock = FixedClock(datetime(2026, 7, 20, 21, 0, tzinfo=timezone.utc))
+
+    calculate_drawdown(conn, clock, etf, definition, date(2026, 7, 20))
+
+    [value] = get_indicator_values(conn, definition.indicator_definition_id, etf.etf_id)
+    # peak=30 throughout (prices only decline) -> trough 10: (10-30)/30.
+    assert value.value == (Decimal("10") - Decimal("30")) / Decimal("30")
+    pipeline_name = f"indicator:MAX_DRAWDOWN:v1:{etf.ticker}"
+    assert get_last_successful_pipeline_date(conn, pipeline_name) == date(2026, 7, 20)
+
+
+def test_calculate_drawdown_raises_when_too_few_trading_days(conn: sqlite3.Connection) -> None:
+    etf = _make_etf_with_trading_days(conn, [date(2026, 7, 16), date(2026, 7, 17)])  # only 2
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 16), "30")
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 17), "20")
+    definition = _make_drawdown_definition(window=3)
+    insert_indicator_definition(conn, definition)
+    clock = FixedClock(datetime(2026, 7, 17, 21, 0, tzinfo=timezone.utc))
+
+    with pytest.raises(InsufficientPriceHistoryError):
+        calculate_drawdown(conn, clock, etf, definition, date(2026, 7, 17))
+
+    assert get_indicator_values(conn, definition.indicator_definition_id, etf.etf_id) == []
+
+
+def test_calculate_drawdown_raises_when_pricebar_missing_for_a_trading_day(
+    conn: sqlite3.Connection,
+) -> None:
+    etf = _make_etf_with_trading_days(conn, TRADING_DAYS)
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 16), "30")
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 17), "20")
+    # No PriceBar for 2026-07-20.
+    definition = _make_drawdown_definition(window=3)
+    insert_indicator_definition(conn, definition)
+    clock = FixedClock(datetime(2026, 7, 20, 21, 0, tzinfo=timezone.utc))
+
+    with pytest.raises(InsufficientPriceHistoryError):
+        calculate_drawdown(conn, clock, etf, definition, date(2026, 7, 20))
+
+    assert get_indicator_values(conn, definition.indicator_definition_id, etf.etf_id) == []
+
+
+def test_calculate_drawdown_is_idempotent_on_rerun(conn: sqlite3.Connection) -> None:
+    etf = _make_etf_with_trading_days(conn, TRADING_DAYS)
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 16), "30")
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 17), "20")
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 20), "10")
+    definition = _make_drawdown_definition(window=3)
+    insert_indicator_definition(conn, definition)
+    clock = FixedClock(datetime(2026, 7, 20, 21, 0, tzinfo=timezone.utc))
+
+    for _ in range(3):
+        calculate_drawdown(conn, clock, etf, definition, date(2026, 7, 20))
+
+    values = get_indicator_values(conn, definition.indicator_definition_id, etf.etf_id)
+    assert len(values) == 1
+    assert values[0].value == (Decimal("10") - Decimal("30")) / Decimal("30")
+
+
+def test_calculate_drawdown_watermark_advance_failure_rolls_back_completion(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Same guarantee proven for calculate_sma/calculate_rsi, checked
+    independently for calculate_drawdown -- reusing run_pipeline
+    unmodified is not something to assume without its own test."""
+    etf = _make_etf_with_trading_days(conn, TRADING_DAYS)
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 16), "30")
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 17), "20")
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 20), "10")
+    definition = _make_drawdown_definition(window=3)
+    insert_indicator_definition(conn, definition)
+    clock = FixedClock(datetime(2026, 7, 20, 21, 0, tzinfo=timezone.utc))
+
+    def _boom(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("simulated failure advancing the watermark")
+
+    monkeypatch.setattr(pipeline_run, "advance_pipeline_watermark", _boom)
+
+    with pytest.raises(RuntimeError):
+        calculate_drawdown(conn, clock, etf, definition, date(2026, 7, 20))
+
+    assert get_indicator_values(conn, definition.indicator_definition_id, etf.etf_id) == []
+    pipeline_name = f"indicator:MAX_DRAWDOWN:v1:{etf.ticker}"
+    assert get_last_successful_pipeline_date(conn, pipeline_name) is None
+    status = conn.execute(
+        "SELECT status FROM IngestionRun WHERE pipeline_name = ?", (pipeline_name,)
+    ).fetchone()["status"]
+    assert status == "running"
+
+
+def test_calculate_drawdown_partial_write_rolls_back_on_failure(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import core.analytics.indicator_calculation as indicator_calculation
+
+    etf = _make_etf_with_trading_days(conn, TRADING_DAYS)
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 16), "30")
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 17), "20")
+    _insert_bar(conn, etf.etf_id, date(2026, 7, 20), "10")
+    definition = _make_drawdown_definition(window=3)
+    insert_indicator_definition(conn, definition)
+    clock = FixedClock(datetime(2026, 7, 20, 21, 0, tzinfo=timezone.utc))
+
+    real_insert = indicator_calculation.insert_indicator_value
+
+    def _insert_then_fail(conn_: sqlite3.Connection, value: object) -> None:
+        real_insert(conn_, value)
+        raise RuntimeError("simulated failure after a successful write")
+
+    monkeypatch.setattr(indicator_calculation, "insert_indicator_value", _insert_then_fail)
+
+    with pytest.raises(RuntimeError):
+        calculate_drawdown(conn, clock, etf, definition, date(2026, 7, 20))
+
+    assert get_indicator_values(conn, definition.indicator_definition_id, etf.etf_id) == []
+    pipeline_name = f"indicator:MAX_DRAWDOWN:v1:{etf.ticker}"
+    assert get_last_successful_pipeline_date(conn, pipeline_name) is None
+    status = conn.execute(
+        "SELECT status FROM IngestionRun WHERE pipeline_name = ?", (pipeline_name,)
+    ).fetchone()["status"]
+    assert status == "failed"

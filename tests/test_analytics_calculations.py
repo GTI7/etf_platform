@@ -4,7 +4,7 @@ from decimal import Decimal
 
 import pytest
 
-from core.analytics.domain.calculations import mean, rsi, sma
+from core.analytics.domain.calculations import max_drawdown, mean, rsi, sma
 
 
 def test_sma_averages_prices() -> None:
@@ -86,3 +86,69 @@ def test_rsi_output_always_within_0_to_100() -> None:
     for closes in examples:
         value = rsi(closes)
         assert Decimal("0") <= value <= Decimal("100")
+
+
+def test_max_drawdown_increasing_prices_is_zero() -> None:
+    prices = [Decimal("100"), Decimal("110"), Decimal("120")]
+
+    assert max_drawdown(prices) == Decimal("0")
+
+
+def test_max_drawdown_single_decline() -> None:
+    prices = [Decimal("100"), Decimal("90")]
+
+    assert max_drawdown(prices) == Decimal("-0.10")
+
+
+def test_max_drawdown_decline_and_recovery() -> None:
+    prices = [Decimal("100"), Decimal("90"), Decimal("120")]
+
+    assert max_drawdown(prices) == Decimal("-0.10")
+
+
+def test_max_drawdown_partial_decline_from_peak() -> None:
+    prices = [Decimal("100"), Decimal("110"), Decimal("105")]
+
+    assert max_drawdown(prices) == (Decimal("105") - Decimal("110")) / Decimal("110")
+
+
+def test_max_drawdown_multiple_peaks_uses_worst_decline() -> None:
+    # peak 150 -> trough 120: -0.2; then a new peak 300 -> trough 150: -0.5,
+    # a worse decline than the first -- proves the running peak is
+    # re-established after a recovery, not just the window's global max.
+    prices = [
+        Decimal("100"),
+        Decimal("150"),
+        Decimal("120"),
+        Decimal("300"),
+        Decimal("150"),
+        Decimal("400"),
+    ]
+
+    assert max_drawdown(prices) == Decimal("-0.5")
+
+
+def test_max_drawdown_uses_decimal_division_exactly() -> None:
+    prices = [Decimal("3"), Decimal("1")]
+
+    assert max_drawdown(prices) == (Decimal("1") - Decimal("3")) / Decimal("3")
+
+
+def test_max_drawdown_single_price_is_zero() -> None:
+    assert max_drawdown([Decimal("100")]) == Decimal("0")
+
+
+def test_max_drawdown_rejects_empty_list() -> None:
+    with pytest.raises(ValueError):
+        max_drawdown([])
+
+
+def test_max_drawdown_output_always_non_positive() -> None:
+    examples = [
+        [Decimal("10"), Decimal("20"), Decimal("15"), Decimal("30"), Decimal("5")],
+        [Decimal("50"), Decimal("50.01"), Decimal("49.99"), Decimal("50")],
+        [Decimal("100"), Decimal("1")],
+        [Decimal("1"), Decimal("100")],
+    ]
+    for prices in examples:
+        assert max_drawdown(prices) <= Decimal("0")
