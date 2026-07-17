@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import urllib.error
+import urllib.request
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
@@ -178,3 +179,43 @@ def test_http_get_reads_urlopen_response_body(monkeypatch: pytest.MonkeyPatch) -
     )
 
     assert _http_get("https://example.invalid") == b'{"ok": true}'
+
+
+def test_http_get_sends_a_request_object_with_explicit_user_agent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Yahoo Finance's chart endpoint rejects Python's default urllib
+    User-Agent with HTTP 429 -- _http_get() must build a Request carrying
+    its own explicit, non-default User-Agent, not pass a bare URL string."""
+
+    class _FakeResponse:
+        def __enter__(self) -> "_FakeResponse":
+            return self
+
+        def __exit__(self, *exc_info: object) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return b"{}"
+
+    captured: dict[str, object] = {}
+
+    def fake_urlopen(request: object, timeout: int) -> _FakeResponse:
+        captured["request"] = request
+        return _FakeResponse()
+
+    monkeypatch.setattr(
+        "core.market_data.providers.yahoo_finance.urllib.request.urlopen", fake_urlopen
+    )
+
+    _http_get("https://example.invalid")
+
+    request = captured["request"]
+    assert isinstance(request, urllib.request.Request)
+    # Request.add_header() capitalizes the key it stores ("User-agent"),
+    # and get_header() does a plain, non-normalizing lookup -- so the
+    # lookup key must match that stored form exactly, not the header's
+    # conventional "User-Agent" casing.
+    user_agent = request.get_header("User-Agent".capitalize())
+    assert user_agent is not None
+    assert "python-urllib" not in user_agent.lower()

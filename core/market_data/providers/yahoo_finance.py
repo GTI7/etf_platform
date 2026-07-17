@@ -13,8 +13,16 @@ from core.market_data.providers.base import ProviderError, ProviderPriceBar
 _CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{ticker}"
 
 
+_USER_AGENT = "Mozilla/5.0 (compatible; etf-intelligence-platform/1.0)"
+
+
 def _http_get(url: str) -> bytes:
-    with urllib.request.urlopen(url, timeout=10) as response:  # noqa: S310
+    # Yahoo Finance's chart endpoint rejects Python's default urllib
+    # User-Agent (Python-urllib/x.y) with HTTP 429, regardless of actual
+    # request volume -- an explicit, non-default User-Agent is required for
+    # every request to reach the endpoint at all.
+    request = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
+    with urllib.request.urlopen(request, timeout=10) as response:  # noqa: S310
         return response.read()
 
 
