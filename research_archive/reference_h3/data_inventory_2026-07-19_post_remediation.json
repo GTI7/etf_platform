@@ -1,0 +1,40 @@
+{
+  "phase": "database remediation -- Section 6 (validation plan) of docs/REFERENCE_H3_DATABASE_REMEDIATION_PLAN.md",
+  "generated_at": "2026-07-19",
+  "scope_note": "Data remediation execution and re-verification only. No H3 signal, benchmark, peer group, lookback window, scoring logic, IC, p-value, or forward return is present anywhere in this artifact.",
+  "predecessor_artifacts": {
+    "pre_extension": "research_archive/reference_h3/data_inventory_2026-07-19.json",
+    "post_extension": "research_archive/reference_h3/data_inventory_2026-07-19_post_extension.json",
+    "note": "Both predecessor files are left unedited as the historical pre-remediation record, per the remediation plan's Section 7. This file supersedes their post_extension_verification claim, which was accurate on its own narrow (missing-only) terms but did not disclose the +2-per-ETF surplus documented in docs/REFERENCE_H3_GATE2_DISCREPANCY_ANALYSIS.md."
+  },
+  "root_cause_recap": {
+    "invalid_row_count": 50,
+    "affected_dates": ["2026-06-19", "2026-07-03"],
+    "affected_etfs": 25,
+    "source_tag": "backfill-gap-fill",
+    "origin": "Unidentified; not producible by any current or historically-committed codebase path -- see docs/REFERENCE_H3_BACKFILL_GAP_FILL_ORIGIN_REPORT.md. Most likely a manual/un-versioned forward-fill action from 2026-07-17, predating the H3 extension.",
+    "h3_extension_relationship": "None -- the H3 extension's own batch (49,300 rows, source=yahoo_finance) was clean and is not implicated."
+  },
+  "remediation_performed": {
+    "description": "Export-then-delete (Option F) using an invariant-based predicate (Option D): deleted every PriceBar row whose (etf_id, session_date) has no matching is_trading_day=1 TradingSession row for that ETF's calendar -- not a source-tag match.",
+    "script": "maintenance/remediate_h3_invalid_pricebar_rows.py",
+    "script_sha256": "cc868b506993eaf31eb1b77e26114031807c9ae286611c8019c0ec3fe2ddb008",
+    "pre_delete_export": "research_archive/reference_h3/removed_backfill_gap_fill_rows_2026-07-19.json",
+    "executed_inside_transaction": true,
+    "executed_at": "2026-07-19"
+  },
+  "before_after_coverage": {
+    "before": {"total_pricebar_rows": 61900, "bars_per_etf": 2476},
+    "after": {"total_pricebar_rows": 61850, "bars_per_etf": 2474}
+  },
+  "post_remediation_verification": {
+    "method": "Two-directional check per ETF: for each of the 25 ETFs, compared stored PriceBar dates against the full set of real XNYS trading days within its own [earliest, latest] range, computing BOTH missing (expected - stored) and surplus (stored - expected) -- replacing the post-extension check's missing-only methodology that masked this incident originally.",
+    "universe_check": "exactly the original 25 tickers present, no ETF added or removed",
+    "result": "0 missing, 0 surplus, of 2474 expected trading days -- for all 25 ETFs, identical range across all 25 ETFs (earliest=2016-09-13, latest=2026-07-17)",
+    "source_tag_audit": "0 remaining PriceBar rows with source='backfill-gap-fill' or any other value the current ingestion codebase does not itself produce; only source='yahoo_finance' remains (61,850 rows)",
+    "recurrence_check": "0 PriceBar rows match the invariant-based predicate immediately after the delete; 0 PriceBar rows have been inserted since the H3 extension batch (2026-07-18T22:24:13 UTC) other than the extension's own clean batch, per direct query at remediation time",
+    "row_count_arithmetic": "61,900 - 50 = 61,850 (confirmed against the live database, not the archived JSON)",
+    "full_validation_record": "research_archive/reference_h3/post_remediation_validation_2026-07-19.json"
+  },
+  "gate_2_status": "NOT YET SATISFIED -- remediation, its dry-run/export/delete execution, and this re-verification are complete and passed in full. What remains is a genuinely independent reviewer (per the governance plan's Section 4 duties and the remediation plan's Section 8) who did not author or execute the delete script, re-querying the live database and producing research_archive/reference_h3/gate2_independent_review_<date>_post_remediation.md. That record does not yet exist and was intentionally not produced by this remediation task, since the executor cannot self-certify independence."
+}

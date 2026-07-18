@@ -1,0 +1,315 @@
+{
+  "row_count_reconciliation": {
+    "before": 61900,
+    "after": 61850,
+    "expected_after": 61850,
+    "delta": 50,
+    "pass": true
+  },
+  "two_directional_coverage_per_etf": {
+    "ACWI": {
+      "bars_per_etf": 2474,
+      "earliest": "2016-09-13",
+      "latest": "2026-07-17",
+      "expected_trading_days": 2474,
+      "missing_count": 0,
+      "missing_dates": [],
+      "surplus_count": 0,
+      "surplus_dates": []
+    },
+    "ARKK": {
+      "bars_per_etf": 2474,
+      "earliest": "2016-09-13",
+      "latest": "2026-07-17",
+      "expected_trading_days": 2474,
+      "missing_count": 0,
+      "missing_dates": [],
+      "surplus_count": 0,
+      "surplus_dates": []
+    },
+    "BND": {
+      "bars_per_etf": 2474,
+      "earliest": "2016-09-13",
+      "latest": "2026-07-17",
+      "expected_trading_days": 2474,
+      "missing_count": 0,
+      "missing_dates": [],
+      "surplus_count": 0,
+      "surplus_dates": []
+    },
+    "BOTZ": {
+      "bars_per_etf": 2474,
+      "earliest": "2016-09-13",
+      "latest": "2026-07-17",
+      "expected_trading_days": 2474,
+      "missing_count": 0,
+      "missing_dates": [],
+      "surplus_count": 0,
+      "surplus_dates": []
+    },
+    "EEM": {
+      "bars_per_etf": 2474,
+      "earliest": "2016-09-13",
+      "latest": "2026-07-17",
+      "expected_trading_days": 2474,
+      "missing_count": 0,
+      "missing_dates": [],
+      "surplus_count": 0,
+      "surplus_dates": []
+    },
+    "EFA": {
+      "bars_per_etf": 2474,
+      "earliest": "2016-09-13",
+      "latest": "2026-07-17",
+      "expected_trading_days": 2474,
+      "missing_count": 0,
+      "missing_dates": [],
+      "surplus_count": 0,
+      "surplus_dates": []
+    },
+    "EWJ": {
+      "bars_per_etf": 2474,
+      "earliest": "2016-09-13",
+      "latest": "2026-07-17",
+      "expected_trading_days": 2474,
+      "missing_count": 0,
+      "missing_dates": [],
+      "surplus_count": 0,
+      "surplus_dates": []
+    },
+    "GLD": {
+      "bars_per_etf": 2474,
+      "earliest": "2016-09-13",
+      "latest": "2026-07-17",
+      "expected_trading_days": 2474,
+      "missing_count": 0,
+      "missing_dates": [],
+      "surplus_count": 0,
+      "surplus_dates": []
+    },
+    "HACK": {
+      "bars_per_etf": 2474,
+      "earliest": "2016-09-13",
+      "latest": "2026-07-17",
+      "expected_trading_days": 2474,
+      "missing_count": 0,
+      "missing_dates": [],
+      "surplus_count": 0,
+      "surplus_dates": []
+    },
+    "ICLN": {
+      "bars_per_etf": 2474,
+      "earliest": "2016-09-13",
+      "latest": "2026-07-17",
+      "expected_trading_days": 2474,
+      "missing_count": 0,
+      "missing_dates": [],
+      "surplus_count": 0,
+      "surplus_dates": []
+    },
+    "IWM": {
+      "bars_per_etf": 2474,
+      "earliest": "2016-09-13",
+      "latest": "2026-07-17",
+      "expected_trading_days": 2474,
+      "missing_count": 0,
+      "missing_dates": [],
+      "surplus_count": 0,
+      "surplus_dates": []
+    },
+    "QQQ": {
+      "bars_per_etf": 2474,
+      "earliest": "2016-09-13",
+      "latest": "2026-07-17",
+      "expected_trading_days": 2474,
+      "missing_count": 0,
+      "missing_dates": [],
+      "surplus_count": 0,
+      "surplus_dates": []
+    },
+    "SCHD": {
+      "bars_per_etf": 2474,
+      "earliest": "2016-09-13",
+      "latest": "2026-07-17",
+      "expected_trading_days": 2474,
+      "missing_count": 0,
+      "missing_dates": [],
+      "surplus_count": 0,
+      "surplus_dates": []
+    },
+    "SKYY": {
+      "bars_per_etf": 2474,
+      "earliest": "2016-09-13",
+      "latest": "2026-07-17",
+      "expected_trading_days": 2474,
+      "missing_count": 0,
+      "missing_dates": [],
+      "surplus_count": 0,
+      "surplus_dates": []
+    },
+    "SPY": {
+      "bars_per_etf": 2474,
+      "earliest": "2016-09-13",
+      "latest": "2026-07-17",
+      "expected_trading_days": 2474,
+      "missing_count": 0,
+      "missing_dates": [],
+      "surplus_count": 0,
+      "surplus_dates": []
+    },
+    "TLT": {
+      "bars_per_etf": 2474,
+      "earliest": "2016-09-13",
+      "latest": "2026-07-17",
+      "expected_trading_days": 2474,
+      "missing_count": 0,
+      "missing_dates": [],
+      "surplus_count": 0,
+      "surplus_dates": []
+    },
+    "USMV": {
+      "bars_per_etf": 2474,
+      "earliest": "2016-09-13",
+      "latest": "2026-07-17",
+      "expected_trading_days": 2474,
+      "missing_count": 0,
+      "missing_dates": [],
+      "surplus_count": 0,
+      "surplus_dates": []
+    },
+    "VGK": {
+      "bars_per_etf": 2474,
+      "earliest": "2016-09-13",
+      "latest": "2026-07-17",
+      "expected_trading_days": 2474,
+      "missing_count": 0,
+      "missing_dates": [],
+      "surplus_count": 0,
+      "surplus_dates": []
+    },
+    "VNQ": {
+      "bars_per_etf": 2474,
+      "earliest": "2016-09-13",
+      "latest": "2026-07-17",
+      "expected_trading_days": 2474,
+      "missing_count": 0,
+      "missing_dates": [],
+      "surplus_count": 0,
+      "surplus_dates": []
+    },
+    "VT": {
+      "bars_per_etf": 2474,
+      "earliest": "2016-09-13",
+      "latest": "2026-07-17",
+      "expected_trading_days": 2474,
+      "missing_count": 0,
+      "missing_dates": [],
+      "surplus_count": 0,
+      "surplus_dates": []
+    },
+    "VTI": {
+      "bars_per_etf": 2474,
+      "earliest": "2016-09-13",
+      "latest": "2026-07-17",
+      "expected_trading_days": 2474,
+      "missing_count": 0,
+      "missing_dates": [],
+      "surplus_count": 0,
+      "surplus_dates": []
+    },
+    "XLE": {
+      "bars_per_etf": 2474,
+      "earliest": "2016-09-13",
+      "latest": "2026-07-17",
+      "expected_trading_days": 2474,
+      "missing_count": 0,
+      "missing_dates": [],
+      "surplus_count": 0,
+      "surplus_dates": []
+    },
+    "XLF": {
+      "bars_per_etf": 2474,
+      "earliest": "2016-09-13",
+      "latest": "2026-07-17",
+      "expected_trading_days": 2474,
+      "missing_count": 0,
+      "missing_dates": [],
+      "surplus_count": 0,
+      "surplus_dates": []
+    },
+    "XLK": {
+      "bars_per_etf": 2474,
+      "earliest": "2016-09-13",
+      "latest": "2026-07-17",
+      "expected_trading_days": 2474,
+      "missing_count": 0,
+      "missing_dates": [],
+      "surplus_count": 0,
+      "surplus_dates": []
+    },
+    "XLV": {
+      "bars_per_etf": 2474,
+      "earliest": "2016-09-13",
+      "latest": "2026-07-17",
+      "expected_trading_days": 2474,
+      "missing_count": 0,
+      "missing_dates": [],
+      "surplus_count": 0,
+      "surplus_dates": []
+    }
+  },
+  "two_directional_coverage_pass": true,
+  "source_tag_audit": {
+    "distinct_sources": [
+      {
+        "source": "yahoo_finance",
+        "c": 61850
+      }
+    ],
+    "unrecognized_sources": [],
+    "pass": true
+  },
+  "universe_date_range_integrity": {
+    "ticker_count": 25,
+    "tickers": [
+      "ACWI",
+      "ARKK",
+      "BND",
+      "BOTZ",
+      "EEM",
+      "EFA",
+      "EWJ",
+      "GLD",
+      "HACK",
+      "ICLN",
+      "IWM",
+      "QQQ",
+      "SCHD",
+      "SKYY",
+      "SPY",
+      "TLT",
+      "USMV",
+      "VGK",
+      "VNQ",
+      "VT",
+      "VTI",
+      "XLE",
+      "XLF",
+      "XLK",
+      "XLV"
+    ],
+    "global_earliest": "2016-09-13",
+    "global_latest": "2026-07-17",
+    "pass": true
+  },
+  "export_backup_integrity": {
+    "export_path": "research_archive\\reference_h3\\removed_backfill_gap_fill_rows_2026-07-19.json",
+    "export_row_count": 50,
+    "pass": true
+  },
+  "recurrence_check": {
+    "rows_matching_predicate_post_delete": 0,
+    "pass": true
+  },
+  "all_checks_pass": true
+}

@@ -1,0 +1,36 @@
+{
+  "phase": "pre-validation Section 3 -- historical data sufficiency verification, POST-EXTENSION",
+  "generated_at": "2026-07-19",
+  "scope_note": "Data extension execution and verification only. No H3 signal, benchmark, peer group, lookback window, scoring logic, IC, p-value, or forward return is present anywhere in this artifact.",
+  "action_performed": {
+    "description": "Backfilled the gap before the previously-existing window, using only existing, unmodified ingestion mechanisms.",
+    "commands": [
+      "experiments.seed_trading_calendar.run(start_date=2016-09-13)",
+      "experiments.backfill_price_history.run(start_date=2016-09-13, end_date=2024-07-16)"
+    ],
+    "calendar_seed_result": {
+      "requested_range": "2016-09-13 to 2027-07-19",
+      "real_trading_sessions_in_range": 2725,
+      "new_trading_session_rows_inserted": 1973,
+      "already_present": 752
+    },
+    "backfill_result": {
+      "requested_range": "2016-09-13 to 2024-07-16",
+      "per_etf_inserted": 1972,
+      "per_etf_skipped": 0,
+      "total_inserted": 49300,
+      "total_skipped": 0,
+      "missing_etf_rows": 0
+    }
+  },
+  "before_after_coverage": {
+    "before": {"start": "2024-07-17", "end": "2026-07-17", "bars_per_etf": 504},
+    "after": {"start": "2016-09-13", "end": "2026-07-17", "bars_per_etf": 2476}
+  },
+  "post_extension_verification": {
+    "method": "for each of the 25 ETFs, compared its stored PriceBar dates against the full set of real XNYS trading days within its own [earliest, latest] range",
+    "universe_check": "exactly the original 25 tickers present, no ETF added or removed",
+    "result": "ALL CLEAN -- every ETF: 0 missing dates of 2474 expected trading days (0.000% missing), earliest=2016-09-13, latest=2026-07-17, identical range across all 25 ETFs"
+  },
+  "gate_2_status": "NOT YET SATISFIED -- inventory, decision, execution, and re-verification are complete; independent reviewer confirmation (per governance plan Section 4 duties) has not occurred and cannot be self-certified by the same process that performed this work."
+}
