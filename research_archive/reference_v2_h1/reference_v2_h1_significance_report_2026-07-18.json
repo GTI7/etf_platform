@@ -1,0 +1,86 @@
+{
+  "generated_at": "2026-07-18T21:10:58.740443+00:00",
+  "config": {
+    "hypothesis": "REFERENCE v2 H1 -- low volatility",
+    "specification": "docs/REFERENCE_V2_H1_LOW_VOLATILITY_SPECIFICATION.md",
+    "period_start": "2024-07-18",
+    "period_end": "2026-07-18",
+    "lookback_trading_days": 60,
+    "forward_trading_days": 20,
+    "min_panel_size": 10,
+    "etf_universe_size": 25,
+    "ranking_dates_in_base_panel": 421,
+    "ranking_dates_h1_a": 421,
+    "ranking_dates_h1_b": 421,
+    "permutations": 10000,
+    "bootstrap_iterations": 2000,
+    "block_lengths": [
+      20,
+      40,
+      60
+    ],
+    "random_seed": 2026071801
+  },
+  "statistics": {
+    "h1_a": {
+      "observed": -0.11722455691576832,
+      "null_median": 3.6543029417138544e-05,
+      "difference_from_null": -0.11726109994518545,
+      "raw_p_value": 0.0,
+      "adjusted_p_value": 0.0,
+      "significant_after_correction": true,
+      "bootstrap": {
+        "block_20": {
+          "ci_low": -0.24716060661428832,
+          "ci_high": 0.01808701808879948,
+          "excludes_zero": false
+        },
+        "block_40": {
+          "ci_low": -0.27663397588160055,
+          "ci_high": 0.031099899506669092,
+          "excludes_zero": false
+        },
+        "block_60": {
+          "ci_low": -0.2724159967111273,
+          "ci_high": 0.030202631098118004,
+          "excludes_zero": false
+        }
+      },
+      "bootstrap_robust_across_block_lengths": false,
+      "passes": false
+    },
+    "h1_b": {
+      "observed": -0.037940800292344236,
+      "null_median": -7.491321030513448e-05,
+      "difference_from_null": -0.0378658870820391,
+      "raw_p_value": 0.0001,
+      "adjusted_p_value": 0.0001,
+      "significant_after_correction": true,
+      "bootstrap": {
+        "block_20": {
+          "ci_low": -0.1539725470491504,
+          "ci_high": 0.06739950666910287,
+          "excludes_zero": false
+        },
+        "block_40": {
+          "ci_low": -0.16557610085876118,
+          "ci_high": 0.09355435775625792,
+          "excludes_zero": false
+        },
+        "block_60": {
+          "ci_low": -0.17092988306230586,
+          "ci_high": 0.0810931847250137,
+          "excludes_zero": false
+        }
+      },
+      "bootstrap_robust_across_block_lengths": false,
+      "passes": false
+    }
+  },
+  "decision": {
+    "h1_a_passed": false,
+    "h1_b_passed": false,
+    "verdict": "ARCHIVE",
+    "verdict_reason": "Neither H1-A nor H1-B survived Holm-Bonferroni-corrected permutation testing with bootstrap robustness."
+  }
+}
