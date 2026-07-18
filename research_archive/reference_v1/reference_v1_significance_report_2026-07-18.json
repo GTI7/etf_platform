@@ -1,0 +1,163 @@
+{
+  "generated_at": "2026-07-18T16:32:12.075020+00:00",
+  "config": {
+    "scoring_profile": "REFERENCE v1",
+    "period_start": "2024-07-17",
+    "period_end": "2026-07-17",
+    "forward_horizon_trading_days": 20,
+    "bucket_size": 5,
+    "etf_universe_size": 25,
+    "ranking_dates_observed": 463,
+    "permutations": 10000,
+    "bootstrap_iterations": 2000,
+    "block_lengths": [
+      20,
+      40,
+      60
+    ],
+    "random_seed": 20260718
+  },
+  "statistics": {
+    "momentum_ic": {
+      "observed": 0.02881707924904469,
+      "null_median": 2.7413191560059844e-05,
+      "difference_from_null": 0.02878966605748463,
+      "raw_p_value": 0.0025,
+      "adjusted_p_value": 0.005,
+      "significant_after_correction": true,
+      "bootstrap": {
+        "block_20": {
+          "ci_low": -0.025270559893670046,
+          "ci_high": 0.07889367004485794,
+          "excludes_zero": false
+        },
+        "block_40": {
+          "ci_low": -0.03854980063133411,
+          "ci_high": 0.08898990696128925,
+          "excludes_zero": false
+        },
+        "block_60": {
+          "ci_low": -0.04876889848812095,
+          "ci_high": 0.09251453729855458,
+          "excludes_zero": false
+        }
+      },
+      "bootstrap_robust_across_block_lengths": false,
+      "passes": false
+    },
+    "value_ic": {
+      "observed": 0.07128038675692498,
+      "null_median": 2.884022808050395e-05,
+      "difference_from_null": 0.07125154652884448,
+      "raw_p_value": 0.0,
+      "adjusted_p_value": 0.0,
+      "significant_after_correction": true,
+      "bootstrap": {
+        "block_20": {
+          "ci_low": -0.02654384899941535,
+          "ci_high": 0.17114884015395235,
+          "excludes_zero": false
+        },
+        "block_40": {
+          "ci_low": -0.025047406307316906,
+          "ci_high": 0.16489410068586818,
+          "excludes_zero": false
+        },
+        "block_60": {
+          "ci_low": -0.00424272029279513,
+          "ci_high": 0.14910951884101198,
+          "excludes_zero": false
+        }
+      },
+      "bootstrap_robust_across_block_lengths": false,
+      "passes": false
+    },
+    "raw_blend_ic": {
+      "observed": 0.03196710417012793,
+      "null_median": -8.307027745467979e-07,
+      "difference_from_null": 0.031967934872902476,
+      "raw_p_value": 0.0007,
+      "adjusted_p_value": 0.0021,
+      "significant_after_correction": true,
+      "bootstrap": {
+        "block_20": {
+          "ci_low": -0.023495971091543444,
+          "ci_high": 0.08342993022096687,
+          "excludes_zero": false
+        },
+        "block_40": {
+          "ci_low": -0.031150481807609237,
+          "ci_high": 0.092795854793155,
+          "excludes_zero": false
+        },
+        "block_60": {
+          "ci_low": -0.03911795979398571,
+          "ci_high": 0.09981263498920084,
+          "excludes_zero": false
+        }
+      },
+      "bootstrap_robust_across_block_lengths": false,
+      "passes": false
+    },
+    "normalized_blend_ic": {
+      "observed": 0.06501195108839797,
+      "null_median": -7.934581817899876e-05,
+      "difference_from_null": 0.06509129690657697,
+      "raw_p_value": 0.0,
+      "adjusted_p_value": 0.0,
+      "significant_after_correction": true,
+      "bootstrap": {
+        "block_20": {
+          "ci_low": -0.011187944441165611,
+          "ci_high": 0.13085022592224654,
+          "excludes_zero": false
+        },
+        "block_40": {
+          "ci_low": -0.001389780721411551,
+          "ci_high": 0.12755920445501664,
+          "excludes_zero": false
+        },
+        "block_60": {
+          "ci_low": 0.0036045335069375445,
+          "ci_high": 0.1277766064398982,
+          "excludes_zero": true
+        }
+      },
+      "bootstrap_robust_across_block_lengths": false,
+      "passes": false
+    },
+    "top_bottom_spread": {
+      "observed": 0.002310542917246408,
+      "null_median": 1.2345351368179138e-05,
+      "difference_from_null": 0.0022981975658782285,
+      "raw_p_value": 0.0718,
+      "adjusted_p_value": 0.0718,
+      "significant_after_correction": false,
+      "bootstrap": {
+        "block_20": {
+          "ci_low": -0.0038402964109929103,
+          "ci_high": 0.007920619156418299,
+          "excludes_zero": false
+        },
+        "block_40": {
+          "ci_low": -0.004432571318760384,
+          "ci_high": 0.008654128738892385,
+          "excludes_zero": false
+        },
+        "block_60": {
+          "ci_low": -0.004757392531930072,
+          "ci_high": 0.00871237624275121,
+          "excludes_zero": false
+        }
+      },
+      "bootstrap_robust_across_block_lengths": false,
+      "passes": false
+    }
+  },
+  "decision": {
+    "qualifying_statistics_passed": [],
+    "raw_blend_only_artifact_detected": false,
+    "verdict": "ARCHIVE",
+    "verdict_reason": "No statistic survived Holm-Bonferroni-corrected permutation testing with bootstrap robustness."
+  }
+}
