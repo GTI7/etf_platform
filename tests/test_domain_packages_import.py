@@ -4,9 +4,12 @@ logic yet -- only a package docstring. Phase 1A
 (docs/RESEARCH_PLATFORM_MVP_MIGRATION_PLAN.md Step 2) populates
 ``core.statistics`` with its first extracted module
 (``core.statistics.significance``), so that one domain is carved out of
-the "still empty" check below; ``core.governance``, ``core.validation``,
-``core.research``, and ``core.reporting`` remain untouched and are still
-held to the original Phase 0 emptiness guarantee."""
+the "still empty" check below. Phase 1C (Step 4) populates
+``core.governance`` with its first two modules
+(``core.governance.freeze_verifier``, ``core.governance.independence_linter``),
+carving that domain out too; ``core.validation``, ``core.research``, and
+``core.reporting`` remain untouched and are still held to the original
+Phase 0 emptiness guarantee."""
 
 from __future__ import annotations
 
@@ -23,7 +26,6 @@ NEW_DOMAIN_MODULES = [
 ]
 
 STILL_EMPTY_DOMAIN_MODULES = [
-    "core.governance",
     "core.validation",
     "core.research",
     "core.reporting",
@@ -61,3 +63,16 @@ def test_statistics_package_now_exposes_the_significance_submodule() -> None:
 
     assert significance is not None
     assert hasattr(significance, "spearman_correlation")
+
+
+def test_governance_package_now_exposes_tier_1_submodules() -> None:
+    """Phase 1C populates core.governance with its first two modules --
+    callers import each submodule explicitly (``core.governance`` itself
+    re-exports nothing), and each must expose its public entry point."""
+    import core.governance.freeze_verifier as freeze_verifier
+    import core.governance.independence_linter as independence_linter
+
+    assert freeze_verifier is not None
+    assert hasattr(freeze_verifier, "verify_freeze")
+    assert independence_linter is not None
+    assert hasattr(independence_linter, "lint")

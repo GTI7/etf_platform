@@ -572,3 +572,151 @@ Tier 1 items come first, per Step 4). It does not change
 `remediate_h3_invalid_pricebar_rows.py`'s `PREDICATE_SQL`, delete logic,
 or export format in any way, and it does not touch
 `research_archive/reference_h3/` or any other historical artifact.
+
+---
+
+## Platform Migration Phase 1C — Governance Tier 1
+
+**No version tag.** Phase 1A and 1B were labeled `v0.4.0`/`v0.5.0`
+above; those already collide with `docs/BASELINE_STATUS.md`'s
+unrelated main release track (`v0.4.0` "Foundation frozen", `v0.5.0`
+"Second Concrete Indicator"), which predates this migration and is not
+being renumbered here. Phase 1C is left deliberately untagged rather
+than continuing that collision into `v0.6.0`, which is not just a
+numbering coincidence but a real, already-shipped, already-documented
+release (`docs/RELEASE_NOTES_v0.6.0.md`, "Write-side Pipeline
+Composition") — reusing it here would misidentify this change as part
+of that release.
+
+Executes `docs/RESEARCH_PLATFORM_MVP_MIGRATION_PLAN.md` Section 3, Step
+4 (first half): `IndependenceLabelLinter` and `FreezeVerifier`, the two
+Governance Tier 1 automations
+`docs/RESEARCH_PLATFORM_RETROSPECTIVE.md` Section 3 ranked highest —
+pure functions over text/git state, needing no schema and no dependency
+on Research, Validation, or Reporting. Additive: two new modules, two
+new test files, no edit to any existing file's behavior other than
+`core/governance/__init__.py`'s own docstring (updated to stop
+describing the package as empty).
+
+### AD-033: `FreezeVerifier.verify_freeze` takes a raw commit ref, not a `FreezeId`
+
+**Decision:** `core/governance/freeze_verifier.py`'s `verify_freeze(commit_ref:
+str, covered_paths: Iterable[Path | str]) -> VerificationResult` diverges
+from `docs/PLATFORM_ARCHITECTURE_V1.md` Section 4.4's sketch —
+`FreezeVerifier.verify_freeze(self, freeze_id: FreezeId) ->
+VerificationResult` — by taking a plain git commit reference and an
+explicit list of covered file paths instead of a `FreezeId`.
+
+**Rationale:** `FreezeId` is a Research-domain concept, backed by the
+project registry `docs/RESEARCH_PLATFORM_MVP_MIGRATION_PLAN.md` Step 5
+has not built yet (`core/research/` remains an empty stub;
+`ProjectId`/`ArtifactRef` are reserved names only per AD-031, not a
+working registry). Building freeze-record persistence here, ahead of
+Research existing to own it, would be a new abstraction ahead of any
+concrete second consumer — exactly what this repository's stated
+discipline (`docs/ARCHITECTURE_DECISIONS.md`'s cross-cutting AD-005)
+rules out. The raw-commit-ref signature instead takes exactly what every
+existing frozen document already states in prose today (see e.g.
+`docs/H3_GATE1_QUANTITATIVE_VALIDATION_REPORT.md`'s own freeze-commit
+table: a hash plus a list of files it covers).
+
+**This is a temporary interface, stated explicitly so it is not mistaken
+for the final one.** When `core/research/` is eventually built with a
+real `FreezeId`-keyed registry, the expected path is a thin wrapper that
+resolves a `FreezeId` to `(commit_ref, covered_paths)` and calls this
+function unchanged — not a rewrite of `verify_freeze`'s own logic. This
+mirrors AD-030's treatment of the archive manifest as an early,
+intentionally partial guard ahead of `ArchiveVerifier`.
+
+**Verification semantics, stated explicitly.** A `VERIFIED` result
+proves the covered files are byte-identical to their content at the
+claimed commit, with no committed or uncommitted drift since — i.e. the
+freeze is *reproducible*. It proves nothing about whether the frozen
+methodology was itself correct, adequate, or reviewed, and it does not
+constitute approval of any research decision; it answers only "is this
+document's own freeze claim actually true of the repository right now."
+The result is one of three states (`VERIFIED` / `DRIFTED` /
+`UNVERIFIABLE`), deliberately not a boolean — an unresolvable commit
+ref or a covered path that never existed at that commit is a different
+failure mode than a real, completed drift finding, and collapsing the
+two into one `bool` would lose that distinction.
+
+**Explicitly out of scope.** No `FreezeId` type, no persistence, no
+Research-domain dependency, no CLI beyond what its own test suite needs.
+Read-only: every git invocation is a read-only plumbing command
+(`rev-parse`, `cat-file -e`, `diff`, `status --porcelain`); nothing
+writes, commits, checks out, or resets. `research_archive/`, every
+`experiments/validate_*.py` script, and `maintenance/remediate_h3_invalid_pricebar_rows.py`
+are untouched by this AD.
+
+**Smoke test evidence (Days 6-12, read-only).** Run against the two
+real, already-documented H3 freeze claims: the methodology freeze
+(`docs/H3_GATE1_QUANTITATIVE_VALIDATION_REPORT.md`, commit `07f0da3`,
+covering `attempt_001_specification.md`,
+`REFERENCE_H3_PREVALIDATION_PLAN.md`,
+`REFERENCE_H3_GATE3_ECONOMIC_RATIONALE.md`,
+`RESEARCH_GOVERNANCE_STANDARD.md`) and the acceptance-criteria freeze
+(`research_archive/reference_h3/decision_log.md` Entry 15, commit
+`a643993`, covering `H3_ACCEPTANCE_CRITERIA.md`). Both resolved to their
+documented full hashes and returned `VERIFIED`, with no drifted files
+and no errors — reproducing, by independent recomputation rather than
+by re-reading the prior human audit's conclusion, exactly what
+`H3_GATE1_QUANTITATIVE_VALIDATION_REPORT.md`'s own freeze-commit table
+already claimed. No repository file was modified by this run.
+
+### AD-034: `IndependenceLabelLinter` is a local, line-adjacent lexical check, not a semantic one
+
+**Decision:** `core/governance/independence_linter.py`'s `lint()` flags a
+line containing "independent"/"independently" unless a `Level 2` or
+`Level 3` qualifier appears on that same line or the immediately
+preceding line. It does not attempt to determine whether "independent"
+is being used in a review-independence sense at all, and it does not
+scan an entire document for "does a Level 2/3 qualifier appear
+anywhere" — both were considered and rejected.
+
+**Rationale — why not whole-document.** A whole-file "does this
+document mention Level 2/3 anywhere" check would flag almost nothing:
+most H3 documents mention a Level qualifier somewhere while still
+containing individual unqualified sentences, which is the actual defect
+`docs/RESEARCH_PLATFORM_RETROSPECTIVE.md` Section 2 describes (three
+specific mislabeled review documents, not whole documents missing any
+qualifier at all). The check has to be local to be the check the
+retrospective actually asked for.
+
+**Rationale — why not semantic.** Distinguishing a review-independence
+claim from an unrelated use of the word (e.g. "independent variable")
+would require sentence-level natural language understanding, which is
+out of scope for a Tier 1 automation meant to be "the cheapest possible
+automation on this list" (retrospective Section 3 item 2's own framing).
+`lint()` therefore also flags non-review uses of "independent" as a
+known, accepted false positive — findings are candidates for human
+triage (consistent with `docs/PLATFORM_ARCHITECTURE_V1.md` Section 4.4:
+Governance flags, it does not fix or auto-reject), not an automatic
+pass/fail gate, so an occasional false positive costs a reviewer one
+glance, not a wrongly blocked action.
+
+**Explicitly out of scope.** No configuration for additional qualifier
+patterns, no per-document allowlist, no CLI beyond what its own test
+suite needs. Read-only: only reads the given file paths.
+
+**Calibration finding (Days 6-12 smoke test, read-only).** Run against
+every `.md` file under `docs/` and `research_archive/` (50 files): 403
+findings, no repository file modified. This is far more than "the three
+mislabeled H3 review documents" the retrospective named, and inspection
+confirms why — real documents typically state a Level 2/3 qualifier
+once per section, then use bare "independent"/"independently" several
+more times in the same section, still referring to that one
+already-qualified claim; the one-line lookback this AD deliberately
+chose does not reach those later, section-scoped repeats. This is
+evidence of the documented "not semantic" tradeoff above showing up
+concretely, not a new defect: `lint()` is a **candidate-discovery tool**
+that finds every lexically unqualified occurrence, not a validator that
+determines whether each occurrence is unqualified *in its section's
+context*. Consistent with this AD's own "findings are candidates for
+human triage, not an automatic gate" framing, the 403 findings are
+disclosed here as a calibration signal for a future decision, not acted
+on now — **the matching rule (same-line/previous-line window) is
+unchanged by this finding**; widening it (e.g. to paragraph/section
+scope) remains open for later, once Governance has a real consumer to
+evaluate precision against, and should not be done speculatively ahead
+of that need.
