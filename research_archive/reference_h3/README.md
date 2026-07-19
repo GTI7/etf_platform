@@ -84,6 +84,18 @@ of every decision point across this cycle to date.
   and the directory listing (no construction attempt log exists yet).
   Concludes Gate 3 **PASS**, with no blocking or should-fix findings — see
   the file for detail.
+- **`gate1_governance_readiness_review_2026-07-19.md`** — the Level 2
+  (AI-assisted adversarial) review confirming Gate 1 was eligible to
+  begin (see Status below); referenced but not previously listed here.
+- **`gate1_independence_analysis_2026-07-19.json`** — the machine-generated
+  Gate 1 rank-correlation / score-overlap output underlying
+  `gate1_final_determination.md`.
+- **`gate1_final_determination.md`** — the consolidated final
+  determination for Gate 1 (candidate signal independence): **PASS**.
+  See `decision_log.md` Entry 13.
+- **`gate4_final_determination.md`** — the consolidated final
+  determination for Gate 4 (no unresolved specification degrees of
+  freedom): **PASS**. See `decision_log.md` Entry 14.
 
 No H3 signal, score, benchmark, peer group, lookback window, IC,
 p-value, or forward return appears anywhere in any of these files —
@@ -143,3 +155,12 @@ Section 2 has not yet been executed against the frozen construction. Gate
 4 (no unresolved degrees of freedom for a full specification) likewise
 remains open. Gate 1 quantitative testing may now begin per the
 governance readiness review above.
+
+**Pointer added without editing the above:** Gate 1 and Gate 4 have since
+each reached a final determination of **PASS** —
+[`gate1_final_determination.md`](gate1_final_determination.md) and
+[`gate4_final_determination.md`](gate4_final_determination.md). See
+`decision_log.md` Entries 13–14 and its "Current status (as of Entry 14)"
+section for the authoritative, current gate-by-gate status; the
+paragraphs above are left unedited as the historical record per this
+archive's append discipline.

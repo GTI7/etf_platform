@@ -277,3 +277,126 @@ determination.
 - **No outcome data** (forward return, IC, p-value, Sharpe, or any other
   performance figure) has been read, computed, or referenced at any point
   reflected in this log.
+
+## Entry 13 — Gate 1 final determination consolidated: PASS
+
+- **Date:** 2026-07-19 14:56
+- **Decision:** Gate 1 (candidate signal independence) closed at
+  **PASS**, consolidating the quantitative validation report and its
+  independent reproduction review into a single governance decision
+  record. The degenerate-case boundary was not triggered; observed
+  median Spearman correlation 0.1085 against REFERENCE v1's MOMENTUM
+  score, treated as the stricter "moderate correlation" case per the
+  pre-validation plan's ambiguity-resolution principle; a pre-existing
+  economic explanation for the correlation was found in
+  `attempt_001_specification.md` §4 (pre-dating the measurement); the
+  figures were independently reproduced to full floating-point
+  precision via two independently written code paths. This entry
+  consolidates already-recorded evidence; no new analysis was performed
+  and no H3 methodology or scoring logic was modified.
+- **Evidence references:**
+  `research_archive/reference_h3/gate1_final_determination.md` (commit
+  `a2cafac`); `docs/H3_GATE1_QUANTITATIVE_VALIDATION_REPORT.md`;
+  `docs/H3_GATE1_REPRODUCTION_REVIEW.md`;
+  `experiments/validate_h3_gate1_independence.py`;
+  `research_archive/reference_h3/gate1_independence_analysis_2026-07-19.json`.
+- **Governance status:** Phase 3, Gate 1 — **satisfied**. Does not, by
+  itself, authorize proceeding to a frozen H3 specification — see Entry
+  14 and the status section below for the full four-gate picture.
+- **Reviewer level:** Level 2 — AI-assisted adversarial (procedurally
+  independent: fresh session, no conversational continuity to the
+  validation session, independently recomputed — not merely inspected —
+  the rank-correlation and score-overlap figures via a second,
+  independently written implementation; **not organizationally
+  independent** — same disclosed limitations as Entries 7, 8, and 11).
+- **Known limitations:** No Level 3 (organizationally independent)
+  review exists or is available on this platform. The dataset-hash /
+  provenance policy called for by
+  `docs/RESEARCH_GOVERNANCE_STANDARD.md` §5 remains open. The
+  bottom-tail rank-overlap asymmetry (median 40% vs. the 20% chance
+  baseline for top-5) is independently confirmed as a measured fact but
+  remains unexplained. Independent-confirmation duties 1–3 (construction
+  log review; no-outcome-data confirmation; no-prior-result-influence
+  confirmation) were read but not subjected to a full adversarial audit
+  by the reproduction review, by its own account. 19 of 502 nominal
+  window dates could not be evaluated due to a `Score`-table coverage
+  gap on the MOMENTUM side. Full detail:
+  `gate1_final_determination.md` §5.
+
+## Entry 14 — Gate 4 final determination consolidated: PASS
+
+- **Date:** 2026-07-19 14:58
+- **Decision:** Gate 4 (no unresolved specification degrees of freedom)
+  closed at **PASS**, consolidating the degrees-of-freedom audit into a
+  single governance decision record. Five of seven audited categories
+  (universe, segments, scoring, lookback, missing-data) are CONTROLLED;
+  evaluation window and acceptance criteria are PARTIALLY CONTROLLED
+  with disclosed, non-blocking limitations rather than concealed or
+  outcome-driven adjustments. No blocking issue was identified in the
+  audit. This entry consolidates already-recorded evidence; no new
+  analysis was performed and no H3 methodology, scoring logic,
+  parameter, benchmark, universe, or acceptance criterion was modified,
+  tuned, or reinterpreted.
+- **Evidence references:**
+  `research_archive/reference_h3/gate4_final_determination.md`;
+  `docs/H3_GATE4_DEGREES_OF_FREEDOM_AUDIT.md`; `gate1_final_determination.md`;
+  `attempt_001_specification.md`; `FREEZE_RECORD.md` (commit `07f0da3`).
+- **Governance status:** Phase 3, Gate 4 — **satisfied**. All four
+  Phase 3 gates (2, 3, 1, 4) now PASS; per
+  `docs/REFERENCE_H3_PREVALIDATION_PLAN.md` §6 this closes Phase 3 as a
+  whole, though the archival items noted under Known limitations remain
+  outstanding and are not resolved by this entry.
+- **Reviewer level:** Level 2 — AI-assisted adversarial (procedurally
+  independent: a session distinct from the sessions that produced the
+  frozen specification and the Gate 1 evidence, independently verifying
+  claims via git history (`git log --follow`,
+  `git merge-base --is-ancestor`) rather than relying on the underlying
+  reports' own self-descriptions; **not organizationally independent** —
+  same disclosed limitations as Entries 7, 8, 11, and 13).
+- **Known limitations:** No Level 3 review exists or is available on
+  this platform. Evaluation window and acceptance criteria remain only
+  partially controlled, per the audit. The bottom-tail rank-overlap
+  asymmetry remains unexplained. The dataset-hash / provenance policy
+  gap remains open. **`gate4_final_determination.md` and its supporting
+  evidence files (`docs/H3_GATE4_DEGREES_OF_FREEDOM_AUDIT.md`,
+  `docs/H3_GATE1_QUANTITATIVE_VALIDATION_REPORT.md`,
+  `docs/H3_GATE1_REPRODUCTION_REVIEW.md`,
+  `experiments/validate_h3_gate1_independence.py`,
+  `gate1_independence_analysis_2026-07-19.json`) are untracked as of
+  this entry — no commit hash exists for them, and per
+  `FREEZE_RECORD.md`'s own standard ("a document's own claim to be
+  frozen is not freeze evidence"), this entry's citation of them should
+  not be read as claiming committed provenance until they are
+  committed.** Full detail: `gate4_final_determination.md` §6.
+
+---
+
+## Current status (as of Entry 14)
+
+- **Gate 2:** PASS (Entry 7).
+- **Gate 3:** PASS (Entry 8).
+- **Gate 1:** PASS (Entry 13) — supersedes the "governance readiness
+  only, quantitative test not run" status recorded in Entry 11 and in
+  the "Current status (as of Entry 12)" section above, which are left
+  unedited as the historical record per this log's append-only
+  discipline.
+- **Gate 4:** PASS (Entry 14) — supersedes the "not assessed" status
+  recorded in the "Current status (as of Entry 12)" section above,
+  likewise left unedited.
+- **Phase 3:** All four gates now satisfied.
+- **Phase 7 Decision:** Not reached. No PASS, FAIL, or INCONCLUSIVE
+  determination exists for H3 as a whole. This log records process
+  decisions only and does not itself render one. Per both final
+  determination records' own "Next allowed action" sections, all four
+  Phase 3 gates being satisfied does not, by itself, authorize
+  proceeding to a frozen H3 specification (Phase 4) beyond what those
+  records state; that remains a separate governance step outside the
+  scope of this log.
+- **Outstanding archival items (not resolved by Entries 13–14):** the
+  dataset-hash / provenance policy gap
+  (`docs/RESEARCH_GOVERNANCE_STANDARD.md` §5); committing
+  `gate4_final_determination.md` and its supporting evidence files,
+  which remain untracked as of this entry.
+- **No outcome data** beyond what is already cited in Entries 7, 8, 13,
+  and 14 has been read, computed, or referenced in producing this
+  update.
