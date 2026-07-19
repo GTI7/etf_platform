@@ -515,3 +515,60 @@ proven low-risk ground for this pattern (AD-003), and a reservation
 that turns out to be unnecessary costs two unused `NewType` lines,
 while retrofitting a shared identifier after several domains have each
 already grown their own would be the more expensive path.
+
+---
+
+## Platform Migration Phase 1B (`v0.5.0`) — Price coverage check extraction
+
+Executes `docs/RESEARCH_PLATFORM_MVP_MIGRATION_PLAN.md` Section 3, Step
+3, the migration step directly after Phase 1A's Statistics extraction:
+"Copy the two-directional missing/surplus check out of
+`maintenance/remediate_h3_invalid_pricebar_rows.py` into a new
+`maintenance/verify_price_coverage.py`, callable standalone or from a
+test." Like Phase 1A, this is additive: a new file, extracted logic,
+zero edits to the historical script it comes from.
+
+### AD-032: Price coverage check is extracted as structured dataclasses, not the original's plain dicts
+
+**Decision:** `maintenance/verify_price_coverage.py`'s
+`check_etf_coverage()` / `verify_price_coverage()` copy the two-directional
+(missing + invalid) per-ETF coverage logic from
+`remediate_h3_invalid_pricebar_rows.py`'s `per_etf_coverage_check()`
+unchanged in substance — same predicate (expected trading days between
+an ETF's own earliest and latest stored `PriceBar.session_date`,
+compared against stored dates in both directions) — but returns a
+frozen `CoverageReport` dataclass per ETF instead of the original's
+plain `dict`. The original script is untouched; it keeps its own inlined
+dict-returning version, exactly as Phase 1A left the four
+`experiments/validate_*.py` scripts' inlined statistics helpers
+untouched (AD-029).
+
+**Rationale:** `docs/PLATFORM_ARCHITECTURE_V1.md` Section 4.4 names a
+`DatasetIntegrityChecker`-shaped check as this exact gap's eventual
+Governance-domain owner, and Section 4.2 established `GateResult` as a
+"plain record" contract other domains consume. A dataclass is that same
+shape today, one step ahead of Governance actually existing, at zero
+behavioral cost — `dataclasses.asdict()` produces the identical
+plain-dict/JSON shape the original script already prints, so nothing
+about the tool's CLI output changes. This is consistent with AD-003's
+existing "enough structure to catch mistakes, no framework" discipline.
+
+**Terminology note — "invalid," not "surplus."** The original script's
+field name `surplus_dates` is renamed `invalid_dates` here: "surplus"
+described the specific H3 remediation case (rows that shouldn't exist at
+all), but the same predicate also fires on a completely unpopulated
+calendar date (AD-023's calendar-gap case), which is not "surplus" in
+any meaningful sense — both are simply stored rows whose date does not
+resolve to a recognized trading day. `invalid_dates` names the actual
+invariant being checked, independent of which of the two underlying
+causes produced it (see AD-023's own "deliberately not distinguished").
+No behavior differs from the original; only the field name is clearer
+in the new module.
+
+**Explicitly out of scope.** This AD does not introduce a
+`core/governance/` `DatasetIntegrityChecker` implementation — that
+remains future work per the migration plan's own sequencing (Governance
+Tier 1 items come first, per Step 4). It does not change
+`remediate_h3_invalid_pricebar_rows.py`'s `PREDICATE_SQL`, delete logic,
+or export format in any way, and it does not touch
+`research_archive/reference_h3/` or any other historical artifact.

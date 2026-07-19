@@ -47,7 +47,19 @@ def test_protected_file_content_is_unchanged(relative_path: str) -> None:
 
 def test_no_protected_directory_gained_or_lost_files() -> None:
     """Catches a new file silently added to (or removed from) a protected
-    tree that the per-file check above, by construction, cannot see."""
+    tree that the per-file check above, by construction, cannot see.
+
+    Unlike research_archive/ (fully closed -- every file there is
+    historical H3/REFERENCE evidence) and experiments/*.py (every script
+    is historical, per-cycle evidence), maintenance/ is only partially
+    frozen: docs/RESEARCH_PLATFORM_MVP_MIGRATION_PLAN.md Section 4 itself
+    designates maintenance/verify_price_coverage.py as new, additive,
+    reusable tooling -- not a historical artifact -- so maintenance/ is
+    a closed set only over the specific file(s) already recorded in
+    EXPECTED_HASHES (today: remediate_h3_invalid_pricebar_rows.py), the
+    same way experiments/ is already scoped to *.py rather than every
+    file physically present.
+    """
     current_files = set()
     for base in ("research_archive", "experiments", "maintenance"):
         base_dir = REPO_ROOT / base
@@ -55,6 +67,9 @@ def test_no_protected_directory_gained_or_lost_files() -> None:
             if path.is_file() and "__pycache__" not in path.parts:
                 if base == "experiments" and path.suffix != ".py":
                     continue  # experiments/README.md is documentation, not a protected script
-                current_files.add(path.relative_to(REPO_ROOT).as_posix())
+                relative_path = path.relative_to(REPO_ROOT).as_posix()
+                if base == "maintenance" and relative_path not in EXPECTED_HASHES:
+                    continue  # new reusable tooling, not historical evidence -- see docstring above
+                current_files.add(relative_path)
 
     assert current_files == set(EXPECTED_HASHES)
