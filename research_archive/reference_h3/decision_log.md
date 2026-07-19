@@ -371,32 +371,184 @@ determination.
 
 ---
 
-## Current status (as of Entry 14)
+## Entry 15 — Acceptance criteria frozen (Phase 4, item 8)
+
+- **Date:** 2026-07-19 15:16 (logged retroactively in this entry; the
+  freeze commit itself predates this log entry by the gap disclosed
+  below)
+- **Decision:** `docs/H3_ACCEPTANCE_CRITERIA.md` frozen as the
+  pre-registered PASS/FAIL/INCONCLUSIVE decision rule for Phase 6,
+  written and committed *before* any H3 outcome figure (forward return,
+  IC, p-value, Sharpe ratio, drawdown) existed anywhere on this
+  platform, per that document's own §0 attestation. Resolves the two
+  design choices Attempt 1's specification had explicitly left open
+  (§3.7–3.8: forward holding horizon, portfolio-formation logic) on
+  non-outcome grounds: dual horizon (60d primary / 20d diagnostic),
+  bucket size 5 reused unmodified from
+  `docs/REFERENCE_V2_H1_LOW_VOLATILITY_SPECIFICATION.md`. Three items
+  left explicitly UNRESOLVED rather than filled with an invented number
+  (net-of-cost minimum excess return, max-drawdown threshold, volatility
+  ceiling) — see the frozen document's §7.
+- **Evidence references:** commit `a6439934882d5ad2c08ce8dba597810ac99e69f9`
+  (short `a643993`); `research_archive/reference_h3/ACCEPTANCE_CRITERIA_FREEZE.md`.
+- **Governance status:** Phase 4 (Methodology Freeze), item 8 —
+  satisfied. Phase 4 as a whole (items 1–7: universe, dataset version,
+  evaluation period, benchmark, metrics, scoring rules, parameters) was
+  already fixed by Attempt 1's specification (Entry 10) and the four
+  Phase 3 gates (Entries 3–14); this entry closes the one remaining
+  item.
+- **Reviewer level:** Level 1 (self-review; authoring commit). No
+  distinct Level 2 confirmation of this specific freeze document's
+  completeness against the eight-element checklist exists as of this
+  entry — `docs/H3_ACCEPTANCE_CRITERIA.md` §6 itself requires one
+  before Phase 5 may begin; this gap is disclosed, not resolved, here.
+- **Known limitations:** This entry was written retroactively, during
+  the same archival pass that produced Entries 16–17 below, to close a
+  gap: the acceptance-criteria freeze commit (`a643993`) was never
+  logged in this file at the time it was made, so this log was briefly
+  incomplete against `docs/RESEARCH_GOVERNANCE_STANDARD.md` §5's
+  "decision_log.md records ... which freeze commit is in effect"
+  requirement between `a643993` and this entry's authorship. No content
+  in `docs/H3_ACCEPTANCE_CRITERIA.md` was altered, tuned, or
+  reinterpreted by this entry — it is a provenance record only. The
+  Level 2 confirmation requirement noted above remains open.
+
+## Entry 16 — Phase 6 Validation executed: EVIDENCE AGAINST
+
+- **Date:** 2026-07-19 17:02
+- **Decision:** Phase 6 (Validation) executed exactly against the two
+  frozen documents above — `attempt_001_specification.md` (commit
+  `07f0da3`) for the H3 score, `H3_ACCEPTANCE_CRITERIA.md` (commit
+  `a643993`) for the statistical framework and decision rule. First
+  point in H3's lifecycle any forward return, IC, p-value, or other
+  outcome figure was read, computed, or referenced. Result: **H3-A**
+  (primary, score autocorrelation, 60d) = +0.04986, correct sign,
+  Holm-Bonferroni-adjusted p = 0.0000, but its bootstrap CI includes
+  zero at all three required block lengths (20/40/60d) — does not pass
+  the frozen §4.2 bar. **H3-B** (secondary, top-5/bottom-5 spread, 60d)
+  = **−0.00573 — wrong sign**, Holm-Bonferroni-adjusted p = 0.0251
+  (significant). Per Acceptance Criteria §5.2 item 2, a
+  Holm-Bonferroni-significant result in the direction opposite the
+  hypothesis's stated prediction is a **significant reversal**,
+  recorded as evidence against the mechanism, not a milder finding than
+  FAIL. Global-equity-segment sensitivity checked and ruled out as the
+  driver (H3-B bit-identical with/without `VT`/`ACWI`). No parameter
+  was tuned, no alternative specification was run, and no criterion was
+  relaxed after this result was seen.
+- **Evidence references:**
+  `experiments/validate_h3_phase6_economic_validation.py` (script, reuses
+  `compute_h3_scores()` and the platform's existing statistical machinery
+  unmodified); `research_archive/reference_h3/phase6_economic_validation_2026-07-19.json`
+  (machine-readable evidence, seed `2026071901`, 483 window dates, 423
+  usable at the 60d horizon, 10,000 permutations, 2,000 bootstrap
+  iterations per block length); `docs/H3_PHASE6_ECONOMIC_VALIDATION_REPORT.md`
+  (full report, all seven required sections, completed decision-record
+  template).
+- **Governance status:** Phase 6 (Validation) — complete.
+- **Reviewer level:** Level 1 (self-review) only, at the point of this
+  entry. No Level 2 or above confirmation of this specific Phase 6 run
+  has yet been obtained — a real, disclosed gap, consistent with the
+  pattern already flagged in Entries 7–14 for other artifacts before
+  their own independent review was later obtained.
+- **Known limitations:** Single ~2-year, single-regime history (≈8
+  independent 60-day windows only); the internal tension between
+  H3-A's near-zero permutation p-value and its zero-inclusive bootstrap
+  CI is the disclosed effective-sample-size problem (Acceptance
+  Criteria §2.2) manifesting exactly as pre-registered, not a
+  contradiction; the 20-day diagnostic statistics are structurally
+  inflated by trailing-window overlap and are not decision-relevant;
+  no transaction-cost, turnover, or capacity model exists on this
+  platform (moot for this specific outcome, since the result is not a
+  PASS); no Level 3 (organizationally independent) review exists or is
+  available on this platform. Full detail:
+  `docs/H3_PHASE6_ECONOMIC_VALIDATION_REPORT.md` §6.
+
+## Entry 17 — Phase 7 Decision and Phase 8 Archive: H3 CLOSED
+
+- **Date:** 2026-07-19 17:27
+- **Decision:** H3 resolves to this platform's **FAIL**-tier terminal
+  outcome, under `docs/RESEARCH_GOVERNANCE_STANDARD.md` §7's
+  three-outcome Decision Framework, in the specific "significant
+  reversal" form Acceptance Criteria §5.2 item 2 defines as evidence
+  against the mechanism rather than a milder non-result. This is not
+  INCONCLUSIVE: the ambiguity-resolution and undefined-statistic rules
+  (Acceptance Criteria §4.2, §4.4) applied cleanly, no statistical-power
+  limitation was discovered that could not have been anticipated at
+  freeze (the small-effective-sample-size risk was explicitly
+  pre-registered in Acceptance Criteria §2.2 before this run), and the
+  cycle was not closed by neglect. The terminal-failure discipline
+  (`docs/RESEARCH_GOVERNANCE_STANDARD.md` §7 "FAIL", inherited in full
+  by this "evidence against" determination; also restated directly in
+  Acceptance Criteria §5.3) now binds without exception: research under
+  H3's exact frozen construction (Attempt 1) stops, effective
+  immediately, other than this Phase 8 archive step; no parameter of
+  the frozen construction or the frozen acceptance criteria may be
+  adjusted on this result to attempt to convert it into a PASS; no
+  alternative evaluation period may be substituted after the fact; no
+  criterion may be relaxed or reinterpreted having seen this result. A
+  future relative-strength/rotation-style hypothesis is only legitimate
+  as a wholly new Phase 1–2 cycle that explicitly engages with this
+  archived evidence and states, in writing, why it is genuinely
+  different from H3 Attempt 1 — not a renamed or restarted attempt at
+  it.
+- **Evidence references:** Entry 16 above and everything it cites;
+  `docs/REFERENCE_H3_RESEARCH_CLOSEOUT.md` (Phase 8 close-out report,
+  mirroring the structure already used for REFERENCE v1 and REFERENCE
+  v2 H1's own closures).
+- **Governance status:** Phase 7 (Decision) — complete, FAIL-tier.
+  Phase 8 (Archive) — opened by this entry; per
+  `docs/RESEARCH_GOVERNANCE_STANDARD.md` §2 Phase 8, archived "with
+  exactly the same rigor as a PASS," append-only from this point,
+  subject to the outstanding archival items noted below.
+- **Reviewer level:** Level 1 (self-review) only. This closure has not
+  received Level 2 or above confirmation as of this entry — consistent
+  with Entry 16's own disclosure, this is a real, open gap in the
+  evidence package (`docs/RESEARCH_GOVERNANCE_STANDARD.md` §5
+  `reviewer_reports/`), not a claim that this determination is
+  governance-final beyond Level 1.
+- **Known limitations:** All limitations disclosed in Entry 16 apply
+  unchanged to this closure. Additionally: this archive package does
+  not follow the idealized `research_archive/<cycle_name>/` layout
+  `docs/RESEARCH_GOVERNANCE_STANDARD.md` §5 describes (`hypothesis.md`,
+  `methodology.md`, `dataset_manifest.json`, `dataset_hashes/`,
+  `experiment_results/`, `reviewer_reports/`) — it follows this cycle's
+  own already-established, differently-named convention (dated,
+  individually-named files plus this log), the same convention Entries
+  1–14 already used throughout Phase 3. Retrofitting the idealized
+  layout was judged out of scope for this closure and is noted here as
+  an open item, not silently skipped. The dataset-hash / provenance
+  policy gap first noted in Entry 13's Known limitations remains open.
+  No Level 3 review exists or is available on this platform, for this
+  cycle or any prior one.
+
+---
+
+## Current status (as of Entry 17)
 
 - **Gate 2:** PASS (Entry 7).
 - **Gate 3:** PASS (Entry 8).
-- **Gate 1:** PASS (Entry 13) — supersedes the "governance readiness
-  only, quantitative test not run" status recorded in Entry 11 and in
-  the "Current status (as of Entry 12)" section above, which are left
-  unedited as the historical record per this log's append-only
-  discipline.
-- **Gate 4:** PASS (Entry 14) — supersedes the "not assessed" status
-  recorded in the "Current status (as of Entry 12)" section above,
-  likewise left unedited.
-- **Phase 3:** All four gates now satisfied.
-- **Phase 7 Decision:** Not reached. No PASS, FAIL, or INCONCLUSIVE
-  determination exists for H3 as a whole. This log records process
-  decisions only and does not itself render one. Per both final
-  determination records' own "Next allowed action" sections, all four
-  Phase 3 gates being satisfied does not, by itself, authorize
-  proceeding to a frozen H3 specification (Phase 4) beyond what those
-  records state; that remains a separate governance step outside the
-  scope of this log.
-- **Outstanding archival items (not resolved by Entries 13–14):** the
+- **Gate 1:** PASS (Entry 13).
+- **Gate 4:** PASS (Entry 14).
+- **Phase 3:** All four gates satisfied.
+- **Phase 4 (Methodology Freeze):** Complete — construction frozen
+  Entry 10 (`07f0da3`), acceptance criteria frozen Entry 15 (`a643993`).
+- **Phase 5 (Implementation):** Complete —
+  `experiments/validate_h3_phase6_economic_validation.py` (Entry 16).
+- **Phase 6 (Validation):** Complete — EVIDENCE AGAINST (Entry 16).
+- **Phase 7 (Decision):** Complete — **FAIL-tier, evidence against
+  (significant reversal)** (Entry 17). This supersedes the "Not
+  reached" status recorded in the "Current status (as of Entry 14)"
+  section above, left unedited as the historical record per this log's
+  append-only discipline.
+- **Phase 8 (Archive):** Opened (Entry 17). H3 Attempt 1 is CLOSED.
+  No further research under this exact frozen construction is
+  permitted; see Entry 17's terminal-failure discipline in full.
+- **Outstanding archival items (not resolved by Entries 15–17):** the
   dataset-hash / provenance policy gap
-  (`docs/RESEARCH_GOVERNANCE_STANDARD.md` §5); committing
-  `gate4_final_determination.md` and its supporting evidence files,
-  which remain untracked as of this entry.
-- **No outcome data** beyond what is already cited in Entries 7, 8, 13,
-  and 14 has been read, computed, or referenced in producing this
-  update.
+  (`docs/RESEARCH_GOVERNANCE_STANDARD.md` §5); this cycle's non-standard
+  (but internally consistent) archive layout, per Entry 17; no Level 2
+  or above review yet exists for Entries 15–17's own artifacts
+  (`H3_ACCEPTANCE_CRITERIA.md`'s freeze-completeness confirmation,
+  the Phase 6 script and its result, and this closure itself).
+- **No outcome data** beyond what is already cited in Entries 15–17 has
+  been read, computed, or referenced in producing this update.

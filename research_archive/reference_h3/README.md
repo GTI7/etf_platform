@@ -160,7 +160,36 @@ governance readiness review above.
 each reached a final determination of **PASS** —
 [`gate1_final_determination.md`](gate1_final_determination.md) and
 [`gate4_final_determination.md`](gate4_final_determination.md). See
-`decision_log.md` Entries 13–14 and its "Current status (as of Entry 14)"
-section for the authoritative, current gate-by-gate status; the
+`decision_log.md` Entries 13–14 and its former "Current status (as of
+Entry 14)" section for that point-in-time gate-by-gate status; the
 paragraphs above are left unedited as the historical record per this
 archive's append discipline.
+
+**Second pointer added without editing the above: H3 is now CLOSED.**
+Phase 4 (Methodology Freeze) completed with
+[`ACCEPTANCE_CRITERIA_FREEZE.md`](ACCEPTANCE_CRITERIA_FREEZE.md) /
+`docs/H3_ACCEPTANCE_CRITERIA.md` (commit `a643993`,
+`decision_log.md` Entry 15). Phase 6 (Validation) then executed —
+[`phase6_economic_validation_2026-07-19.json`](phase6_economic_validation_2026-07-19.json),
+produced by `experiments/validate_h3_phase6_economic_validation.py`,
+reported in full in `docs/H3_PHASE6_ECONOMIC_VALIDATION_REPORT.md` — with
+result **EVIDENCE AGAINST**: H3-A (primary, 60d) was correctly signed
+and permutation-significant but its bootstrap CI included zero at all
+three required block lengths; H3-B (secondary, 60d) was
+Holm-Bonferroni-significant in the **wrong sign** (recent H3
+laggards outperformed recent H3 leaders over the next 60 trading
+days), which Acceptance Criteria §5.2 item 2 defines as a significant
+reversal — evidence against the mechanism, not a milder finding than
+FAIL. Phase 7 (Decision) and Phase 8 (Archive) are recorded in
+`decision_log.md` Entry 17 and in
+[`docs/REFERENCE_H3_RESEARCH_CLOSEOUT.md`](../../docs/REFERENCE_H3_RESEARCH_CLOSEOUT.md).
+
+**H3 Attempt 1 is terminally closed.** Per
+`docs/RESEARCH_GOVERNANCE_STANDARD.md` §7's FAIL discipline (inherited
+in full by this "evidence against" determination) and Acceptance
+Criteria §5.3: no parameter of this frozen construction may be adjusted
+on this result in an attempt to produce a different outcome; that would
+be a new attempt or a new cycle, not a correction. See `decision_log.md`
+Entry 17 and "Current status (as of Entry 17)" for the authoritative,
+current status of this cycle; all paragraphs above this point are left
+unedited as the historical record per this archive's append discipline.

@@ -1,0 +1,165 @@
+{
+  "generated_at": "2026-07-19T15:02:08.163996+00:00",
+  "methodology_freeze_commit": "07f0da379d8cccf06d17c34a51cbb557da047fef",
+  "acceptance_criteria_freeze_commit": "a6439934882d5ad2c08ce8dba597810ac99e69f9",
+  "config": {
+    "period_start": "2024-08-13",
+    "period_end": "2026-07-17",
+    "primary_horizon_trading_days": 60,
+    "secondary_horizon_trading_days": 20,
+    "bucket_size": 5,
+    "min_panel_size": 10,
+    "etf_universe_size": 25,
+    "ranking_dates_in_window": 483,
+    "ranking_dates_base_panel_60d": 483,
+    "permutations": 10000,
+    "bootstrap_iterations": 2000,
+    "block_lengths": [
+      20,
+      40,
+      60
+    ],
+    "random_seed": 2026071901
+  },
+  "h3_a_60d_primary": {
+    "observed": 0.049858156028368794,
+    "n_dates": 423,
+    "raw_p_value": 0.0,
+    "adjusted_p_value": 0.0,
+    "bootstrap": {
+      "block_20": {
+        "ci_low": -0.04182178577923259,
+        "ci_high": 0.1352198126932169,
+        "excludes_zero": false
+      },
+      "block_40": {
+        "ci_low": -0.05432537734133479,
+        "ci_high": 0.1389513093289689,
+        "excludes_zero": false
+      },
+      "block_60": {
+        "ci_low": -0.049153436988543374,
+        "ci_high": 0.13764479905437352,
+        "excludes_zero": false
+      }
+    },
+    "significant_after_correction": true,
+    "bootstrap_robust_across_block_lengths": false,
+    "correct_sign": true,
+    "passes": false
+  },
+  "h3_b_60d_primary": {
+    "observed": -0.005730056520036866,
+    "n_dates": 423,
+    "raw_p_value": 0.0251,
+    "adjusted_p_value": 0.0251,
+    "bootstrap": {
+      "block_20": {
+        "ci_low": -0.03195435580430433,
+        "ci_high": 0.0185732742776084,
+        "excludes_zero": false
+      },
+      "block_40": {
+        "ci_low": -0.03660818779461976,
+        "ci_high": 0.021861794805895993,
+        "excludes_zero": false
+      },
+      "block_60": {
+        "ci_low": -0.03339208174488887,
+        "ci_high": 0.02264707529651724,
+        "excludes_zero": false
+      }
+    },
+    "significant_after_correction": true,
+    "bootstrap_robust_across_block_lengths": false,
+    "correct_sign": false,
+    "passes": false
+  },
+  "h3_a_20d_diagnostic": {
+    "observed": 0.6343362684831367,
+    "n_dates": 463,
+    "raw_p_value_uncorrected": 0.0,
+    "bootstrap": {
+      "block_20": {
+        "ci_low": 0.5738272138228943,
+        "ci_high": 0.6913567037713906,
+        "excludes_zero": true
+      },
+      "block_40": {
+        "ci_low": 0.573444093703273,
+        "ci_high": 0.6942973500581492,
+        "excludes_zero": true
+      },
+      "block_60": {
+        "ci_low": 0.5808204435952816,
+        "ci_high": 0.6905669131084897,
+        "excludes_zero": true
+      }
+    },
+    "note": "Diagnostic only, per Acceptance Criteria Section 2.1/4.3 -- not in the Holm-Bonferroni family, not decision-relevant."
+  },
+  "h3_b_20d_diagnostic": {
+    "observed": 0.009471953901386068,
+    "n_dates": 463,
+    "raw_p_value_uncorrected": 0.0,
+    "bootstrap": {
+      "block_20": {
+        "ci_low": -0.003014106237721261,
+        "ci_high": 0.02214103578614423,
+        "excludes_zero": false
+      },
+      "block_40": {
+        "ci_low": -0.002303445020436289,
+        "ci_high": 0.021610420731500633,
+        "excludes_zero": false
+      },
+      "block_60": {
+        "ci_low": -0.0011740673569396141,
+        "ci_high": 0.020687030975192755,
+        "excludes_zero": false
+      }
+    },
+    "note": "Diagnostic only, per Acceptance Criteria Section 2.1/4.3 -- not in the Holm-Bonferroni family, not decision-relevant."
+  },
+  "reversal_flags": {
+    "h3_a_significant_reversal": false,
+    "h3_b_significant_reversal": true
+  },
+  "undefined_statistic_detected": false,
+  "global_equity_segment_sensitivity": {
+    "with_global_equity": {
+      "h3_a_observed": 0.049858156028368794,
+      "h3_b_observed": -0.005730056520036866
+    },
+    "without_global_equity": {
+      "h3_a_observed": 0.0426186004354367,
+      "h3_b_observed": -0.005730056520036866
+    },
+    "note": "Reporting requirement per Acceptance Criteria Section 3.3, not a pass/fail gate on its own."
+  },
+  "h3_b_risk_report": {
+    "construction": "Non-overlapping 60-trading-day periods walking the primary horizon forward in whole steps (reporting-only construction, not part of the frozen acceptance criteria -- see module docstring).",
+    "long_leg": {
+      "n_periods": 8,
+      "max_drawdown": 0.06885656902863004,
+      "annualized_volatility": 0.10762517933187424,
+      "cumulative_return": 0.3901189158140519
+    },
+    "short_leg": {
+      "n_periods": 8,
+      "max_drawdown": 0.08662950138133942,
+      "annualized_volatility": 0.1658175209195068,
+      "cumulative_return": 0.40538068351325074
+    },
+    "spread": {
+      "n_periods": 8,
+      "max_drawdown": 0.1136595834744556,
+      "annualized_volatility": 0.1471516559891219,
+      "cumulative_return": -0.04123966243978294
+    }
+  },
+  "decision": {
+    "outcome": "EVIDENCE_AGAINST",
+    "reason": "Significant reversal per Acceptance Criteria Section 5.2 item 2: at least one of H3-A/H3-B is Holm-Bonferroni significant in the direction opposite the hypothesis's stated prediction. Recorded as evidence against the mechanism, not a milder finding than FAIL."
+  }
+}
