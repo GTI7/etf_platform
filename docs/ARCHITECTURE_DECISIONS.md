@@ -921,3 +921,248 @@ in place keeps one file with one purpose instead of splitting related
 logic across a package boundary that has nothing on the other side yet.
 The move happens later, when `ArchiveVerifier` exists and needs it as
 an input contract — not preemptively.
+
+### AD-040: Step 7 ships `GateResult`/`GateStatus`/`DecisionMetadata` only, not the full Validation apparatus
+
+**Decision:** `core/validation/gate_result.py` adds three frozen types
+— `GateStatus` (a three-way `PASS`/`FAIL`/`AMBIGUOUS` enum, not a
+boolean), `DecisionMetadata` (reviewer, review level, date —
+attribution only), and `GateResult` (gate name, status, summary,
+`evidence_refs`, decision) — plus two concrete gate functions,
+`core.validation.gates.signal_independence` and
+`.economic_rationale`. The `Gate` Protocol, `GateRunner`,
+`ValidationRegistry`, and `GateContext` that
+`docs/PLATFORM_ARCHITECTURE_V1.md` Section 4.2 sketches alongside
+`GateResult` are not built. Neither is a `LifecyclePhase` enum or any
+workflow-state concept, and no historical gate review is backfilled
+into a `GateResult` (see AD-044).
+
+**Rationale.** `GateResult` is the one piece of Section 4.2's sketch
+every gate review to date already needed in substance —
+`GateStatus` mirrors the PASS/FAIL/ambiguous shape
+`phase6_economic_validation_2026-07-19.json` and
+`core.governance.freeze_verifier.FreezeStatus` already use. The
+runner/registry/protocol machinery around it exists in the sketch to
+support *pluggable, registered* gates dispatched by phase; today there
+are exactly two gates and one caller shape (a script invoking a
+function directly), which is precisely the "consumer-less
+abstraction" AD-005, AD-025, AD-028, and AD-039 have each already
+ruled out in this repository for the same reason: building a registry
+ahead of a second concrete way of calling gates would harden a shape
+before anything tells us what it should be. `GateResult` moves first
+because it is a plain, dependency-free record type with a real
+consumer as of this increment (the two gate functions themselves, and
+Reporting later); the protocol/runner/registry layer waits for a
+second calling pattern the way AD-033's `FreezeVerifier` and AD-036's
+`ProjectRegistry` each waited for a second concrete need before
+widening their own interfaces.
+
+### AD-041: Gate functions evaluate already-produced statistics; they never compute one
+
+**Decision:** `signal_independence.evaluate_signal_independence_gate`
+and `economic_rationale.evaluate_economic_rationale_gate` each take an
+already-computed statistic as a plain input parameter
+(`measured_overlap`, `measured_value`) and compare it to a
+caller-supplied frozen threshold. Neither function imports
+`core.statistics`, calls a correlation/IC/permutation/significance
+routine, or performs any calculation beyond the single mechanical
+comparison against the frozen criterion.
+
+**Rationale.** `docs/PLATFORM_ARCHITECTURE_V1.md` Section 4.2 already
+states this boundary in prose — Validation "Owns... Gate/phase
+definitions and their results (not the underlying statistics — those
+are computed by Statistics and merely *carried* by Validation's result
+objects)" — but the boundary was not previously load-bearing in any
+committed Validation code, since no Validation code existed. Making
+Statistics the sole owner of every IC, correlation, permutation-test,
+and significance calculation (as Section 4.3 already assigns) and
+Validation a pure consumer of the result keeps the dependency graph
+one-directional and the two domains independently testable:
+`core.statistics` functions are exercised with plain numeric fixtures
+with no frozen-criteria or freeze-verification concept in scope at
+all, and `core.validation.gates` functions are exercised with
+synthetic already-computed values with no correlation math in scope
+at all. A gate that both computed and evaluated a statistic would
+blur exactly the seam Section 4.2 draws, and would make Statistics'
+`core.statistics.significance` module ambiguous about whether it or
+Validation owns a given calculation going forward.
+
+### AD-042: `GateResult.evidence_refs` are references to immutable evidence locations, not scoped to archive-manifest directories
+
+**Decision:** `GateResult.evidence_refs` is a `tuple[str, ...]` of
+references to immutable evidence locations. GateResult stores
+references to immutable evidence locations. It does not own,
+duplicate, or mutate evidence.
+
+**Rationale.** An earlier draft of this field scoped it specifically
+to archive-manifest evidence subdirectories (AD-038's
+`dataset_hashes/`, `experiment_results/`, `reviewer_reports/`). That
+scoping is too narrow for what a real gate result cites in practice —
+`phase6_economic_validation_2026-07-19.json` and the Gate 1 report
+both cite a mix of frozen source documents, commit hashes, and JSON
+result files, not exclusively archive-manifest paths, and a future
+gate has no reason to be restricted to that one evidence layout. The
+field's actual invariant is narrower and more durable than any one
+directory convention: whatever a reference names must already be
+immutable and already exist independently of this record. Both gate
+functions in this increment honor that invariant identically —
+`evidence_refs` is accepted from the caller and passed through into
+the returned `GateResult` completely unmodified (see
+`signal_independence.py` and `economic_rationale.py`); neither
+function reads, writes, hashes, or validates whatever a reference
+points to. `GateResult` is a citation list, never a copy.
+
+### AD-043: A missing frozen acceptance criterion (or a failed freeze) is a governance failure, not a statistical judgment call
+
+**Decision:** Both gate functions render `GateStatus.AMBIGUOUS` in two
+distinct situations, each with its own fixed rationale text rather
+than an ad hoc one: (1) `verify_freeze()` does not return `VERIFIED`
+for the caller-supplied `freeze_commit_ref`/`freeze_covered_paths`, or
+(2) `frozen_threshold`/`threshold_direction` is `None`, for which the
+rationale is always exactly "Acceptance criterion was not frozen
+before validation." Neither function ever substitutes a threshold of
+its own to force a `PASS`/`FAIL` in either case.
+
+**Rationale.** `experiments/validate_h3_gate1_independence.py`
+documents the real historical instance of case (2): Gate 1's frozen
+plan specifies a comparison to run but never froze a numeric
+overlap threshold, so the script "does not write a PASS/FAIL
+determination" and requires human interpretation instead. Framing
+that outcome as *statistical* ambiguity — as if the measured overlap
+value itself were borderline — would misattribute the cause: the
+measurement can be perfectly clean and unambiguous while the process
+around it is incomplete (no criterion was ever frozen to compare it
+against). Treating both a missing criterion and a failed freeze
+verification as the same `AMBIGUOUS` status, with the same "gate
+cannot mechanically decide" semantics, keeps that distinction correct:
+`AMBIGUOUS` means the gate lacks a trustworthy frozen basis to render
+a verdict at all, never that a comparison came out close. `PASS`/
+`FAIL` are reserved exclusively for the case where both a verified
+freeze and an explicit frozen threshold exist and the comparison is
+purely mechanical — consistent with `docs/RESEARCH_GOVERNANCE_STANDARD.md`
+Section 7's "render PASS, FAIL, or INCONCLUSIVE against pre-registered
+criteria only," never criteria invented after the fact.
+
+### AD-044: Gate functions take explicit typed parameters, not a `GateContext`
+
+**Decision:** `evaluate_signal_independence_gate` and
+`evaluate_economic_rationale_gate` each take a flat set of explicit
+keyword-only parameters (the measured value, the frozen threshold and
+its comparison direction, the freeze commit ref and covered paths,
+evidence refs, and a `DecisionMetadata`) rather than a single
+`GateContext` object bundling a frozen dataset reference and frozen
+methodology parameters, as `docs/PLATFORM_ARCHITECTURE_V1.md` Section
+4.2 sketches. No `GateContext` type is defined anywhere in this
+increment.
+
+**Rationale.** Same pattern as AD-033's `FreezeVerifier.verify_freeze`,
+which takes a raw `commit_ref: str` instead of the sketch's `FreezeId`
+because no registry backing `FreezeId` exists yet: `GateContext` in
+the architecture sketch exists to serve a `Gate` Protocol and
+`GateRunner` that call gates generically, without knowing which
+concrete gate they are invoking. Neither exists yet (AD-040), and with
+exactly two gates called directly by name, a generic context object
+would be pure indirection — every field on it would still need to be
+supplied by the same caller that would otherwise pass explicit
+parameters, with an extra layer of attribute access and no consumer
+that benefits from the genericity. When a second calling pattern
+(a `GateRunner` dispatching by name, for instance) actually needs to
+pass the same bundle of frozen inputs to gates it does not know the
+concrete signature of, `GateContext` is the natural type to introduce
+then — not before.
+
+### AD-045: `DecisionLogger` superseded by template-based decision log discipline
+
+**Decision:** `core/governance/decision_logger.py` — named in
+`docs/RESEARCH_PLATFORM_MVP_MIGRATION_PLAN.md`'s Step 4 file list and
+sketched as a `DecisionLogger` Protocol in
+`docs/PLATFORM_ARCHITECTURE_V1.md` Section 4.4 — will not be
+implemented. No code, abstraction, or stub is introduced by this AD;
+it is a state-alignment record only, closing out a Migration Plan line
+item that a pre-implementation architecture checkpoint found to already
+be satisfied by a different, already-existing mechanism.
+
+**Original intent.** `docs/PLATFORM_ARCHITECTURE_V1.md`'s own
+retrospective-mapping table (Section 8-ish, the "Retrospective item →
+Owning domain → Interface" table) states the job plainly: "Decision-log
+entry scaffolding | Governance | `DecisionLogger.log()`, invoked
+automatically by Research at every `advance_phase()` call rather than
+authored by hand." The Protocol itself (`class DecisionLogger(Protocol):
+def log(self, project_id: ProjectId, entry: DecisionLogEntry) -> None:
+...`) was designed to replace `docs/RESEARCH_GOVERNANCE_STANDARD.md`
+Section 5's hand-authored `decision_log.md` convention with an
+automated, structurally-enforced append-only record, directly targeting
+`docs/RESEARCH_PLATFORM_RETROSPECTIVE.md` Section 2's finding that
+`reference_h3/decision_log.md` Entry 15 was itself "written
+retroactively" against its own freeze commit.
+
+**Why the assumption changed.** Two things this AD did not invent, both
+already committed, jointly close the gap `DecisionLogger` was designed
+to fill:
+
+1. **AD-038 already chose hand-authorship over structural scaffolding
+   for this exact artifact**, for reasons that apply identically to an
+   automated `.log()` call. `scaffold_project_archive()` deliberately
+   does not create `decision_log.md` — "a hypothesis, a methodology, a
+   dataset manifest, and a decision log are things a human writes as a
+   project's evidence actually takes shape... Scaffolding them empty
+   would create a file that looks like recorded evidence at a glance...
+   while containing nothing, which is a worse trap than the file simply
+   not existing yet." A mechanically-generated log entry at a phase
+   transition is the same trap in a different shape: it would satisfy
+   "an entry exists" while omitting the actual content
+   `docs/templates/decision_log_template.md` requires — "which
+   candidate was ranked where and why," "known limitations" — fields
+   that are, and can only be, human judgment. AD-038 already decided
+   this platform treats decision-log content as authored evidence, not
+   generated boilerplate, and that decision was never scoped to just
+   the archive scaffold generator.
+2. **AD-036 already deferred `DecisionLogger`'s own trigger.**
+   `DecisionLogger.log()` was designed to be invoked *by*
+   `advance_phase()`, not called standalone — the architecture doc is
+   explicit that automation, not hand-authorship, is the point. AD-036
+   confirms `ProjectRegistry` v0.1 has "no `advance_phase`-shaped
+   lifecycle-transition method," and no other module implements one
+   either (verified by repository-wide search: zero `advance_phase`
+   definitions anywhere in `core/`). Building `DecisionLogger` today
+   would mean building a module with zero real callers — the exact
+   "consumer-less abstraction" pattern AD-005, AD-025, AD-028, AD-039,
+   AD-040, and AD-044 have each already refused in this repository, for
+   the same reason each time: a shape hardens before anything tells it
+   what it should be.
+
+**What already does the job, verified against the current repository,
+not the plan.** `docs/templates/decision_log_template.md` is the
+scaffolding piece that *was* built — a structured, append-only entry
+format (Decision / Evidence references / Governance status / Reviewer
+level / Known limitations) that already exists and is already
+production-proven: `research_archive/reference_h3/decision_log.md`
+carries 18 entries in this exact shape, and
+`docs/RESEARCH_PLATFORM_RETROSPECTIVE.md` Section 1 names the
+"archive discipline (supersession, never silent edit)" — the same
+discipline the template encodes — as one of the platform's genuine
+strengths, "followed consistently, including during an active
+incident." No code gap remains between what `DecisionLogger` would have
+provided and what the template-plus-hand-authorship pattern already
+provides; the difference is automation of a step this platform has
+independently decided (AD-038) should stay manual.
+
+**Final decision.** No `DecisionLogger` implementation is planned.
+`core/governance/` is not expanded by this AD. If a future concrete
+need re-opens automated decision logging — for instance, once
+`advance_phase()` exists and a real caller wants a *mechanical* entry
+(phase, timestamp, commit hash) alongside, not instead of, the
+human-authored narrative — that is a new decision to make at that time,
+against that concrete need, not a resumption of this one.
+
+**Migration/status.** `research_archive/reference_h3/decision_log.md`
+and `docs/templates/decision_log_template.md` remain the canonical
+decision-log mechanism, unchanged by this AD. `docs/PLATFORM_ARCHITECTURE_V1.md`
+Section 4.4's `DecisionLogger` Protocol and
+`docs/RESEARCH_PLATFORM_MVP_MIGRATION_PLAN.md`'s references to it are
+left as-written, per this repository's established convention that
+ADRs record divergence from those two documents rather than editing
+them retroactively (the same convention AD-036 and AD-040 already
+follow for `ProjectRegistry` and the `Gate` Protocol respectively) —
+this AD is the authoritative record that the divergence is permanent,
+not an oversight.

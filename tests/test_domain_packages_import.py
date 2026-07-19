@@ -11,8 +11,13 @@ carving that domain out too. Phase 1D (Step 5) populates
 ``core.research`` with its identity/metadata slice
 (``core.research.project``, ``project_id``, ``project_repository``,
 ``project_registry``, ``historical_backfill``), carving that domain out
-as well; ``core.validation`` and ``core.reporting`` remain untouched and
-are still held to the original Phase 0 emptiness guarantee."""
+as well. Migration Plan Step 7 populates ``core.validation`` with its
+minimal gate-result increment (``core.validation.gate_result``,
+``core.validation.gates.signal_independence``,
+``core.validation.gates.economic_rationale`` -- see
+docs/ARCHITECTURE_DECISIONS.md AD-040 through AD-044), carving that
+domain out too; ``core.reporting`` remains untouched and is still held
+to the original Phase 0 emptiness guarantee."""
 
 from __future__ import annotations
 
@@ -29,7 +34,6 @@ NEW_DOMAIN_MODULES = [
 ]
 
 STILL_EMPTY_DOMAIN_MODULES = [
-    "core.validation",
     "core.reporting",
 ]
 
@@ -98,3 +102,18 @@ def test_research_package_now_exposes_identity_and_metadata_submodules() -> None
     assert hasattr(project_registry, "ProjectRegistry")
     assert hasattr(historical_backfill, "HISTORICAL_PROJECTS")
     assert hasattr(historical_backfill, "backfill_historical_projects")
+
+
+def test_validation_package_now_exposes_step_7_submodules() -> None:
+    """Step 7 populates core.validation with its minimal gate-result
+    increment -- callers import each submodule explicitly (``core.validation``
+    itself re-exports nothing), and each must expose its public entry point."""
+    import core.validation.gate_result as gate_result
+    import core.validation.gates.economic_rationale as economic_rationale
+    import core.validation.gates.signal_independence as signal_independence
+
+    assert hasattr(gate_result, "GateStatus")
+    assert hasattr(gate_result, "DecisionMetadata")
+    assert hasattr(gate_result, "GateResult")
+    assert hasattr(signal_independence, "evaluate_signal_independence_gate")
+    assert hasattr(economic_rationale, "evaluate_economic_rationale_gate")
