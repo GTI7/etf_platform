@@ -1,12 +1,14 @@
 # Architecture Decisions
 
 This document records the definitive design decisions made during Phase 0
-(`v0.1.0`), Phase 1 (`v0.2.0`), and Phase 2 (`v0.3.0`) of the ETF
-Intelligence Platform. It is a record, not a proposal: nothing here changes
-existing code or behavior. Decisions are grouped by the phase in which they
-were made and numbered (`AD-NNN`) for reference. Where a later phase
-revised an earlier decision, the entry says so explicitly rather than
-silently superseding it.
+(`v0.1.0`), Phase 1 (`v0.2.0`), Phase 2 (`v0.3.0`) of the ETF Intelligence
+Platform, and the Platform Migration Phase 0 / Phase 1A (`v0.4.0`) that
+began converting the repository into the reusable research platform
+described in `docs/PLATFORM_ARCHITECTURE_V1.md`. It is a record, not a
+proposal: nothing here changes existing code or behavior. Decisions are
+grouped by the phase in which they were made and numbered (`AD-NNN`) for
+reference. Where a later phase revised an earlier decision, the entry says
+so explicitly rather than silently superseding it.
 
 ---
 
@@ -393,3 +395,123 @@ tests.
 effect for Phase 2. These IDs have no reuse outside the analytics context,
 so adding them to the shared module would have been an unnecessary
 extension of it rather than a required one.
+
+---
+
+## Platform Migration Phase 0 / Phase 1A (`v0.4.0`) — Statistics domain extraction
+
+Decisions made while executing
+`docs/RESEARCH_PLATFORM_MVP_MIGRATION_PLAN.md` Steps 1–2, against the
+target shape fixed by `docs/PLATFORM_ARCHITECTURE_V1.md`. Unlike Phases
+0–2 above, which designed the ETF platform's own data/analytics model,
+this phase begins converting the repository into the reusable research
+platform described there; it is additive scaffolding, not a redesign
+of anything Phases 0–2 already decided.
+
+### AD-029: Statistics domain extraction is a copy, not a move, with compatibility tests kept permanently
+
+**Decision:** `core/statistics/significance.py` duplicates the
+significance-testing helpers (`_spearman`, `_pearson`,
+`_rank_average_ties`, `_percentile`, `daily_ic_series`, `mean_ic`,
+`top_bottom_spread`, `permutation_null`, `empirical_p_value`,
+`bootstrap_ci`, `holm_bonferroni`) that have lived inside
+`experiments/validate_reference_v1_significance.py` since REFERENCE v1.
+The four `experiments/validate_*.py` scripts that use these functions
+keep their own existing implementation untouched — none were rewired to
+import from `core.statistics.significance`. The tests proving the
+extraction is faithful (`tests/compatibility/test_statistics_reference_v1_compatibility.py`)
+are retained permanently as migration evidence, not deleted once Phase
+1A review completed.
+
+**Rationale:** REFERENCE v1's published result depends on the exact
+behavior of the inlined implementation that produced it; rewiring that
+script to call a new module would change what "reproduce REFERENCE v1"
+means for a closed cycle, which
+`docs/RESEARCH_PLATFORM_MVP_MIGRATION_PLAN.md` Sections 5–6 rule out.
+The compatibility tests were originally scoped (Migration Plan Section
+7) as temporary proof of a correct extraction, deletable once reviewed.
+Phase 1A review concluded that framing undersold their value: they are
+not just an extraction check, they are standing, re-runnable evidence
+that `core/statistics/significance.py` — the module every future
+Validation gate will call — remains numerically identical to the
+implementation REFERENCE v1 was actually validated against. That
+evidence has no expiry date, so the tests do not either. See
+`docs/STATISTICS_DOMAIN.md` ("Compatibility tests") for the same
+statement made from the domain's side.
+
+**Explicitly not decided here:** whether the drift-regression pattern
+should be applied to REFERENCE v2 H1's or H3's own inlined copies. No
+second extraction has happened yet (`core/statistics/ranking.py`
+remains deferred per `docs/STATISTICS_DOMAIN.md` "Not extracted in
+Phase 1A"); this AD covers only what Phase 1A actually built.
+
+### AD-030: Archive manifest is an early preservation guard, not `ArchiveVerifier`
+
+**Decision:** `tools/archive_manifest.py` and
+`docs/RESEARCH_ARCHIVE_MANIFEST.md` were introduced in Phase 0, ahead
+of any `core/governance/` business logic, as a narrow, purely additive
+integrity guard: `build_manifest()` constructs a small
+`archive_manifest.json` for a *new* project's archive directory, and
+`write_manifest()` refuses outright to write into any of the three
+legacy archive directories (`reference_v1`, `reference_v2_h1`,
+`reference_h3`) or to overwrite an existing manifest file.
+
+**Rationale:** the retrospective identified archive-completeness
+checking as a real gap (Tier 2), but the full check — validating a
+directory against the complete Standard Section 5 evidence-package
+shape — is `ArchiveVerifier`'s job (`docs/PLATFORM_ARCHITECTURE_V1.md`
+Section 4.4), which requires `core/governance/` to exist first. Rather
+than wait, Phase 0 shipped the one piece of that problem answerable
+immediately and safely: a manifest schema plus write-side guards that
+make it structurally impossible for the earliest platform tooling to
+touch a closed, historical archive. This is deliberately a fraction of
+the eventual system, not a first draft of the whole thing.
+
+**Scope, stated explicitly so it is not mistaken for completion:**
+`tools/archive_manifest.py` does not read or interpret an existing
+manifest, does not check for the presence of `hypothesis.md`,
+`methodology.md`, `dataset_hashes/`, or any other Standard Section 5
+artifact, and does not implement `ArchiveVerifier.verify_archive()`. It
+has written zero manifests into any real project archive as of this
+decision (H4 has not opened). A future `ArchiveVerifier` implementation
+is expected to build on this manifest as its input contract — reading
+`schema_version` and `lifecycle_version` to decide what shape of check
+to run — rather than replacing it.
+
+### AD-031: `ProjectId` / `ArtifactRef` are reserved on the Shared Kernel ahead of any caller
+
+**Decision:** `ProjectId` and `ArtifactRef` (`typing.NewType` over
+`str`, following AD-003's existing convention) were added to
+`core/shared/ids.py` in Phase 0, with no code anywhere in the
+repository constructing or consuming either one yet, and no existing
+identifier migrated to use them.
+
+**Rationale:** `docs/PLATFORM_ARCHITECTURE_V1.md` Section 4.1 and 4.4
+name `ProjectId` (Research domain, the Project Registry's key) and
+`ArtifactRef` (Research's `advance_phase()`, Governance's
+`verify_archive()`/`reproduce()`) as identifiers every future domain
+converges on. Reserving the names now, on the same Shared Kernel module
+every domain already imports from for `ETFId`/`UniverseId`/etc., means
+`core/research/` and `core/governance/` have a stable type to import
+when they are actually implemented, instead of each domain inventing
+its own ad hoc string-id type at that point and requiring a later
+rename across every caller.
+
+**Scope, stated explicitly:** this is a name and a type reservation,
+nothing more. No registry, no persistence, no multi-tenancy, and no
+`TenantId`-style concept exists in this codebase or was introduced by
+this decision — `docs/PLATFORM_ARCHITECTURE_V1.md`'s "commercial-ready"
+design principle (Section 2) notes only that domain boundaries would
+*not preclude* a future multi-tenant deployment, which is a claim about
+the shape of the domain graph, not a reservation of any tenant-scoped
+identifier. Introducing an actual tenant concept would be a real,
+separate architectural decision, made when a concrete second-tenant
+requirement exists — not implied by, or bundled into, this AD.
+
+**Considered and rejected:** not reserving the names, and letting
+`core/research/`'s eventual implementation introduce `ProjectId` at
+that point instead. Rejected because `core/shared/ids.py` is Phase 0/1
+proven low-risk ground for this pattern (AD-003), and a reservation
+that turns out to be unnecessary costs two unused `NewType` lines,
+while retrofitting a shared identifier after several domains have each
+already grown their own would be the more expensive path.

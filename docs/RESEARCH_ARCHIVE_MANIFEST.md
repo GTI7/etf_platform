@@ -6,6 +6,22 @@ versioned index file that will accompany the evidence package
 (`docs/RESEARCH_GOVERNANCE_STANDARD.md` Section 5) for every *future*
 research project archived under `research_archive/<project>/`.
 
+**This is an early preservation/integrity guard, not the complete
+future archive system.** It was introduced in Phase 0, ahead of any
+`core/governance/` business logic, to answer one narrow question
+safely and immediately: can the earliest platform tooling be made
+structurally incapable of writing into or overwriting a closed,
+historical archive. `tools/archive_manifest.py`'s `write_manifest()`
+guarantees exactly that (see "Reference implementation" below) and
+nothing more — it does not check archive completeness, does not read
+or interpret an existing manifest, and does not implement
+`ArchiveVerifier`. A future `ArchiveVerifier`
+(`docs/PLATFORM_ARCHITECTURE_V1.md` Section 4.4) is expected to build
+on this manifest as its input contract — reading `schema_version` and
+`lifecycle_version` to decide what shape of completeness check to run
+against the rest of Standard Section 5's evidence package — rather
+than replacing it. See `docs/ARCHITECTURE_DECISIONS.md` AD-030.
+
 It does not apply retroactively. `research_archive/reference_v1/`,
 `research_archive/reference_v2_h1/`, and `research_archive/reference_h3/`
 each predate this concept, each have their own shape (3 flat files / 3

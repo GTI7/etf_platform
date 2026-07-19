@@ -1,19 +1,16 @@
-"""Tests for core/statistics/significance.py.
+"""Characterization tests for core/statistics/significance.py.
 
-Two kinds of test live here, per
-docs/RESEARCH_PLATFORM_MVP_MIGRATION_PLAN.md Section 7:
+Known, hand-computable inputs proving the extracted functions behave
+the way the Statistics domain is supposed to (correct math, correct
+edge cases). This is normal statistical validation -- it says nothing
+about REFERENCE v1 specifically and imports nothing from
+``experiments/``.
 
-1. Characterization tests against known, hand-computable inputs --
-   proving the extracted functions behave the way the Statistics
-   domain is supposed to (correct math, correct edge cases).
-2. Drift-regression tests proving the new ``core.statistics.significance``
-   functions produce results IDENTICAL to the original inlined
-   implementations in ``experiments/validate_reference_v1_significance.py``
-   on the same fixed inputs -- the only tests in this repository allowed
-   to import from an ``experiments/`` script, and only to prove the copy
-   is faithful. Per Section 7, these exist to confirm the extraction is
-   correct and are not a permanent coupling; they may be deleted once
-   Phase 1A is reviewed and accepted.
+For the separate migration-evidence suite proving
+``core.statistics.significance`` is a faithful, byte-for-byte-identical
+extraction of REFERENCE v1's original inlined implementation, see
+``tests/compatibility/test_statistics_reference_v1_compatibility.py``
+(docs/STATISTICS_DOMAIN.md, "Compatibility tests").
 """
 
 from __future__ import annotations
@@ -34,39 +31,6 @@ from core.statistics.significance import (
     rank_average_ties,
     spearman_correlation,
     top_bottom_spread,
-)
-from experiments.validate_reference_v1_significance import (
-    _pearson as old_pearson,
-)
-from experiments.validate_reference_v1_significance import (
-    _percentile as old_percentile,
-)
-from experiments.validate_reference_v1_significance import (
-    _rank_average_ties as old_rank_average_ties,
-)
-from experiments.validate_reference_v1_significance import (
-    _spearman as old_spearman,
-)
-from experiments.validate_reference_v1_significance import (
-    bootstrap_ci as old_bootstrap_ci,
-)
-from experiments.validate_reference_v1_significance import (
-    daily_ic_series as old_daily_ic_series,
-)
-from experiments.validate_reference_v1_significance import (
-    empirical_p_value as old_empirical_p_value,
-)
-from experiments.validate_reference_v1_significance import (
-    holm_bonferroni as old_holm_bonferroni,
-)
-from experiments.validate_reference_v1_significance import (
-    mean_ic as old_mean_ic,
-)
-from experiments.validate_reference_v1_significance import (
-    permutation_null as old_permutation_null,
-)
-from experiments.validate_reference_v1_significance import (
-    top_bottom_spread as old_top_bottom_spread,
 )
 
 # ---------------------------------------------------------------------------
@@ -187,73 +151,3 @@ def test_holm_bonferroni_known_textbook_example() -> None:
     assert result["a"]["adjusted_p_value"] == 0.03  # max(0.02, 0.01 * 3)
     assert result["c"]["adjusted_p_value"] == 0.06  # max(0.03, 0.03 * 2)
     assert result["b"]["adjusted_p_value"] == 0.06  # max(0.06, 0.04 * 1)
-
-
-# ---------------------------------------------------------------------------
-# Drift-regression tests -- new core.statistics.significance output must
-# equal the original inlined experiments/ implementation's output, on the
-# same fixed inputs. Per Section 7, these are the extraction's proof of
-# correctness and may be retired once Phase 1A is reviewed.
-# ---------------------------------------------------------------------------
-
-
-def test_rank_average_ties_matches_original() -> None:
-    values = [30.0, 10.0, 20.0, 20.0, 5.0]
-    assert rank_average_ties(values) == old_rank_average_ties(values)
-
-
-def test_pearson_correlation_matches_original() -> None:
-    xs = [1.0, 5.0, 3.0, 2.0, 4.0]
-    ys = [2.0, 3.0, 3.0, 1.0, 5.0]
-    assert pearson_correlation(xs, ys) == old_pearson(xs, ys)
-
-
-def test_spearman_correlation_matches_original() -> None:
-    xs = [1.0, 5.0, 3.0, 2.0, 4.0]
-    ys = [2.0, 3.0, 3.0, 1.0, 5.0]
-    assert spearman_correlation(xs, ys) == old_spearman(xs, ys)
-
-
-def test_percentile_matches_original() -> None:
-    values = sorted([3.1, 1.2, 9.9, 4.4, 2.2, 7.7])
-    for pct in (0, 2.5, 25, 50, 75, 97.5, 100):
-        assert percentile(values, pct) == old_percentile(values, pct)
-
-
-def test_daily_ic_series_matches_original() -> None:
-    panel = _panel(score_key="raw_blend")
-    assert daily_ic_series(panel, "raw_blend") == old_daily_ic_series(panel, "raw_blend")
-
-
-def test_mean_ic_matches_original() -> None:
-    panel = _panel(score_key="raw_blend")
-    assert mean_ic(panel, "raw_blend") == old_mean_ic(panel, "raw_blend")
-
-
-def test_top_bottom_spread_matches_original() -> None:
-    panel = _panel(score_key="raw_blend")
-    assert top_bottom_spread(panel, "raw_blend", 1) == old_top_bottom_spread(panel, "raw_blend", 1)
-
-
-def test_permutation_null_matches_original_given_same_seed() -> None:
-    panel = _panel(score_key="raw_blend") * 5
-    new_null = permutation_null(panel, "raw_blend", mean_ic, iterations=200, rng=random.Random(42))
-    old_null = old_permutation_null(panel, "raw_blend", old_mean_ic, iterations=200, rng=random.Random(42))
-    assert new_null == old_null
-
-
-def test_empirical_p_value_matches_original() -> None:
-    null = [0.1, -0.2, 0.3, -0.4, 0.05]
-    assert empirical_p_value(0.25, null) == old_empirical_p_value(0.25, null)
-
-
-def test_bootstrap_ci_matches_original_given_same_seed() -> None:
-    panel = _panel(score_key="raw_blend") * 10
-    new_ci = bootstrap_ci(panel, mean_ic, "raw_blend", block_length=3, iterations=100, rng=random.Random(7))
-    old_ci = old_bootstrap_ci(panel, old_mean_ic, "raw_blend", block_length=3, iterations=100, rng=random.Random(7))
-    assert new_ci == old_ci
-
-
-def test_holm_bonferroni_matches_original() -> None:
-    labeled = [("a", 0.01), ("b", 0.04), ("c", 0.03), ("d", 0.005), ("e", 0.2)]
-    assert holm_bonferroni(labeled) == old_holm_bonferroni(labeled)

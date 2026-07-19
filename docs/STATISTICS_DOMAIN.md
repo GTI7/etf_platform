@@ -109,8 +109,7 @@ scope) rules out.
   `pearson_correlation`, `_rank_average_ties` -> `rank_average_ties`,
   `_percentile` -> `percentile`, moving from private-to-a-script to
   public-in-a-library); the renaming changes no numeric behavior, and
-  is characterized by `tests/test_statistics_significance.py`'s
-  drift-regression tests against the original functions.
+  is characterized by the compatibility tests described below.
 - **No I/O, no database, no Clock.** Every function operates on values
   already in memory.
 - **No dependency on any other domain.** `core/statistics/` imports
@@ -118,6 +117,58 @@ scope) rules out.
   `core.governance`, `core.validation`, `core.research`,
   `core.reporting`, or `experiments`. Verified by
   `python -m tools.check_import_boundaries`.
+
+## Compatibility tests
+
+`tests/compatibility/test_statistics_reference_v1_compatibility.py`
+proves, function by function and on fixed inputs, that
+`core/statistics/significance.py` produces output IDENTICAL to the
+original implementation still inlined in
+`experiments/validate_reference_v1_significance.py`. It is the only
+test file in this repository allowed to import from an `experiments/`
+script, and it does so for exactly this purpose.
+
+**These are not normal statistical validation.** A normal unit test
+(e.g. `tests/test_statistics_significance.py`'s characterization
+tests) asserts a function computes the *correct* answer against a
+known, hand-computable input. A compatibility test asserts nothing
+about correctness — it asserts that the new module's answer is
+*identical* to the answer REFERENCE v1 was actually published against.
+The two questions are independent: an extraction could pass every
+compatibility test while faithfully reproducing a bug in the original,
+or fail a compatibility test over a change that happens to be a
+correctness improvement. Compatibility tests exist to make that
+distinction visible and deliberate, never to stand in for correctness
+review.
+
+**Retained permanently, not deleted after review.**
+`docs/RESEARCH_PLATFORM_MVP_MIGRATION_PLAN.md` Section 7 originally
+scoped this suite as temporary — proof that Phase 1A's extraction was
+faithful, "deleted once Phase 1A is reviewed and accepted." Phase 1A's
+hardening review concluded that framing undersold the suite's ongoing
+value: `core/statistics/significance.py` is the module every future
+Validation gate will call, and this suite is the standing, re-runnable
+evidence that it remains numerically identical to the implementation
+REFERENCE v1's published result actually depends on. That evidence
+does not expire at the moment of review, so the suite is kept
+indefinitely as migration evidence rather than deleted (see
+`docs/ARCHITECTURE_DECISIONS.md` AD-029). A change to
+`core/statistics/significance.py` that legitimately needs to diverge
+from REFERENCE v1's original behavior (a bug fix, a new capability)
+updates or retires the specific compatibility test affected, with the
+divergence and its reason recorded in the commit — it does not delete
+the suite wholesale.
+
+**Historical experiments remain immutable.** This suite reads from
+`experiments/validate_reference_v1_significance.py`; it never causes
+that file to change, and nothing in Phase 1A rewired any of the four
+`experiments/validate_*.py` scripts to import from
+`core.statistics.significance` instead of their own inlined copies
+(see "Not extracted in Phase 1A" above and "No rewiring of the
+historical scripts" below). `experiments/validate_reference_v1_significance.py`
+is exactly as frozen after this suite exists as it was before — per
+`docs/RESEARCH_PLATFORM_MVP_MIGRATION_PLAN.md` Section 6, editing it
+would change what "reproduce REFERENCE v1" means for a closed cycle.
 
 ## Explicitly out of scope
 
