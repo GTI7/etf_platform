@@ -7,6 +7,13 @@ phase, preserved as it is produced per
 gain further contents (independence analysis, construction attempt
 log, gate decisions, final determination) as later phases execute.
 
+**Freeze provenance:** [`FREEZE_RECORD.md`](FREEZE_RECORD.md) /
+[`COMMIT.txt`](COMMIT.txt) record the exact commit
+(`07f0da3`) that froze the construction specification and the
+governance record below. **Decision history:**
+[`decision_log.md`](decision_log.md) is the single, append-only record
+of every decision point across this cycle to date.
+
 ## Contents
 
 - **`data_inventory_2026-07-19.json`** — the complete Phase 1 /
