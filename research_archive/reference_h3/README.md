@@ -193,3 +193,13 @@ be a new attempt or a new cycle, not a correction. See `decision_log.md`
 Entry 17 and "Current status (as of Entry 17)" for the authoritative,
 current status of this cycle; all paragraphs above this point are left
 unedited as the historical record per this archive's append discipline.
+
+**Third pointer added without editing the above:**
+[`h3_final_closure.md`](h3_final_closure.md) consolidates the frozen
+methodology and acceptance-criteria commits, the Phase 6 evidence, the
+final EVIDENCE AGAINST determination, governance status, and factual
+lessons learned into a single terminal closure document. It performs
+no new analysis and changes no conclusion recorded above; it is the
+one-stop reference for H3's permanent closure and the requirement that
+any future related work register as a new hypothesis (H4, H5, ...)
+rather than a modification of H3.

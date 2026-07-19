@@ -552,3 +552,39 @@ determination.
   the Phase 6 script and its result, and this closure itself).
 - **No outcome data** beyond what is already cited in Entries 15–17 has
   been read, computed, or referenced in producing this update.
+
+## Entry 18 — Phase 8 archive consolidation: h3_final_closure.md
+
+- **Date:** 2026-07-19
+- **Decision:** Added `h3_final_closure.md`, a single consolidated
+  Phase 8 closure record: hypothesis identifier, frozen methodology
+  commit (`07f0da3`), acceptance-criteria freeze commit (`a643993`),
+  Phase 6 validation evidence, the EVIDENCE AGAINST final
+  determination, governance status across all eight phases, factual
+  lessons learned, and an explicit statement that H3 is permanently
+  closed under its frozen specification and that any future related
+  work must register as a new hypothesis (H4, H5, ...), not a
+  modification of H3. Verified for internal consistency against the
+  Phase 6 report, the machine-readable evidence JSON, the validation
+  script, and both freeze records before being written; all figures
+  cited match those sources exactly. No H3 methodology, scoring logic,
+  acceptance criterion, or prior gate/phase determination was
+  reinterpreted, weakened, or strengthened in producing this document.
+- **Evidence references:** `h3_final_closure.md` (this archive
+  directory); consolidates
+  `docs/H3_PHASE6_ECONOMIC_VALIDATION_REPORT.md`,
+  `phase6_economic_validation_2026-07-19.json`,
+  `experiments/validate_h3_phase6_economic_validation.py`,
+  `FREEZE_RECORD.md`, `ACCEPTANCE_CRITERIA_FREEZE.md`,
+  `docs/REFERENCE_H3_RESEARCH_CLOSEOUT.md`, and Entries 1–17 above.
+- **Governance status:** Phase 8 (Archive) — consolidation step
+  complete. Does not reopen or supersede Phase 7's decision (Entry 17);
+  restates it in a single durable location per this task's archival
+  discipline.
+- **Reviewer level:** Level 1 (self-review; archival consolidation
+  only, not a review of H3's research substance).
+- **Known limitations:** Same as Entry 17 — no Level 2 or above review
+  of the Phase 6–8 artifacts this document consolidates has been
+  obtained; no Level 3 review exists or is available on this platform.
+  This entry and `h3_final_closure.md` do not close that gap, only
+  restate its existence in one place.
