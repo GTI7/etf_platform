@@ -44,6 +44,62 @@ goal is narrower and prior to that question:
 Only once both are answered does it make sense to invest in writing a
 frozen H3 specification.
 
+### Candidate selection and rejected alternatives
+
+H3 was not chosen in isolation. `docs/REFERENCE_RESEARCH_ROADMAP_NEXT.md`
+(Section 5) ranked seven remaining candidate hypotheses — carried over,
+untested, from the original REFERENCE v2 eight-hypothesis strategy
+document — against four fixed criteria: economic justification,
+independence from REFERENCE v1 and REFERENCE v2 H1, data availability,
+and overfitting risk. That ranking was produced, and frozen, before any
+H3-specific pre-validation work began and before any H3 construction,
+benchmark, or data extension existed to observe. It could not have been
+shaped by an H3 result that did not yet exist.
+
+The six candidates ranked below H3, and why each was not selected as
+the next hypothesis:
+
+- **H2 — Long-term momentum (12-1 month).** Rejected primarily on
+  independence: ranked "Medium–Low" independence from REFERENCE v1's
+  own MOMENTUM, the closest of any candidate to a disguised variant of
+  an already-tested construct. Also data-constrained — requires deeper
+  history than was backfilled at ranking time.
+- **H6 — Long-horizon reversal (3–6 month).** Strong economic
+  justification and independence, but rejected on data availability:
+  as few as 4–8 non-overlapping windows in the pre-extension history,
+  an effective-sample-size problem worse than the one both prior
+  cycles already failed to clear.
+- **H5 — Carry / yield.** Strong economic justification and
+  independence, but rejected because it requires a genuinely new data
+  source not yet integrated into the platform, with universe fit
+  unverified.
+- **H4 — Volume / flow acceleration.** Rejected on data reliability:
+  ETF-level volume is contaminated by creation/redemption mechanics
+  specific to the ETF wrapper, an uncertainty no other candidate
+  carries.
+- **H7 — Correlation-regime / idiosyncrasy.** Rejected primarily on
+  economic grounds: no clear a priori direction, which the roadmap
+  memo flags as a sign-selection risk — a researcher-degrees-of-freedom
+  problem this plan's own Gate 3 discipline is designed to prevent.
+- **H8 — Macro-conditional beta exposure.** Rejected as the weakest
+  candidate on every criterion simultaneously: requires new external
+  data and new statistical infrastructure beyond a simple score, and
+  carries the highest researcher-degrees-of-freedom risk of the set.
+
+H3 was ranked first because it was the only candidate scoring well on
+all four criteria simultaneously — not because it was the only
+candidate considered, and not because any candidate's construction was
+tried and observed to fail before H3 was chosen. No candidate in this
+list, including H3, was evaluated against any forward return, IC, or
+other outcome variable before or during this ranking; the ranking
+criteria are all determinable without touching outcome data, and the
+roadmap memo's own scope statement confirms none was computed. This is
+recorded here, in the document where H3's construction is actually
+chosen and frozen, for the same reason Section 2 restates the roadmap's
+prior-result-independence constraint at this level: so the constraint
+binds at the point decisions are made, not only where it is first
+stated.
+
 ## 2. Research independence verification
 
 **Standalone principle — no outcome data, ever, in this phase.** This
@@ -217,6 +273,36 @@ terminal rule that follows from it.
     does not introduce a numerical tolerance figure to draw that line;
     instead, any case a reviewer is not confident about defaults to
     more scrutiny, never to less.
+  - **General ambiguity-resolution principle, restated.** The rule
+    above is a specific instance of a single standing principle that
+    governs every ambiguous reading this phase can produce, not only
+    the near-1.0 boundary: where measurement uncertainty, a small
+    number of underlying dates, or any other source of imprecision
+    leaves a reviewer unable to confidently place a result on one side
+    of a boundary or the other, the ambiguous case is treated as the
+    stricter of the two possible readings by default. This applies
+    symmetrically to the moderate-correlation/low-correlation boundary
+    as well — a result that could plausibly be read as either should be
+    treated as moderate (requiring a written economic explanation)
+    until that explanation is provided, not defaulted to low
+    (requiring nothing further). No new numerical threshold is
+    introduced by this restatement; it only makes explicit that
+    ambiguity is never resolved in the direction of less scrutiny,
+    anywhere in this phase.
+  - **Scope boundary — not a promotion or acceptance threshold.** This
+    section resolves ambiguity only in Gate 1's score-to-score
+    correlation reading. It does not, and cannot, define how
+    near-threshold ambiguity in H3's eventual significance test
+    (forward return, IC, p-value, or any promotion criterion) should be
+    resolved, because Section 2's own standalone principle prohibits
+    this phase from touching that kind of data at all. That question
+    belongs to the frozen H3 specification a PASS outcome here would
+    authorize (Section 6), and must be resolved there using the same
+    pre-registered, no-post-hoc-adjustment discipline REFERENCE v1 and
+    REFERENCE v2 H1 already established (Holm-Bonferroni correction,
+    bootstrap robustness, and a promotion table fixed before any result
+    is seen) — not invented ad hoc if a result later turns out to be
+    close to whatever bar that future document sets.
 
 ## 3. Historical data sufficiency verification
 
@@ -287,6 +373,36 @@ necessary or safe.
 This plan does not assume which of A/B/C is correct; that judgment
 depends on the actual inventory results, not on this document.
 
+### Frozen methodology summary (binding once Gate 1 begins)
+
+Restating in one place what Sections 2 and 3 above already define
+piecemeal — this summary adds no new rule; it only collects the frozen
+elements so a reviewer does not have to reconstruct them from separate
+sections:
+
+| Element | Frozen definition | Source |
+|---|---|---|
+| Datasets | The current 25-ticker ETF universe, at whatever historical depth Gate 2's A/B/C decision and any resulting extension establish — not a forward-return dataset, since none is used in this phase | Section 3 |
+| Evaluation basis | Same-date score-to-score comparison, restricted to ranking dates already covered by REFERENCE v1's own analysis — not a forward-looking evaluation period, since this phase never evaluates against a future outcome | Section 2 |
+| Metrics | Daily cross-sectional Spearman rank correlation (distribution across dates) and score-overlap at the ranking extremes | Section 2 |
+| Benchmark | REFERENCE v1's frozen MOMENTUM score, unchanged | Section 2 |
+| Decision rules | The degenerate-case boundary, the moderate-correlation explanation requirement, and the ambiguity-resolution principle; the four research decision gates | Section 2, Section 4 |
+
+**Freeze point.** All five elements above are fixed as of the version
+of this document in effect when the first construction attempt
+(Section 2) is logged against Gate 1 — that logging event is what
+"Gate 1 begins" means for the purpose of this freeze. From that point
+through the end of this pre-validation cycle (a PASS, PARTIAL, or FAIL
+determination, Section 6), no element in this table may be changed for
+any reason, including a reason discovered while reviewing an attempt's
+results. A change to any row — a different date-sampling rule, a
+different aggregation statistic, a different degenerate-case boundary,
+a different benchmark — is a methodology change, not a construction
+change, and Section 2 already states what a methodology change does:
+it invalidates the pre-validation cycle to date and requires this
+document to be revised and re-approved before any further attempt is
+logged.
+
 **Universe change dependency (Option C only).** If Option C is chosen
 and the resulting universe is not a strict subset of the original
 25-ticker universe — i.e., it adds any ticker REFERENCE v1's MOMENTUM
@@ -311,8 +427,18 @@ can be meaningfully performed, since Gate 1 requires a single, already
 
 **Independent confirmation duties (apply to Gates 1, 2, and 3 alike).**
 For each of these three gates, the confirming reviewer must be someone
-who did not perform the work being confirmed, and must, before the
-gate counts as satisfied:
+who did not perform the work being confirmed. "Someone" here means a
+distinct reviewing party in substance, not merely a technically
+separate work session — a fresh session initiated by, or under the
+direction of, the same individual or process that performed the work
+being reviewed does not, by itself, establish independence; it
+establishes only that the review and the work happened at different
+times. Where the work and its review are both carried out by the same
+underlying researcher or process (human or AI) with no organizational
+separation between them, that fact must be disclosed alongside the
+confirmation record (Section 6), not left for a reader to assume from
+the review's own "independent" framing. The confirming reviewer must,
+before the gate counts as satisfied:
 
 1. review the complete construction attempt log (Section 2) — not only
    the final passing construction, if there is one;
@@ -334,6 +460,20 @@ gate counts as satisfied:
    above, including the independently reproduced figures for Gate 1 —
    as part of the archived evidence (Section 6), not only as an
    informal sign-off.
+
+**Reproducibility standard (applies to all five duties above).** Every
+input dataset, calculation, selection criterion, and the final
+conclusion for each gate must be reproducible by the confirming
+reviewer from the written record alone — the frozen documents, the
+archived evidence (Section 6), and the raw data itself — without
+requiring any verbal explanation, clarification, or supplementary
+context from whoever performed the original work. If a reviewer can
+only reach or understand a result after the original author explains
+it in conversation, the record is incomplete and the gate is not
+satisfied, regardless of whether the reviewer is ultimately persuaded.
+A satisfied gate must leave enough in writing that a reviewer with no
+access to the original author at all — not merely one who chooses not
+to ask — could still complete the confirmation.
 
 **Gate 1 — Candidate signal independence verified.**
 The frozen H3 construction has been checked against REFERENCE v1's
@@ -497,6 +637,49 @@ pre-validation evidence preserved per the archive discipline above —
 and the project returns to `docs/REFERENCE_RESEARCH_ROADMAP_NEXT.md`'s
 ranked shortlist for the next candidate.
 
+**Terminal failure discipline (explicit restatement).** The moment a
+FAIL determination is reached, four things follow immediately and are
+non-negotiable, not matters of researcher judgment:
+
+1. **Research on this H3 attempt stops.** No further construction
+   attempts, data work, or analysis proceeds under the H3 name once
+   FAIL is recorded, other than the archive-discipline steps above.
+2. **No tuning to force a different outcome.** No parameter, benchmark,
+   peer-grouping, universe, or lookback adjustment may be made to any
+   already-failed attempt, or proposed as a quick fix, in order to
+   convert a FAIL into a PASS. Any construction change of any kind is a
+   new attempt under Section 2's cap, not a correction to an old one —
+   and if the cap (case (a) above) is what triggered FAIL, no further
+   attempt is permitted regardless of how the change is characterized.
+3. **No alternative evaluation period may be substituted after the
+   fact.** The dataset and evaluation basis fixed by this document's
+   frozen methodology summary (Section 3) may not be swapped for a
+   different historical window, a different subset of dates, or a
+   different universe once a FAIL determination is reached, in an
+   attempt to find a period where the same construction would have
+   passed. Section 3's Option C (universe change) remains available
+   only as a pre-attempt research-direction decision (PARTIAL outcome,
+   above) — not as a post-FAIL do-over.
+4. **No parameter adjustment introduced after seeing results.** This
+   restates, for the specific moment of a FAIL determination, the
+   standing rule already implicit throughout this document: nothing
+   about a candidate's construction may be selected or adjusted with
+   knowledge of how it, or any close variant of it, performed against
+   the independence check or any outcome data. A FAIL determination is
+   the single moment in this process where the temptation to violate
+   this rule is highest, which is exactly why it is restated explicitly
+   here rather than left to be inferred from the general principle
+   alone.
+
+These four points restate rules already established elsewhere in this
+document (Section 2's attempt cap and methodology freeze, Section 2's
+prior-result-independence principle, Section 3's frozen dataset);
+nothing above introduces a new decision rule. They are collected here
+because a terminal FAIL is the point in the process where the pressure
+to quietly bend an existing rule is greatest, and a governance document
+that only states its rules once, far from the moment they are tested,
+invites exactly that kind of drift.
+
 **Terminal rule.** Reaching the attempt cap closes H3, as currently
 conceived, for this research program. It does not reset by opening a
 new pre-validation cycle, relabeling the idea, or revising it under a
@@ -517,3 +700,64 @@ writing, why it is a genuinely new hypothesis rather than a renamed or
 restarted H3 attempt. A proposal that does not engage with the
 archived evidence at all does not satisfy the terminal rule, regardless
 of how it describes itself.
+
+## 7. H3 Final Determination (Archive Template)
+
+A fillable record, separate from and in addition to the archive
+discipline already required by Section 6. Section 6 requires that a
+final determination be preserved in `research_archive/`; this template
+is the structured form that determination should take, so that every
+H3 pre-validation cycle — this one, or any future one permitted under
+the Terminal rule (Section 6) — produces a determination record in a
+consistent, comparable shape rather than free-form prose scattered
+across whichever documents happened to be produced along the way.
+
+This section is a template only. It contains no determination as of
+this document's own freeze; it is completed once, at the point a final
+PASS, FAIL, or INCONCLUSIVE determination is actually reached, by
+whoever is authorized to close the pre-validation cycle — not filled in
+speculatively before that point, and not filled in by the same
+reviewer who performed the work being determined, consistent with
+Section 4's independent-confirmation duties.
+
+---
+
+**Determination:** ☐ PASS ☐ FAIL ☐ INCONCLUSIVE
+
+*(PASS and FAIL correspond exactly to Section 6's PASS and FAIL
+outcomes. INCONCLUSIVE is used only if the cycle is closed — by
+deliberate decision, not by neglect — without reaching a Section 6
+PASS or FAIL determination and without an open PARTIAL redirection
+still in progress; a stalled or abandoned cycle, per Section 6's
+"incremental preservation" clause, should be recorded as INCONCLUSIVE
+rather than left with no determination at all. A PARTIAL outcome that
+is still an active, in-progress redirection is not itself a final
+determination and should not be recorded here until it resolves to one
+of the three options above.)*
+
+**Determination date:** _______________
+
+**Reviewer(s) recording this determination:** _______________
+*(must satisfy Section 4's independent-confirmation duties relative to
+whoever performed the work being determined; state explicitly whether
+that independence was organizational or session-based only, per
+Section 4's disclosure requirement)*
+
+**Version of this plan in effect:** _______________
+*(commit hash or equivalent immutable pointer, per Section 6's commit-
+pointer convention)*
+
+**Evidence references:**
+- Construction attempt log (Section 2), all attempts: _______________
+- Independence analysis (Gate 1): _______________
+- Data inventory and A/B/C decision (Gate 2): _______________
+- Economic rationale (Gate 3): _______________
+- Gate confirmation records (Section 4, all gates confirmed): _______________
+
+**Synthesis rationale:**
+_______________
+*(a short, written account of how the evidence above led to the
+determination above — not left to be inferred from the individual gate
+records alone, per Section 6)*
+
+---
