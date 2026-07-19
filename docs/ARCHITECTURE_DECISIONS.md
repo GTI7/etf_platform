@@ -1166,3 +1166,119 @@ them retroactively (the same convention AD-036 and AD-040 already
 follow for `ProjectRegistry` and the `Gate` Protocol respectively) —
 this AD is the authoritative record that the divergence is permanent,
 not an oversight.
+
+### AD-046: Reporting input boundary — `ReportBuilder` accepts `GateResult` directly, not `project_id`/`report_type`
+
+**Decision:** Step 8 v0.1's `ReportBuilder.build()` takes a `GateResult`
+(from `core/validation/gate_result.py`) directly as its input, not the
+`(project_id: ProjectId, report_type: ReportType)` signature
+`docs/PLATFORM_ARCHITECTURE_V1.md` Section 4.5 sketches. This is a
+pre-implementation record, written before `core/reporting/` exists —
+unlike AD-033/AD-036/AD-040, which documented a narrower interface
+already built, this AD fixes the narrower interface *as* the target
+before any code is written, so Step 8 does not start from the sketch's
+signature and discover the gap mid-implementation.
+
+**Why the sketch's signature cannot be implemented today.** Section
+4.5's own sketch requires resolving "the `GateResult`s belonging to
+`project_id`." No such lookup exists. Verified directly, not inferred:
+
+- `GateResult` (`core/validation/gate_result.py`) has exactly five
+  fields — `gate_name`, `status`, `summary`, `evidence_refs`,
+  `decision: DecisionMetadata` — and `DecisionMetadata` carries only
+  `reviewer`, `review_level`, `decided_at`. Neither type has a
+  `project_id` field or anything resembling one.
+- Every `GateResult(...)` construction site in the repository
+  (`core/validation/gates/signal_independence.py`,
+  `core/validation/gates/economic_rationale.py`) confirms this — none
+  passes or references a `ProjectId`.
+- `ProjectRegistry` (`core/research/project_registry.py`, added under
+  AD-036) resolves identity and metadata only — `register_project`,
+  `get_project`, `list_projects` — and `Project`
+  (`core/research/project.py`) has no field holding gate results or any
+  other reference back to Validation-domain output.
+
+There is, as of this AD, no code path from a `ProjectId` to the
+`GateResult`s associated with it in either direction. Building
+`ReportBuilder.build(project_id, report_type)` against that gap would
+mean either fabricating a lookup Reporting has no business owning, or
+shipping a signature with no real implementation behind its first
+parameter.
+
+**Rationale.**
+
+- **Avoids implicit Research→Validation ownership.** A Reporting-owned
+  `project_id → GateResult[]` lookup would make Reporting the de facto
+  join point between two domains it only consumes from — exactly the
+  kind of cross-domain orchestration §3's dependency rules reserve for
+  Research, not Reporting (`docs/PLATFORM_ARCHITECTURE_V1.md` Section 3:
+  Reporting is "a true leaf; no domain's correctness can ever depend on
+  Reporting having run"). If a `ProjectId → GateResult` association is
+  ever needed, that is Research's or Validation's decision to expose,
+  not Reporting's to invent as a side effect of wanting a build-time
+  parameter.
+- **Follows the established narrower-interface pattern.** Same
+  discipline as AD-033 (`FreezeVerifier` takes a raw `commit_ref`, not a
+  `FreezeId` backed by a registry that didn't exist yet), AD-036
+  (`ProjectRegistry` implements exactly identity + metadata, not the
+  sketch's filtering or id-minting), and AD-040 (`GateResult`/
+  `GateStatus`/`DecisionMetadata` only, not the full `Gate`/
+  `GateRunner`/`ValidationRegistry` apparatus). In each case the
+  narrower slice was recorded explicitly rather than left as a silent
+  gap between the architecture doc and the code.
+- **Avoids a Validation-domain schema change as an implementation side
+  effect.** Adding `project_id` to `GateResult` would modify a frozen,
+  tested, already-shipped Validation-domain type (Step 7, committed at
+  `5c42422`) to satisfy a Reporting-domain convenience. That is a
+  cross-domain decision belonging to Validation as the owning domain
+  with Reporting as the requesting consumer — not something this AD
+  authorizes, and not something `ReportBuilder`'s implementation should
+  decide unilaterally by needing it.
+
+**Boundary rules for `ReportBuilder`/`Renderer`, stated explicitly so
+Step 8 does not have to rediscover them mid-implementation:**
+
+- Reporting renders; it never validates. It does not compute a
+  PASS/FAIL/AMBIGUOUS outcome or any other judgment — it displays
+  `GateResult.status` as given.
+- Reporting displays; it never interprets. `summary` is reprinted
+  verbatim; a renderer does not parse it back into numbers to reformat,
+  round, or re-derive a conclusion from it.
+- Reporting does not resolve evidence references. `evidence_refs`
+  (AD-042: opaque references to immutable evidence locations) are
+  displayed as citations only — never dereferenced, fetched, or
+  validated. That is `ArchiveVerifier`/`ReproducibilityChecker`
+  territory, neither of which exists and neither of which this domain
+  is.
+- Reporting does not compute statistics. Any renderer needing a
+  differently-formatted number than `GateResult` already carries is a
+  new, explicit Validation/Statistics-domain question, not something
+  `Renderer` derives itself.
+
+**Minimal Step 8 v0.1 implementation scope, per this AD:**
+
+- `ReportBuilder.build(gate_result: GateResult) -> ReportModel`.
+- One JSON `Renderer` — closest to `dataclasses.asdict()`, built first
+  as the lowest-risk validation of `ReportBuilder`'s shape.
+- One Markdown `Renderer` — the actual Step 8 deliverable per
+  `docs/RESEARCH_PLATFORM_MVP_MIGRATION_PLAN.md`.
+- No `ReportRegistry` — same "no registry before a second consumer"
+  discipline AD-040 already applies to `GateRunner`/
+  `ValidationRegistry`.
+- No historical rendering — applies only to `GateResult`s produced
+  going forward, per the Migration Plan's own Step 8 scope.
+
+**What this AD does not decide.** Whether `GateResult` should ever gain
+a `project_id` field, and whether a `ProjectId → GateResult` lookup
+should exist anywhere, are left open — to be raised, if a concrete need
+arises, as a Validation- or Research-domain decision, not resolved here
+as a precondition Reporting imposes on those domains. Section 3's
+already-flagged gaps (raw statistics not structured past `summary`;
+`VerificationResult` detail not carried into `GateResult`) remain
+separately deferred, per `docs/REPORTING_ARCHITECTURE_PROPOSAL.md`
+Section 3, to be resolved against a real second need rather than
+pre-solved here.
+
+**Status.** No code is introduced by this AD. `core/reporting/` remains
+unbuilt; this record fixes the input boundary Step 8 must build
+against.

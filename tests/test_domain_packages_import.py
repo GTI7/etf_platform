@@ -16,8 +16,11 @@ minimal gate-result increment (``core.validation.gate_result``,
 ``core.validation.gates.signal_independence``,
 ``core.validation.gates.economic_rationale`` -- see
 docs/ARCHITECTURE_DECISIONS.md AD-040 through AD-044), carving that
-domain out too; ``core.reporting`` remains untouched and is still held
-to the original Phase 0 emptiness guarantee."""
+domain out too. Step 8 populates ``core.reporting`` with its minimal
+report-model/builder/renderer increment (``core.reporting.report_model``,
+``.report_builder``, ``.json_renderer``, ``.markdown_renderer`` -- see
+docs/ARCHITECTURE_DECISIONS.md AD-046), carving out the last of the
+five -- no domain module remains in the "still empty" check below."""
 
 from __future__ import annotations
 
@@ -33,9 +36,7 @@ NEW_DOMAIN_MODULES = [
     "core.reporting",
 ]
 
-STILL_EMPTY_DOMAIN_MODULES = [
-    "core.reporting",
-]
+STILL_EMPTY_DOMAIN_MODULES: list[str] = []
 
 
 @pytest.mark.parametrize("module_name", NEW_DOMAIN_MODULES)
@@ -117,3 +118,19 @@ def test_validation_package_now_exposes_step_7_submodules() -> None:
     assert hasattr(gate_result, "GateResult")
     assert hasattr(signal_independence, "evaluate_signal_independence_gate")
     assert hasattr(economic_rationale, "evaluate_economic_rationale_gate")
+
+
+def test_reporting_package_now_exposes_step_8_submodules() -> None:
+    """Step 8 populates core.reporting with its minimal
+    model/builder/renderer increment -- callers import each submodule
+    explicitly (``core.reporting`` itself re-exports nothing), and each
+    must expose its public entry point."""
+    import core.reporting.json_renderer as json_renderer
+    import core.reporting.markdown_renderer as markdown_renderer
+    import core.reporting.report_builder as report_builder
+    import core.reporting.report_model as report_model
+
+    assert hasattr(report_model, "ReportModel")
+    assert hasattr(report_builder, "build_report")
+    assert hasattr(json_renderer, "render_json")
+    assert hasattr(markdown_renderer, "render_markdown")

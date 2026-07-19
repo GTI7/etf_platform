@@ -1,16 +1,16 @@
 """Reporting domain (Layer 3, leaf).
 
-Reserved package for the platform's future rendering capability --
-``ReportBuilder``, ``Renderer``, and ``ReportRegistry`` -- per
-docs/PLATFORM_ARCHITECTURE_V1.md Section 4.5.
-
-Empty as of Phase 0 of docs/RESEARCH_PLATFORM_MVP_MIGRATION_PLAN.md: no
-builder or renderer has been written here yet. Every research report to
-date has been hand-written Markdown, transcribing figures that already
-exist in a machine-readable JSON artifact -- see
-docs/RESEARCH_PLATFORM_RETROSPECTIVE.md Section 3, item 7.
+Step 8 v0.1 (docs/ARCHITECTURE_DECISIONS.md AD-046,
+docs/STEP_8_REPORTING_DESIGN.md): ``report_model.ReportModel``,
+``report_builder.build_report``, ``json_renderer.render_json``, and
+``markdown_renderer.render_markdown``. Callers import each submodule
+explicitly -- this package itself re-exports nothing, the same
+convention ``core.statistics``/``core.governance``/``core.research``/
+``core.validation`` already follow.
 
 Depends on every other domain's structured output, read-only. A true
 leaf: nothing may depend on Reporting, and no domain's correctness may
-ever depend on a report having been generated.
+ever depend on a report having been generated. ``report_builder.py`` is
+the only module in this package permitted to import
+``core.validation``; both renderers take ``ReportModel`` only.
 """
