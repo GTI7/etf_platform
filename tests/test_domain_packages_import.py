@@ -7,9 +7,12 @@ logic yet -- only a package docstring. Phase 1A
 the "still empty" check below. Phase 1C (Step 4) populates
 ``core.governance`` with its first two modules
 (``core.governance.freeze_verifier``, ``core.governance.independence_linter``),
-carving that domain out too; ``core.validation``, ``core.research``, and
-``core.reporting`` remain untouched and are still held to the original
-Phase 0 emptiness guarantee."""
+carving that domain out too. Phase 1D (Step 5) populates
+``core.research`` with its identity/metadata slice
+(``core.research.project``, ``project_id``, ``project_repository``,
+``project_registry``, ``historical_backfill``), carving that domain out
+as well; ``core.validation`` and ``core.reporting`` remain untouched and
+are still held to the original Phase 0 emptiness guarantee."""
 
 from __future__ import annotations
 
@@ -27,7 +30,6 @@ NEW_DOMAIN_MODULES = [
 
 STILL_EMPTY_DOMAIN_MODULES = [
     "core.validation",
-    "core.research",
     "core.reporting",
 ]
 
@@ -76,3 +78,23 @@ def test_governance_package_now_exposes_tier_1_submodules() -> None:
     assert hasattr(freeze_verifier, "verify_freeze")
     assert independence_linter is not None
     assert hasattr(independence_linter, "lint")
+
+
+def test_research_package_now_exposes_identity_and_metadata_submodules() -> None:
+    """Phase 1D populates core.research with its identity/metadata slice
+    -- callers import each submodule explicitly (``core.research`` itself
+    re-exports nothing), and each must expose its public entry point."""
+    import core.research.historical_backfill as historical_backfill
+    import core.research.project as project
+    import core.research.project_id as project_id
+    import core.research.project_registry as project_registry
+    import core.research.project_repository as project_repository
+
+    assert hasattr(project, "Project")
+    assert hasattr(project, "ProjectLifecycleState")
+    assert hasattr(project_id, "create_project_id")
+    assert hasattr(project_repository, "ResearchProjectRepository")
+    assert hasattr(project_repository, "InMemoryResearchProjectRepository")
+    assert hasattr(project_registry, "ProjectRegistry")
+    assert hasattr(historical_backfill, "HISTORICAL_PROJECTS")
+    assert hasattr(historical_backfill, "backfill_historical_projects")

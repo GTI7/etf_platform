@@ -720,3 +720,155 @@ unchanged by this finding**; widening it (e.g. to paragraph/section
 scope) remains open for later, once Governance has a real consumer to
 evaluate precision against, and should not be done speculatively ahead
 of that need.
+
+---
+
+## Platform Migration Phase 1D — Research project identity and metadata
+
+No version tag, for the same reason Phase 1C has none (see above — the
+`v0.4.0`/`v0.5.0`-style labels collide with `docs/BASELINE_STATUS.md`'s
+unrelated real release track, and `v0.6.0`/`v0.7.0` are both real,
+already-shipped releases with their own release notes).
+
+Executes `docs/RESEARCH_PLATFORM_MVP_MIGRATION_PLAN.md` Section 3, Step
+5, narrowed to identity and metadata ownership only: `ProjectId`
+construction, the `Project` record, the `ResearchProjectRepository`
+storage boundary, `ProjectRegistry`, and backfilling the three closed
+historical cycles. `FreezeManager`, `ExperimentOrchestrator`, and any
+lifecycle-transition behavior (`advance_phase`) are explicitly deferred
+— nothing here calls into Governance, Data, Statistics, or Validation.
+Additive: five new modules under `core/research/`, two new test files,
+no edit to any existing file's behavior other than
+`core/research/__init__.py`'s own docstring and the same
+`tests/test_domain_packages_import.py` carve-out pattern Phase 1A and
+1C already established.
+
+### AD-035: `ProjectId` stays a `NewType`; validation lives in a constructor function, not a wrapper class
+
+**Decision:** `core/research/project_id.py`'s `create_project_id(raw:
+str) -> ProjectId` validates format (`^[a-z][a-z0-9_]*$`) and returns
+the existing `core.shared.ids.ProjectId` — the `NewType("ProjectId",
+str)` reserved by AD-031. No new `ProjectId` type is defined anywhere;
+`core/research/` imports and reuses the Shared Kernel one exactly as
+AD-031 anticipated it would.
+
+**Rationale.** AD-003 is an explicit, cross-cutting rule: "Typed IDs via
+`typing.NewType`, no wrapper classes." A validated value object (a
+frozen dataclass wrapping a string, raising on construction) is the
+natural shape for "immutable, validated, no accidental free-form
+strings," but would be exactly the wrapper class AD-003 rules out, and
+would leave two competing `ProjectId` concepts in the codebase (the
+Shared Kernel one AD-031 already reserved, and a new one for Research to
+use instead). `create_project_id` resolves this the same way
+`serialize_parameters()` already resolves an analogous problem for
+`IndicatorDefinition.parameters` (AD-020): the type itself stays a bare
+`NewType`, and a single constructor function is the enforced gate every
+caller is expected to go through. This is a convention, not a runtime
+guarantee — nothing prevents `ProjectId("bad id")` directly, the same
+limitation AD-003 already accepts for every other typed id in this
+codebase.
+
+### AD-036: `ProjectRegistry`'s v0.1 interface is narrower than the architecture doc's own sketch
+
+**Decision:** `core/research/project_registry.py`'s `ProjectRegistry`
+implements exactly `register_project(project: Project) -> None`,
+`get_project(project_id: ProjectId) -> Project`, and `list_projects() ->
+list[Project]`. This differs from `docs/PLATFORM_ARCHITECTURE_V1.md`
+Section 4.1's own sketch in two ways: the sketch's
+`register_project(name, asset_class, mechanism) -> ProjectId` has the
+registry mint the id and construct the record; this implementation has
+the caller construct a complete `Project` (id included) and hand it to
+the registry. The sketch's `list_projects(*, phase=None, status=None)`
+filters; this implementation does not.
+
+**Rationale.** Same pattern as AD-033's `FreezeVerifier` divergence last
+phase: build the narrowest slice that satisfies the current concrete
+need (identity + metadata ownership, per this step's explicit scope)
+rather than the full future interface ahead of a caller that would
+exercise the rest of it. Filtering and id-minting can be added later
+without breaking this signature — `list_projects()` gains optional
+keyword filters, `register_project` could gain a factory-style
+convenience wrapper — neither requires revisiting `Project`,
+`ResearchProjectRepository`, or the historical backfill built against
+today's interface.
+
+**Two-layer design (`ProjectRegistry` over `ResearchProjectRepository`),
+stated explicitly.** Unlike `ProviderRegistry` (AD-015), which is a flat
+dict with no separate storage interface, `ProjectRegistry` delegates
+storage to an injected `ResearchProjectRepository`. This is a deliberate
+exception to "no abstraction ahead of need," not an oversight: today's
+only implementation (`InMemoryResearchProjectRepository`) is exactly as
+simple as `ProviderRegistry`'s internal dict, but the Migration Plan
+Step 5 explicitly names YAML and SQLite as expected future
+implementations. The seam costs one `ABC` and one constructor
+parameter today, in exchange for never having to revisit
+`ProjectRegistry`'s own logic (duplicate-id checking, lookup semantics)
+when a real persistence mechanism is chosen later.
+
+**`lifecycle_state` vs. `research_outcome`, stated explicitly.**
+`Project.lifecycle_state` (`ACTIVE`/`FROZEN`/`ARCHIVED`) is a closed,
+registry-controlled vocabulary describing where a project is in the
+governance process. `Project.research_outcome` is free text (`None`
+until concluded) describing what was found — deliberately not an enum,
+because the real vocabulary the three historical cycles already used is
+not one closed set: `docs/REFERENCE_V1_RESEARCH_CLOSEOUT.md` and
+`docs/REFERENCE_V2_H1_RESEARCH_CLOSEOUT.md` both record `"ARCHIVE"`,
+while `docs/REFERENCE_H3_RESEARCH_CLOSEOUT.md` records
+`"EVIDENCE AGAINST"` — a `docs/RESEARCH_GOVERNANCE_STANDARD.md` Section
+7 FAIL-discipline classification, not the same three-category framework
+the other two use. Coding a single enum now would mean guessing at a
+taxonomy real research history hasn't settled on, ahead of any second
+concrete need to structure it — the same discipline AD-005 already
+applies everywhere else in this codebase.
+
+**`origin_date`, not `created_at`, stated explicitly.** No file anywhere
+in the repository records when any of the three historical cycles
+actually *started*. `Project.origin_date` deliberately does not claim
+to answer that question — it names the earliest already-recorded
+evidence date for that project (a dated report filename, or a freeze
+commit's author date; see `core/research/historical_backfill.py` for
+the exact source per project), sourced via `FixedClock`-style historical
+fact recording (AD-007's pattern, applied to a past fact rather than a
+test), never `SystemClock.now()`. Inventing a "created" timestamp that
+isn't backed by any real artifact would be exactly the kind of
+undisclosed retroactive record-keeping
+`docs/RESEARCH_PLATFORM_RETROSPECTIVE.md` Section 2 already identified
+as a defect in H3's own process (`decision_log.md` Entry 15's
+retroactively-written freeze-commit entry).
+
+**Explicitly out of scope.** No `FreezeManager`, no
+`ExperimentOrchestrator`, no `advance_phase`-shaped lifecycle-transition
+method — `Project.lifecycle_state` is set once at construction by the
+caller; nothing in this AD's code ever mutates an already-registered
+project. No YAML/SQLite-backed `ResearchProjectRepository`
+implementation. `research_archive/` is read only to source the
+historical backfill's evidence citations (commit hashes, filenames,
+dates already present in existing frozen files) — no file under
+`research_archive/`, `experiments/`, or `maintenance/` is modified by
+this AD.
+
+### AD-037: Historical backfill points to existing evidence; it does not duplicate it
+
+**Decision:** `core/research/historical_backfill.py`'s three `Project`
+records carry only pointers into already-existing evidence
+(`metadata["closeout_doc"]`, `metadata["freeze"]`) — commit hashes and
+document paths copied verbatim from `research_archive/reference_v1/COMMIT.txt`,
+`research_archive/reference_v2_h1/COMMIT.txt`,
+`research_archive/reference_h3/FREEZE_RECORD.md`, and each cycle's
+close-out report. No figure, verdict narrative, or methodology detail
+from any closeout document is copied or restated beyond the single
+`research_outcome` label each document's own headline verdict already
+uses verbatim (`"ARCHIVE"`, `"ARCHIVE"`, `"EVIDENCE AGAINST"`).
+
+**`reference_h3`'s two-commit freeze shape vs. the other two's
+single-commit shape, stated explicitly.** `reference_v1` and
+`reference_v2_h1` each have one freeze commit (`metadata["freeze"]["commit"]`)
+because each was archived directly from one significance-report
+snapshot with no separate methodology-freeze-then-acceptance-criteria-freeze
+phases. `reference_h3` has two
+(`metadata["freeze"]["construction_commit"]`,
+`metadata["freeze"]["acceptance_commit"]`) because H3's own governance
+process actually froze construction and acceptance criteria as two
+distinct, separately-logged events (`decision_log.md` Entries 10 and
+15) — the metadata shape reflects a real difference in how each cycle
+was actually governed, not an arbitrary inconsistency.
