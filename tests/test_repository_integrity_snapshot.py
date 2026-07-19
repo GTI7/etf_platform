@@ -1,0 +1,60 @@
+"""Regression guard for docs/RESEARCH_PLATFORM_MVP_MIGRATION_PLAN.md Phase
+0's "must remain untouched" list: every file under research_archive/,
+every experiments/*.py script, and the maintenance/ remediation script.
+
+tests/fixtures/protected_file_hashes.json is a one-time snapshot of
+each protected file's SHA-256 content hash, taken before Phase 0 made
+any change to the repository. If any of these files is ever edited,
+moved, or deleted, this test fails -- the fixture itself must never be
+regenerated to make a real change to a protected file pass silently;
+regenerating it is only legitimate for a *deliberately reviewed and
+approved* change to one of these files, which this platform's own
+governance discipline requires to be rare (docs/RESEARCH_GOVERNANCE_STANDARD.md
+Section 5, "nothing in this package is ever silently overwritten").
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+from pathlib import Path
+
+import pytest
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+FIXTURE_PATH = Path(__file__).resolve().parent / "fixtures" / "protected_file_hashes.json"
+
+
+def _load_expected_hashes() -> dict[str, str]:
+    return json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+EXPECTED_HASHES = _load_expected_hashes()
+
+
+@pytest.mark.parametrize("relative_path", sorted(EXPECTED_HASHES))
+def test_protected_file_content_is_unchanged(relative_path: str) -> None:
+    path = REPO_ROOT / relative_path
+    assert path.is_file(), f"{relative_path} is missing -- protected files must never be moved or deleted"
+    assert _sha256(path) == EXPECTED_HASHES[relative_path], (
+        f"{relative_path} content has changed since the Phase 0 snapshot was taken"
+    )
+
+
+def test_no_protected_directory_gained_or_lost_files() -> None:
+    """Catches a new file silently added to (or removed from) a protected
+    tree that the per-file check above, by construction, cannot see."""
+    current_files = set()
+    for base in ("research_archive", "experiments", "maintenance"):
+        base_dir = REPO_ROOT / base
+        for path in base_dir.rglob("*"):
+            if path.is_file() and "__pycache__" not in path.parts:
+                if base == "experiments" and path.suffix != ".py":
+                    continue  # experiments/README.md is documentation, not a protected script
+                current_files.add(path.relative_to(REPO_ROOT).as_posix())
+
+    assert current_files == set(EXPECTED_HASHES)
