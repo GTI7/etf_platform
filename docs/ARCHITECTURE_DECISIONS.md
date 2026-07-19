@@ -872,3 +872,52 @@ process actually froze construction and acceptance criteria as two
 distinct, separately-logged events (`decision_log.md` Entries 10 and
 15) — the metadata shape reflects a real difference in how each cycle
 was actually governed, not an arbitrary inconsistency.
+
+### AD-038: Archive Manifest Scaffold Generator creates evidence directories, not evidence files
+
+**Decision:** `tools/archive_manifest.py`'s `scaffold_project_archive()`
+creates a new project's `archive_manifest.json` (via the existing
+`build_manifest()`/`write_manifest()`) and the three empty evidence
+subdirectories `docs/RESEARCH_GOVERNANCE_STANDARD.md` Section 5 expects
+— `dataset_hashes/`, `experiment_results/`, `reviewer_reports/` — each
+with a `.gitkeep` file so git tracks the empty directory. It does not
+create `hypothesis.md`, `methodology.md`, `dataset_manifest.json`, or
+`decision_log.md`, and it introduces no new manifest schema —
+`schema_version` stays `1`.
+
+**Rationale.** Those four files are authored content: a hypothesis, a
+methodology, a dataset manifest, and a decision log are things a human
+writes as a project's evidence actually takes shape, not boilerplate a
+generator can stub out. Scaffolding them empty would create a file that
+*looks* like recorded evidence at a glance — same filename a reviewer
+or a future `ArchiveVerifier` would look for — while containing
+nothing, which is a worse trap than the file simply not existing yet.
+Directories carry no such ambiguity: an empty `dataset_hashes/` reads
+unambiguously as "not populated yet," which is the truth. This mirrors
+AD-030's framing of the manifest concept itself as an early
+preservation guard, not the complete evidence system — the scaffold
+generator extends *structure*, never substitutes for the human
+judgment Standard Section 5's content requirements exist to capture.
+
+### AD-039: Archive manifest tooling remains in `tools/` until `ArchiveVerifier` provides a concrete governance consumer
+
+**Decision:** `scaffold_project_archive()` is added to
+`tools/archive_manifest.py` alongside `build_manifest()` and
+`write_manifest()`, not moved or duplicated into `core/governance/`.
+
+**Rationale.** `core/governance/` remains intentionally empty in Phase
+0 (per this module's own docstring and AD-030) because there is no
+concrete consumer of manifest data yet — `ArchiveVerifier`
+(`docs/PLATFORM_ARCHITECTURE_V1.md` Section 4.4) is still a forward
+reference, not a package with behavior to slot this into. Moving
+scaffold generation into `core/governance/` now would be exactly the
+kind of speculative, consumer-less abstraction this platform's Phase 0
+discipline (AD-025, AD-028) has consistently deferred elsewhere:
+premature scoping decisions harden ahead of the first real usage
+telling us what shape they should take. `tools/` is where
+`archive_manifest.py` already lives, already tested, already the
+reference implementation this doc's own text points to; extending it
+in place keeps one file with one purpose instead of splitting related
+logic across a package boundary that has nothing on the other side yet.
+The move happens later, when `ArchiveVerifier` exists and needs it as
+an input contract — not preemptively.

@@ -4,9 +4,10 @@ See docs/RESEARCH_ARCHIVE_MANIFEST.md for the schema itself and the
 rationale. This module is tooling, not `core/governance/` business
 logic (that package remains intentionally empty in Phase 0 of
 docs/RESEARCH_PLATFORM_MVP_MIGRATION_PLAN.md) -- it builds and writes
-one small JSON file for a *new* project's archive directory, nothing
-more. It never reads or interprets an existing manifest, and never
-implements `ArchiveVerifier`.
+one small JSON file plus empty evidence directories for a *new*
+project's archive directory, nothing more (AD-038). It never reads or
+interprets an existing manifest, and never implements
+`ArchiveVerifier`.
 
 Pure/IO split, matching the rest of this repository's discipline
 (AD-007's injectable `Clock`, `core/analytics/domain/calculations.py`'s
@@ -89,4 +90,46 @@ def write_manifest(archive_dir: Path, manifest: dict) -> Path:
         )
     archive_dir.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=False), encoding="utf-8")
+    return manifest_path
+
+
+# The three evidence directories from docs/RESEARCH_GOVERNANCE_STANDARD.md
+# Section 5 that this scaffold creates empty. It never creates
+# hypothesis.md, methodology.md, dataset_manifest.json, or
+# decision_log.md -- those are authored content, not structure, and
+# scaffolding them empty would invite a future reader to mistake an
+# empty stub for actual evidence (see AD-038).
+EVIDENCE_SUBDIRECTORIES = ("dataset_hashes", "experiment_results", "reviewer_reports")
+
+GITKEEP_FILENAME = ".gitkeep"
+
+
+def scaffold_project_archive(
+    project_id: str,
+    archive_root: Path,
+    clock: Clock,
+    *,
+    lifecycle_version: str = "v1",
+) -> Path:
+    """Create a new project's archive directory: its manifest plus the
+    three empty evidence subdirectories from Standard Section 5.
+
+    Thin composition of the existing pure/IO-split primitives above --
+    `build_manifest()` then `write_manifest()` -- so both of
+    `write_manifest()`'s refusals (legacy directory, existing manifest)
+    apply here unchanged. Directories are created with a `.gitkeep` file
+    each so git tracks the empty structure; no evidence content file is
+    ever created here (AD-038) -- authoring `hypothesis.md`,
+    `methodology.md`, `dataset_manifest.json`, and `decision_log.md`
+    remains a separate, human act.
+    """
+    archive_dir = archive_root / project_id
+    manifest = build_manifest(project_id, clock, lifecycle_version=lifecycle_version)
+    manifest_path = write_manifest(archive_dir, manifest)
+
+    for subdirectory in EVIDENCE_SUBDIRECTORIES:
+        evidence_dir = archive_dir / subdirectory
+        evidence_dir.mkdir(parents=True, exist_ok=True)
+        (evidence_dir / GITKEEP_FILENAME).touch()
+
     return manifest_path

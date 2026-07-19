@@ -93,6 +93,26 @@ above, and refuses to overwrite an existing manifest file. It is
 tooling, not `core/governance/` business logic — see that module's
 docstring.
 
+### Archive scaffold generator
+
+`scaffold_project_archive(project_id, archive_root, clock, *,
+lifecycle_version="v1")` composes `build_manifest()` and
+`write_manifest()` to set up a *new* project's archive directory in one
+call: it writes `archive_manifest.json`, then creates the three empty
+evidence subdirectories Standard Section 5 expects —
+`dataset_hashes/`, `experiment_results/`, `reviewer_reports/` — each
+with a `.gitkeep` file so git tracks the empty directory. Both of
+`write_manifest()`'s refusals (legacy archive directory, existing
+manifest) apply unchanged, since the scaffold generator calls it rather
+than duplicating its checks.
+
+**It creates evidence directories, not evidence files (AD-038).**
+`hypothesis.md`, `methodology.md`, `dataset_manifest.json`, and
+`decision_log.md` are authored content — a human writes them as the
+project's actual hypothesis, methodology, and decisions take shape.
+Scaffolding empty stubs for any of them would let a reader mistake an
+empty file for recorded evidence, so the generator never creates them.
+
 ## Versioning
 
 This document follows the same discipline
