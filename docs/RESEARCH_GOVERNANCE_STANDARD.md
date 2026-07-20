@@ -677,8 +677,93 @@ invalidate the substance of any specific hypothesis; that remains the
 role of each hypothesis's own pre-validation and methodology documents,
 produced under this standard's Phase 3 and Phase 4 requirements.
 
-**Version:** 1.0. **Effective:** upon commit of this document. Future
+---
+
+## 10. Standing Corrective-Action and Calibration-Leakage Rules
+
+This section codifies two standing rules first adopted as cycle-level
+decisions during the `positive_control_phase3` cycle and promoted here,
+per that cycle's own governance plan, as platform-wide defaults rather
+than one-cycle exceptions. Promoting them does not reopen, revise, or
+reinterpret any decision already recorded for that cycle (Gate 2 and
+Gate 3 remain FAIL, no target, tolerance, or attempt-cap value changes as
+a result of this promotion) — it only makes the rule binding on future
+cycles without requiring a second promotion.
+
+### 10.1 GOV-1 — Correction discipline
+
+No more than one theory-based target correction may be applied to a
+validation gate without a fresh Level 2 review (Section 4) of that
+specific correction. Any subsequent correction motivated by a residual
+observed after a prior correction must pre-register its candidate
+mechanism — before that mechanism is checked against the data it is
+meant to explain — exactly as Section 3's freeze discipline already
+requires for every other frozen element.
+
+This rule applies identically to every gate of a generator-fidelity or
+methodology-fidelity type, including but not limited to a Gate 2
+(score-side or combined daily-IC autocorrelation fidelity) and a Gate 3
+(independence-cutoff verification) of the kind first defined for the
+`positive_control_phase3` cycle — it is a standing platform rule, not
+scoped to that cycle alone. A correction that does not first clear a
+fresh Level 2 review, or whose candidate mechanism was not pre-registered
+before being checked against the residual it responds to, does not
+satisfy this standard regardless of whether the correction later proves
+numerically accurate.
+
+*Origin:* first adopted as standing-rule "GOV-1" in
+`docs/POSITIVE_CONTROL_PHASE3_REMEDIATION_DECISION.md` and
+`research_archive/positive_control_phase3/decision_log.md` Entry 5;
+promoted here per
+`docs/POSITIVE_CONTROL_PHASE3_CONTROLLED_EXECUTION_PLAN.md` gate G4,
+which additionally requires this rule to cover Gate 3 as well as Gate 2
+so no second promotion is needed for that extension.
+
+### 10.2 Calibration-leakage firewall
+
+**(a) Effect-size, lookback, and promotion-criteria leakage.** No future
+hypothesis cycle may cite another cycle's calibration parameters, power
+curves, or minimum-detectable-effect (MDE) figures — including but not
+limited to a positive-control or power-calibration cycle's output — to
+select, size, or justify that future cycle's own effect-size expectation,
+lookback window, or promotion criteria. Such outputs may describe what
+the pipeline can detect in general; they may never inform what a
+specific hypothesis should target.
+
+**(b) Target-function-tuning leakage.** The same firewall applies to a
+gate's own target function (for example, an autocorrelation or
+generator-fidelity target checked against a theoretical curve): the
+target function may not be corrected, adjusted, or re-derived using
+knowledge of the specific residual pattern it is being checked against,
+except through the pre-registration-before-checking discipline Section
+10.1 (GOV-1) already requires. A correction whose only stated support is
+post-hoc agreement with an observed residual shape, with no independently
+disclosed theoretical grounding, is a calibration-leakage violation under
+this section — not a valid correction — regardless of the review level
+that approved it.
+
+*Origin:* (a) first drafted as
+`docs/POSITIVE_CONTROL_VALIDATION_STUDY_PROPOSAL_V2.md` Section 11.2,
+itself carrying forward v1 Section 6.4 unchanged in substance; (b) is
+the extension to target-function tuning required by
+`docs/POSITIVE_CONTROL_PHASE3_CONTROLLED_EXECUTION_PLAN.md` gate G5 so
+that a single promotion covers both leakage channels.
+
+---
+
+**Version:** 1.1. **Effective:** upon commit of this document. Future
 revisions to this standard follow the same discipline it imposes on
 research cycles: a revision is a new, dated version, not a silent edit —
 this document's own version history is itself subject to the archive
 discipline it defines in Section 5.
+
+**Revision history.**
+
+- **v1.0** — original standard (Phases 1–8, Sections 1–9).
+- **v1.1** (2026-07-20) — added Section 10 (GOV-1 correction discipline
+  and the calibration-leakage firewall, extended to target-function
+  tuning), promoting standing rules already adopted at the cycle level
+  for `positive_control_phase3`
+  (`docs/POSITIVE_CONTROL_PHASE3_CONTROLLED_EXECUTION_PLAN.md` gates
+  G4/G5). No change to Sections 1–9 or to any prior decision, freeze, or
+  Decision-phase outcome recorded under v1.0.

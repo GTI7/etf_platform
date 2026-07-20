@@ -79,10 +79,32 @@ def test_write_manifest_refuses_legacy_archive_directories(tmp_path: Path, legac
 
 def test_legacy_archive_ids_match_real_research_archive_directories() -> None:
     """Guards against this module's protected-directory list silently
-    drifting from what actually exists under research_archive/."""
+    drifting from what actually exists under research_archive/.
+
+    Equality (rather than subset) was correct only as long as no new
+    project archive had been created since this manifest concept was
+    introduced (docs/RESEARCH_ARCHIVE_MANIFEST.md: "does not generate a
+    manifest for any hypothesis currently open on this platform ...
+    H3 is closed; H4 has not opened"). Now that a new project archive
+    (`positive_control_phase3/`, scaffolded via
+    `scaffold_project_archive()`) exists alongside the three legacy
+    ones, the correct invariant is: every legacy id still has a real
+    directory (unchanged -- historical evidence stays protected), and
+    every *other* directory has adopted the manifest schema rather than
+    being an undocumented ad hoc addition.
+    """
     repo_root = Path(__file__).resolve().parent.parent
-    actual = {p.name for p in (repo_root / "research_archive").iterdir() if p.is_dir()}
-    assert LEGACY_ARCHIVE_PROJECT_IDS == actual
+    research_archive_dir = repo_root / "research_archive"
+    actual = {p.name for p in research_archive_dir.iterdir() if p.is_dir()}
+    assert LEGACY_ARCHIVE_PROJECT_IDS <= actual
+
+    for project_id in actual - LEGACY_ARCHIVE_PROJECT_IDS:
+        manifest_path = research_archive_dir / project_id / "archive_manifest.json"
+        assert manifest_path.is_file(), (
+            f"{project_id} is a new (non-legacy) research_archive/ directory but has no "
+            "archive_manifest.json -- new project archives must be created via "
+            "tools/archive_manifest.py's scaffold_project_archive(), not an ad hoc directory."
+        )
 
 
 def test_scaffold_project_archive_creates_manifest(tmp_path: Path) -> None:

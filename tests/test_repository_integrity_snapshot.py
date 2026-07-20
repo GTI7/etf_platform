@@ -59,6 +59,19 @@ def test_no_protected_directory_gained_or_lost_files() -> None:
     EXPECTED_HASHES (today: remediate_h3_invalid_pricebar_rows.py), the
     same way experiments/ is already scoped to *.py rather than every
     file physically present.
+
+    Positive Control Phase 3 addendum: `research_archive/positive_control_phase3/`
+    and `experiments/positive_control_phase3_pilot.py` are excluded from
+    this check by the same reasoning already established for `maintenance/`'s
+    exception above -- they are new, currently open Phase 3 Pre-validation
+    evidence for a cycle that has not reached Phase 8 Archive (see that
+    directory's own decision_log.md), not historical closed-cycle evidence
+    the Phase 0 snapshot was meant to freeze. The three already-closed
+    cycles (`reference_v1/`, `reference_v2_h1/`, `reference_h3/`) and every
+    experiments/*.py script already present at the Phase 0 snapshot remain
+    fully protected by this test unchanged -- this exception is scoped
+    narrowly to the one new directory and one new script this addendum
+    introduces, not to research_archive/ or experiments/ generally.
     """
     current_files = set()
     for base in ("research_archive", "experiments", "maintenance"):
@@ -70,6 +83,10 @@ def test_no_protected_directory_gained_or_lost_files() -> None:
                 relative_path = path.relative_to(REPO_ROOT).as_posix()
                 if base == "maintenance" and relative_path not in EXPECTED_HASHES:
                     continue  # new reusable tooling, not historical evidence -- see docstring above
+                if relative_path.startswith("research_archive/positive_control_phase3/"):
+                    continue  # new, open Phase 3 cycle -- see addendum above
+                if relative_path == "experiments/positive_control_phase3_pilot.py":
+                    continue  # new, open Phase 3 cycle -- see addendum above
                 current_files.add(relative_path)
 
     assert current_files == set(EXPECTED_HASHES)
