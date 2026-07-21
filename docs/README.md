@@ -112,6 +112,17 @@ determination → roadmap.
 | 6 | [PHASE_4_ARB_DETERMINATION_2026-07-21.md](PHASE_4_ARB_DETERMINATION_2026-07-21.md) | **Binding determination.** Adjudicates RR-001 against RR-002. §6 is the MUST list; §10 is the certification assessment. |
 | 7 | [PHASE_4_RESULT_REPORT_CANONICALIZATION_CHARTER.md](PHASE_4_RESULT_REPORT_CANONICALIZATION_CHARTER.md) | **Chartered, open.** Split out of A1(b) because naive file hashing can never match across runs (`generated_at`). |
 | 8 | [PHASE_4_IMPLEMENTATION_ROADMAP.md](PHASE_4_IMPLEMENTATION_ROADMAP.md) | Sequencing proposal. Seven independent PRs; states the honest limit of what `VERIFIED` will mean after all of them. |
+| 9 | [PHASE_4_GOVERNANCE_DOCS_FREEZE_RECORD.md](PHASE_4_GOVERNANCE_DOCS_FREEZE_RECORD.md) | **Freeze record** for documents 1–8. Supplies the commit hash that makes the freeze evidence rather than a claim. |
+
+> **Freeze status.** Documents 1–8 above are frozen at commit `91acb2c`,
+> tagged **`phase4-governance-docs-frozen-v1`**.
+>
+> **This is not the Phase 4 Methodology Freeze.** Standard §2's Phase 4
+> gate is **not open** — the Positive Control cycle has Gate 2 and Gate 3
+> both at FAIL. The tag freezes *documentation about the Phase 4 governance
+> subsystem*, not a research methodology, and it is not an approval of
+> anything. See the freeze record's "What this freeze is NOT" section
+> before citing the tag.
 
 **Reviewer reports.** `reviewer_reports/` holds one file per review event,
 each with its own date, reviewer identity, and independence-level
