@@ -56,8 +56,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 class FreezeStatus(str, Enum):
     """Three-way outcome -- deliberately not a boolean. A verification run
-    can fail to complete (bad ref, path never existed at that commit) in a
-    way that is categorically different from completing and finding drift."""
+    can fail to complete (bad ref, path never existed at that commit, or an
+    empty ``covered_paths`` set leaving nothing to check) in a way that is
+    categorically different from completing and finding drift."""
 
     VERIFIED = "verified"
     DRIFTED = "drifted"
@@ -149,6 +150,21 @@ def verify_freeze(
             status=FreezeStatus.UNVERIFIABLE,
             drifted_files=(),
             errors=(f"commit ref {commit_ref!r} does not resolve to a commit",),
+        )
+
+    if not paths:
+        # Zero covered paths means the loop below has nothing to check, so it
+        # would fall through to VERIFIED on no evidence at all. `resolved_hash`
+        # is deliberately preserved here: `resolved_hash is None` continues to
+        # mean exactly "the commit ref itself did not resolve", never anything
+        # else. Non-emptiness is necessary, nowhere near sufficient -- coverage
+        # *adequacy* remains a human review judgment (see the module docstring).
+        return VerificationResult(
+            commit_ref=commit_ref,
+            resolved_hash=resolved_hash,
+            status=FreezeStatus.UNVERIFIABLE,
+            drifted_files=(),
+            errors=("covered_paths is empty; a freeze verification with zero covered paths cannot be VERIFIED",),
         )
 
     errors: list[str] = []

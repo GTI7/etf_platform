@@ -73,6 +73,29 @@ def test_drifted_freeze_is_ambiguous_not_fail(repo: Path) -> None:
     assert "Freeze verification did not succeed" in result.summary
 
 
+def test_empty_freeze_coverage_is_ambiguous_not_pass(repo: Path) -> None:
+    """Zero freeze coverage must reach AD-043's AMBIGUOUS branch, not render
+    a verdict. The threshold here would otherwise PASS, so a PASS would mean
+    the gate evaluated against no freeze evidence at all. The gate needs no
+    code of its own for this -- it inherits it from `verify_freeze`."""
+    freeze_hash = _commit(repo, "acceptance_criteria.md", "frozen criteria\n", "freeze")
+
+    result = evaluate_economic_rationale_gate(
+        statistic_name="mean_ic_60d",
+        measured_value=Decimal("0.05"),
+        frozen_threshold=Decimal("0.03"),
+        threshold_direction="at_least",
+        freeze_commit_ref=freeze_hash,
+        freeze_covered_paths=[],
+        evidence_refs=(),
+        decision=_decision(),
+        repo_root=repo,
+    )
+
+    assert result.status is GateStatus.AMBIGUOUS
+    assert "status=unverifiable" in result.summary
+
+
 def test_meets_frozen_threshold_passes(repo: Path) -> None:
     freeze_hash = _commit(repo, "acceptance_criteria.md", "frozen criteria\n", "freeze")
 

@@ -90,6 +90,28 @@ def test_drifted_freeze_is_ambiguous_not_fail(repo: Path) -> None:
     assert result.summary != "Acceptance criterion was not frozen before validation."
 
 
+def test_empty_freeze_coverage_is_ambiguous_not_pass(repo: Path) -> None:
+    """Zero freeze coverage must reach AD-043's AMBIGUOUS branch, not render
+    a verdict. The threshold here would otherwise PASS, so a PASS would mean
+    the gate evaluated against no freeze evidence at all. The gate needs no
+    code of its own for this -- it inherits it from `verify_freeze`."""
+    freeze_hash = _commit(repo, "gate1_plan.md", "frozen plan\n", "freeze")
+
+    result = evaluate_signal_independence_gate(
+        measured_overlap=Decimal("0.10"),
+        frozen_threshold=Decimal("0.30"),
+        threshold_direction="at_most",
+        freeze_commit_ref=freeze_hash,
+        freeze_covered_paths=[],
+        evidence_refs=(),
+        decision=_decision(),
+        repo_root=repo,
+    )
+
+    assert result.status is GateStatus.AMBIGUOUS
+    assert "status=unverifiable" in result.summary
+
+
 def test_meets_frozen_threshold_passes(repo: Path) -> None:
     freeze_hash = _commit(repo, "gate1_plan.md", "frozen plan\n", "freeze")
 

@@ -1282,3 +1282,91 @@ pre-solved here.
 **Status.** No code is introduced by this AD. `core/reporting/` remains
 unbuilt; this record fixes the input boundary Step 8 must build
 against.
+
+---
+
+### AD-051: An empty `covered_paths` set is `UNVERIFIABLE`, not `VERIFIED`
+
+**Numbering.** The accepted ceiling was AD-046. AD-047–050 are left
+reserved for `docs/PHASE_4_STEP9_DRAFT_ADRS.md`, which provisionally
+claims them and is already cross-referenced by those numbers; this
+increment takes AD-051 rather than renumber settled cross-references.
+The two ADs' content does not conflict either way.
+
+**Decision.** `core/governance/freeze_verifier.py`'s `verify_freeze`
+returns `FreezeStatus.UNVERIFIABLE` when `covered_paths` is empty. No new
+enum member is introduced; the existing three-way contract (AD-033) is
+unchanged.
+
+**Why.** Before this change, `errors` and `drifted` were populated
+exclusively inside the per-path loop, so an empty `covered_paths` meant
+the loop body never ran, both lists stayed empty, and execution fell
+through to `VERIFIED`. A caller could claim a freeze was verified while
+supplying zero evidence, and the function would agree.
+
+This was load-bearing, not cosmetic. AD-043 makes both Validation gates
+(`signal_independence`, `economic_rationale`) render `AMBIGUOUS` whenever
+`verify_freeze` does not return `VERIFIED`. A gate called with
+`freeze_covered_paths=[]` sailed past that safeguard and was free to
+render `PASS`/`FAIL` on zero freeze coverage — defeating the one
+invariant that exists to keep a gate from evaluating against an
+untrustworthy basis. The hole was live and real, but no archived
+governance record is known to have been produced by an empty-coverage
+call; nothing had exercised it with real data.
+
+**Why `UNVERIFIABLE` and not a new status.** `FreezeStatus`'s own
+docstring already frames `UNVERIFIABLE` as a run that fails to complete —
+categorically distinct from a completed run that finds drift. A run given
+zero paths has nothing to complete; it fits that category without
+straining it. Both gate call sites branch on `is not VERIFIED`, never on
+a specific status, so reuse requires zero changes to either gate. A
+distinct `EMPTY`/`NO_COVERAGE` value would let a future caller
+pattern-match on it — but no such caller exists or is proposed, and
+inventing the distinction without a consumer is the premature
+abstraction AD-005/AD-025/AD-028 already rule out.
+
+**Mechanism.** One additive early return between two pieces of unmodified
+logic: after commit resolution (so the unresolvable-ref branch still
+returns first, still with `resolved_hash=None`) and before the per-path
+loop (whose branches are untouched). The guard performs no git
+invocation — it is a length check on an already-materialized list, so the
+module's read-only posture is preserved. `resolved_hash` is deliberately
+carried into the empty-coverage result so that `resolved_hash is None`
+continues to mean exactly "the commit ref itself did not resolve", never
+anything else.
+
+**What this AD does not claim to fix.** It closes exactly one hole:
+zero-evidence verification can no longer be mistaken for success. It
+checks *cardinality*, not *relevance*, and the following remain
+unaddressed — by design, and disclosed here so no future document can
+cite this AD as more than it is:
+
+- **Meaningless coverage.** `covered_paths=["README.md"]` passes the
+  non-empty check and is verified faithfully against that one file —
+  a true answer to a question nobody meaning "was the methodology
+  frozen?" intended to ask.
+- **Incomplete coverage.** `verify_freeze` has no independent source of
+  truth for what the complete frozen set should have been;
+  `covered_paths` is caller-supplied and there is no `FreezeId`-backed
+  registry to check it against (AD-033).
+- **Drift outside declared coverage.** A file that drifted but was never
+  named is invisible to `verify_freeze`, before and after this change.
+- **Commit-reference authentication.** `verify_freeze` verifies fidelity
+  to whatever `commit_ref` it is given; it cannot confirm that ref is the
+  one originally claimed as the freeze point. That is a provenance
+  problem one layer up.
+
+Coverage *adequacy* remains a human review judgment with no mechanism
+behind it anywhere in this codebase. A `VERIFIED` result proves the
+*named paths* were frozen — never that the *methodology* was.
+
+**Scope.** `signal_independence.py`, `economic_rationale.py`,
+`GateResult`, `GateStatus`, `DecisionMetadata`, `VerificationResult`'s
+shape, and every function signature are unchanged. Both gates inherit the
+fix with no code of their own, demonstrated by a propagation test in each
+gate's suite. Four tests were added, none modified. The AD-047 (draft)
+re-disclosure obligation — a dated governance deviation record stating
+that `verify_freeze(commit_ref, [])` *returned* `VERIFIED` — is
+independent of this AD and is **not** discharged by it: that disclosure
+records the hole's historical existence, this AD closes it going forward.
+Both are needed.

@@ -79,6 +79,35 @@ def test_unresolvable_commit_ref_is_unverifiable(repo: Path) -> None:
     assert result.errors
 
 
+def test_empty_covered_paths_is_unverifiable(repo: Path) -> None:
+    """Zero covered paths is zero evidence -- it must never verify. The
+    commit itself still resolved, so `resolved_hash` is populated: a `None`
+    hash continues to mean only "the ref did not resolve"."""
+    freeze_hash = _commit(repo, "frozen.md", "frozen content\n", "freeze")
+
+    result = verify_freeze(freeze_hash, [], repo_root=repo)
+
+    assert result.status is FreezeStatus.UNVERIFIABLE
+    assert not result.verified
+    assert result.resolved_hash == freeze_hash
+    assert result.drifted_files == ()
+    assert any("empty" in error for error in result.errors)
+
+
+def test_empty_covered_paths_with_unresolvable_ref_reports_ref_error(repo: Path) -> None:
+    """Commit resolution is still checked first: an unresolvable ref reports
+    the ref error with `resolved_hash is None`, not the empty-coverage one,
+    so the two `UNVERIFIABLE` causes stay distinguishable."""
+    _commit(repo, "frozen.md", "frozen content\n", "freeze")
+
+    result = verify_freeze("not-a-real-commit-hash", [], repo_root=repo)
+
+    assert result.status is FreezeStatus.UNVERIFIABLE
+    assert result.resolved_hash is None
+    assert any("does not resolve to a commit" in error for error in result.errors)
+    assert not any("empty" in error for error in result.errors)
+
+
 def test_path_absent_at_freeze_commit_is_unverifiable(repo: Path) -> None:
     freeze_hash = _commit(repo, "frozen.md", "frozen content\n", "freeze")
     _commit(repo, "later_file.md", "added after freeze\n", "second commit")
