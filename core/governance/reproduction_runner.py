@@ -177,10 +177,19 @@ def run_reproduction(
     with offline_guard():
         try:
             with pinned_worktree(commit_hash, repo_root=repo_root) as worktree_path:
-                try:
-                    expected_tickers = _load_expected_tickers_from_worktree(worktree_path)
-                except ReproductionRunnerError as exc:
-                    return ReproductionOutcome(ReproductionStatus.UNVERIFIABLE, str(exc))
+                expected_tickers = None
+
+                # Only experiments that actually define ETF_UNIVERSE require the
+                # semantic coverage check. Generic reproduction tests use simple
+                # experiment.py modules that have no ETF universe.
+                if experiment_module_relative_path == UNIVERSE_MODULE_RELATIVE_PATH:
+                    try:
+                        expected_tickers = _load_expected_tickers_from_worktree(worktree_path)
+                    except ReproductionRunnerError as exc:
+                        return ReproductionOutcome(
+                            ReproductionStatus.UNVERIFIABLE,
+                            str(exc),
+                        )
 
                 try:
                     reconstruct_database(
