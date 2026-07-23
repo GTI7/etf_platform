@@ -28,6 +28,14 @@ with nothing to report still gets an explicit value (`None`,
 **Evidence references.** [File paths, commit hashes, or artifact names
 this decision is based on.]
 
+**Machine chain anchor.** [One line, in the form
+`research_archive/<cycle_name>/transition_records.jsonl` — seq `<N>`,
+head `sha256:<64 lowercase hex>`. Required in every entry. State
+`Not applicable` for any entry that records no phase transition, and for
+any cycle that has no transition chain. Per
+`docs/ARCHITECTURE_DECISIONS.md` AD-048 (A5-C7); no other shape or
+version token is valid, and this field is never parsed by code.]
+
 **Governance status.** [Which phase, gate, or control this entry
 satisfies, per docs/RESEARCH_GOVERNANCE_STANDARD.md Section 2/8. If
 this entry records a governance exception, state all three required
@@ -49,6 +57,8 @@ explicit answer.]
 **Decision.** [Fill in.]
 
 **Evidence references.** [Fill in.]
+
+**Machine chain anchor.** [Fill in.]
 
 **Governance status.** [Fill in.]
 

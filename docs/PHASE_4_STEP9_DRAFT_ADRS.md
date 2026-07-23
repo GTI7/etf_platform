@@ -51,39 +51,55 @@ a correction is a new dated writing, never an edit to the record it
 corrects. This table is that writing, and it is a reconciliation of line
 numbers only.
 
-**Citations *into* this file shift by a single uniform offset, and the
-accepted ruling records that carry them are not edited.** Four accepted
-ruling records cite `PHASE_4_STEP9_DRAFT_ADRS.md` by line range, each
-taken against the file as committed at its own HEAD. The AD-047 revision
-above is confined to the AD-047 section, so **every such citation moves
-by exactly +218 and none of them changes what it points at.** Verified
-by matching the cited anchor text line-for-line:
+**Citations *into* this file are re-resolved here, and the accepted
+ruling records that carry them are not edited.** Four accepted ruling
+records cite `PHASE_4_STEP9_DRAFT_ADRS.md` by line range, each taken
+against the file as committed at its own HEAD. Two revisions have moved
+them. The AD-047 revision was confined to the AD-047 section and moved
+every such citation by exactly **+218**. The subsequent **A-2
+preparation revision** — which transcribes A-5, A-8 and A-9 into the
+AD-048 draft and A-6 plus A-5's AD-050 limb into the AD-050 draft — adds
+material *inside* AD-048 and *inside* AD-050, so **the offset is no
+longer uniform** and each row below now carries its own resolved value.
+Verified by matching the cited anchor text line-for-line:
 
-| Cited as | Resolves here to | Anchor content, unchanged | Cited by |
+| Cited as | Resolves here to | Anchor content | Cited by |
 |---|---|---|---|
-| `:110-115` | `:328-333` | AD-048's consumer-less-abstraction condition ("This AD is void if…") | A-9 F-22 |
-| `:121-128` | `:339-346` | AD-048's closed field set, `project_id` … predecessor SHA-256 | A-5 F-2 and §10 |
-| `:121-131` | `:339-349` | The same field set plus the "Never records" opening | A-9 F-23 and §10 |
-| `:144-150` | `:362-368` | AD-048's canonical-JSONL storage and read-append-rewrite sentence | A-8 F-16; A-9 F-5 and §10 |
-| `:170-178` | `:388-396` | AD-048's external anchoring, all three parts | A-5 F-1 and §10; A-8 F-18 and re-run |
-| `:329` | `:547` | The AD-050 heading | A-6 F-18 |
-| `:336-339` | `:554-557` | AD-050's lineage / cycle / attempt sentence | A-6 F-19 |
-| `:383-403` | `:601-621` | AD-050 part 3's four grounds and its stated cost | A-8 F-24 |
-| `:457-461` | `:675-679` | AD-050's evidence preconditions, incl. "verified intact **and anchored**" | A-5 F-16; A-9 F-11 and §10 |
+| `:110-115` | `:344-349` | AD-048's consumer-less-abstraction condition ("This AD is void if…") — **unchanged** | A-9 F-22 |
+| `:121-128` | `:355-362` | AD-048's closed field set, `project_id` … predecessor SHA-256 — **unchanged** | A-5 F-2 and §10 |
+| `:121-131` | `:355-365` | The same field set plus the "Never records" opening — **unchanged** | A-9 F-23 and §10 |
+| `:144-150` | `:378-386` | AD-048's canonical-JSONL storage bullet. The cited read-append-rewrite sentence, incl. "written atomically (temp + replace)", is **unchanged and present at `:378-383`**; `:383-385` is one appended sentence disambiguating "atomically" per A9-C6, and the inherited Windows-CRLF sentence follows at `:385-386` | A-8 F-16; A-9 F-5 and §10 |
+| `:170-178` | `:406-418` | AD-048's external anchoring, **all three parts retained**, each now labelled with its role per A5-C1. Every fragment the citing rulings quote — "cites the chain head hash and sequence number", "commit is performed by a human, outside any gate sequence" — remains present verbatim in place; the anchor as a whole is amended (labels and an intro added) but no quoted fragment is altered or deleted | A-5 F-1 and §10; A-8 F-18 and re-run |
+| `:329` | `:1222` | The AD-050 heading — **unchanged** | A-6 F-18 |
+| `:336-339` | `:1229-1232` | AD-050's lineage / cycle / attempt sentence — **retained byte-identical**, and expressly *not* read as a `lineage_id` claim by A-6 textual change 1 later in the section | A-6 F-19 |
+| `:383-403` | `:1433-1458` | AD-050 part 3's four grounds and its stated cost — **unchanged** | A-8 F-24 |
+| `:457-461` | `:1507-1514` | AD-050's evidence preconditions, incl. "verified intact **and anchored**" — **retained byte-identical**, with A5-C9's decomposition added as a following block, not as an edit to the cited sentence | A-5 F-16; A-9 F-11 and §10 |
 
 **Nothing in those rulings is reopened, re-read, or amended by this
 table.** Each finding continues to rest on the text it quoted verbatim
 in its own body; the quoted text is what makes the finding checkable,
-and every quotation still matches this file byte-for-byte. The line
-number is a locator, not the evidence. This note exists so a later
-reader following a locator lands where the ruling meant, without any
-accepted record being touched — which is the least invasive resolution
-available, and the only one consistent with retaining accepted rulings
-unedited.
+and **the cited meaning of every quotation is preserved and each quoted
+fragment remains recoverable in this file**. In the rows whose anchor is
+unamended the quoted text is unchanged; in the two rows whose surrounding
+anchor was amended the amendments add labels and following sentences and
+delete no quoted fragment, so each cited fragment is still present
+verbatim even though the anchor range as a whole is no longer identical
+to the range the ruling cited. The line number is a locator, not the
+evidence. This note exists so a later reader
+following a locator lands where the ruling meant, without any accepted
+record being touched — which is the least invasive resolution available,
+and the only one consistent with retaining accepted rulings unedited.
+
+**Where an amendment was made inside a cited anchor, it was made because
+a ruling required it**, not for convenience: A5-C1 requires that no
+wording read as though the chain or the commit anchors itself, and A9-C6
+requires "written atomically" to be disambiguated. Both requirements
+land inside ranges the rulings cite, and the least invasive way to
+satisfy them is to retain the cited text and qualify it in place.
 
 **A standing consequence for later revisions of this file.** Any future
-edit above AD-048 moves these locators again. The obligation that
-follows is to update **this table**, never the rulings.
+edit **above or inside** a cited anchor moves these locators again. The
+obligation that follows is to update **this table**, never the rulings.
 
 **Adoption condition.** All four are Phase A items per
 `docs/PHASE_4_STEP9_ARCHITECTURE_RESOLUTION.md` §4.1. No Step 9 code may
@@ -364,7 +380,9 @@ phase-transition records.
   are already tested. `write_canonical_jsonl` rewrites the whole file
   via `path.write_bytes`, so appends are read-append-rewrite with the
   prior prefix verified byte-identical, written atomically (temp +
-  replace). The known Windows CRLF fragility in this module is inherited
+  replace). **"Atomically" is disambiguated at A9-C6: temp-plus-replace
+  makes the *replacement* atomic and leaves the *read-modify-write* not
+  atomic.** The known Windows CRLF fragility in this module is inherited
   and must be covered by an explicit fixture, never assumed away.
 
 **Transcription, not certification.** `PLATFORM_ARCHITECTURE_V1.md`
@@ -386,14 +404,18 @@ its own length**, and the operator who would author retroactively is the
 same actor who can truncate.
 
 Anchoring is therefore external, and deliberately **not** by
-auto-committing:
+auto-committing. The three parts below have three different roles, and
+**only the second of them is the anchor** (A5-C1):
 
-- every record carries a monotonic `sequence_number`;
-- the hand-authored `decision_log.md` entry — written anyway under
-  AD-038 — **cites the chain head hash and sequence number** at time of
-  writing, giving a human-witnessed anchor at zero new machinery;
-- the anchoring **commit is performed by a human, outside any gate
-  sequence**, under the existing archive discipline.
+- **Ordering, not anchoring.** every record carries a monotonic
+  `sequence_number`;
+- **The anchor.** the hand-authored `decision_log.md` entry — written
+  anyway under AD-038 — **cites the chain head hash and sequence
+  number** at time of writing, giving a human-witnessed anchor at zero
+  new machinery;
+- **Retention, not anchoring.** the anchoring **commit is performed by a
+  human, outside any gate sequence**, under the existing archive
+  discipline.
 
 **Why the recorder must not commit.** Two verified reasons. First, the
 Governance domain's read-only posture is explicit and load-bearing:
@@ -415,6 +437,613 @@ links record *N* to *N−1*. The chain here is **novel work** and is
 justified on its own merits. Overclaim-by-borrowed-authority is the
 failure that returned PR0.
 
+---
+
+**Requirements transcribed from the Phase A ruling records — prefixed,
+never merged.** Three accepted ruling records place requirements on this
+AD, and all three number their consequence lists from `C-1`.
+[`PHASE_4_A9_SINGLE_WRITER_RULING_2026-07-22.md`](PHASE_4_A9_SINGLE_WRITER_RULING_2026-07-22.md)
+§9 discloses that collision as its F-25 and directs that A-2 "carry all
+three sets under distinguishing prefixes", applying the same treatment
+retroactively to A-5's and A-8's lists. That direction is followed here.
+The three sets are **disjoint in content and colliding in label only**.
+Each item below carries its prefix, its source ruling, and the ruling
+section it is drawn from; **no item is merged with another, and no item
+is restated inside a second block.**
+
+| Prefix | Source ruling record | Consequence list | Items |
+|---|---|---|---|
+| **A5-C#** | [A-5 — chain anchoring](PHASE_4_A5_CHAIN_ANCHORING_RULING_2026-07-22.md) | §7 | C-1 … C-13 |
+| **A8-C#** | [A-8 — machine-artifact location](PHASE_4_A8_MACHINE_ARTIFACT_LOCATION_RULING_2026-07-22.md) | §6 | C-1 … C-11 |
+| **A9-C#** | [A-9 — single writer](PHASE_4_A9_SINGLE_WRITER_RULING_2026-07-22.md) | §9 | A9-C1 … A9-C10 |
+
+Two items from those lists are **not** carried here, because their own
+rulings place them elsewhere: A-5 §7's closing paragraph places its C-9
+decomposition of *"verified intact and anchored"* on **AD-050**, where it
+is recorded as **A5-C9 (AD-050 limb)**; and A-8 §6's closing paragraph
+places its R-5 (`GateRunRecord` location) on **AD-049**. Neither is
+restated in this AD, and neither is discharged by it.
+
+**None of the three rulings adds a field to the record.** A-5 §7 (F-2),
+A-8 §6, and A-9 §9 (F-23) each state this in terms. The closed field set
+above stands exactly as written, and the key-set test that pins it is
+unchanged.
+
+#### A-5 — chain anchoring (A5-C1 … A5-C13)
+
+**A5-C1 — the anchor is the external human citation, and nothing inside
+the chain is** *(A-5 R-1, §4.1)*. `sequence_number`, the predecessor
+hash, and the commit are respectively ordering, interior integrity, and
+retention. **None of the three is the anchor.**
+
+| Part | Role | The anchor? |
+|---|---|---|
+| `sequence_number` | Ordering and interior completeness; the short value an anchor names | **No** |
+| predecessor hash | Interior integrity: binds record *N* to *N−1* | **No** |
+| the citation `(chain, sequence_number, head hash)` in the cycle's `decision_log.md` | External witness, authored by a human in a different artifact under a different discipline | **Yes** |
+| the human-performed commit | Retention and co-visibility: divergence becomes a diff on tracked files | **No** |
+
+No wording in this AD may read as though the chain or the commit anchors
+itself. The commit is explicitly demoted on stated grounds: this
+repository's git history has already failed to be durable — the PR0
+remediation record was destroyed and exists in no reachable ref — so a
+mechanism whose durability assumption the repository's own history has
+falsified cannot be what the provenance claim rests on. The commit
+remains **required** by A8-C8, as retention, not as anchor.
+
+**A5-C2 — anchor content and hash domain** *(A-5 R-2, §4.2)*. An anchor
+citation consists of exactly three elements: the **chain identity** (the
+repository-relative path `research_archive/<cycle_name>/transition_records.jsonl`,
+written in full so a reader holding only the citation can find the file);
+the **sequence number** of the record being witnessed; and the **head
+hash**, rendered `sha256:<64 lowercase hex>` per the repository's single
+existing hash-citation convention and computed over **the UTF-8 bytes of
+that record's canonical JSON serialization — the exact line
+`write_canonical_jsonl` emits for it, excluding the terminating LF**. The
+head hash is therefore **byte-identical to the predecessor-hash field
+stored in record *N+1***, so verifying an old citation compares it
+against a value the file already carries; only the current head requires
+hashing a line.
+
+**A5-C3 — rejected hash domains, recorded as closed** *(A-5 R-2, §4.2)*.
+A **whole-file hash** is rejected on the decisive ground that a cited
+value must remain checkable after further appends: a file hash cited at
+sequence 3 is invalidated by the write of sequence 4, immediately and
+permanently. A **Merkle root or hash-of-hashes** is rejected (no
+consumer; the length problem is unchanged). A **separate running
+"chain hash" field** distinct from the predecessor hash is rejected as a
+second representation of one fact — the defect Resolution §2.1 rejected
+`Project.current_phase` for. Any digest other than SHA-256 is rejected;
+the repository has exactly one convention.
+
+**A5-C4 — numbering origin, per-cycle scope, contiguity** *(A-5 R-3.1 –
+R-3.3, §4.3)*. Origin is **1**: the first transition record of a cycle
+carries `sequence_number = 1`, so **the head's sequence number is
+identical to the record count** and a cited `N` is directly a claim that
+the chain contained `N` records. Numbering is **per-file and restarts per
+cycle**; sequence numbers are not global and do not order transitions
+across cycles, which is why A5-C2's chain-identity element is mandatory
+rather than inferred. Sequence numbers are **contiguous ascending
+integers `1 … N`, with no gaps and no duplicates**; a gap or a duplicate
+is a **chain-invalid** condition — verification refuses, and it is not
+repaired, not renumbered, and not reported as a warning.
+
+**A5-C5 — the genesis record** *(A-5 R-3.4, §4.3)*. The genesis record's
+predecessor-hash **key is present with the JSON value `null`**. Never an
+omitted key (the serialized key set is closed and pinned by test, so
+omission changes the key set and fails that test), never an empty string,
+and never a sentinel such as `"sha256:0000…"` or the SHA-256 of the empty
+string — each of which is a value that could be computed and therefore
+forged into an interior position, whereas `null` at any sequence other
+than 1 is a structural error a verifier detects trivially. **A `null`
+predecessor at any sequence other than 1 is a structural error.**
+
+**A5-C6 — a zero-byte chain file is a valid empty chain** *(A-5 R-3.5,
+§4.3)*. `read_canonical_jsonl` returns `[]` for a zero-byte file without
+error, and that behaviour is adopted rather than guarded against. The
+consequence is recorded because it is the sharpest statement of why the
+external anchor is not optional: **a chain emptied to zero bytes is
+indistinguishable, from the file alone, from a cycle that has never
+transitioned.** Only the external witness distinguishes them.
+
+**A5-C7 — the citation grammar, and the slot that carries it** *(A-5
+R-4.1 – R-4.2, §4.4)*. The grammar is defined normatively here, in
+exactly one place, as a **single self-locating line** in this fixed
+order:
+
+```
+**Machine chain anchor.** `research_archive/<cycle_name>/transition_records.jsonl` — seq `<N>`, head `sha256:<64 lowercase hex>`
+```
+
+Ruled properties: **one line, found by its bold label alone**, without
+the surrounding entry conforming to any particular shape — both decision
+logs that exist already diverge from the template's entry shape, so a
+carrier defined by position within an entry would be unsatisfiable by two
+of two real files. **No version token**, because a version token implies
+a parser with a version switch and no parser exists or is authorized
+(A5-C9); a change to this grammar is a new AD, and existing citations are
+never rewritten. **`Not applicable` is an explicit, valid value**, per
+the template's own field discipline, and is the correct value for every
+entry that records no phase transition and for every cycle that has no
+chain.
+
+The slot is **`docs/templates/decision_log_template.md`**, which gains
+one new **required** entry field, `**Machine chain anchor.**`, placed
+**after `**Evidence references.**` and before `**Governance status.**`** —
+it is a citation, of the same class as evidence references, and must not
+be confused with a judgment field. That amendment is a
+documentation-only change **bound to the same increment that accepts this
+AD**, so that the format and its carrier land together and both land
+before Phase C can produce anything to cite. **A format with no slot is
+the defect A-5 was raised to close; a slot with no format is
+unverifiable.**
+
+**A5-C8 — ordering, cardinality, and the one-to-one rule** *(A-5 R-4.3,
+§4.4)*. **One citation per entry, in every entry**; entries recording no
+transition carry `Not applicable`, so a reader can always distinguish *no
+anchor because no transition* from *anchor omitted*. **A transition entry
+cites its own record** — `N` is the `sequence_number` of the record that
+the transition described by that entry produced, not the chain head at
+some later time and not the predecessor — which yields a **one-to-one
+correspondence between transition entries and cited sequence numbers**.
+**Ordering is fixed:** human authorization → the mechanical append → the
+human authors the entry citing the resulting record → the human commits
+both files together under existing archive discipline. **A citation can
+never name the commit that contains it** — that hash does not exist when
+the line is written — and this AD does not require it to; the anchoring
+commit is identified after the fact by git, from the tracked file's
+history. **Nothing is retrofitted:** existing entries in
+`reference_h3/decision_log.md` and
+`positive_control_phase3/decision_log.md` are never edited, and the three
+legacy archives, which never receive a chain, never receive a citation.
+
+**A5-C9 — the verification procedure splits, and the split is between
+machine and human** *(A-5 R-5, §4.5)*. **Internal verification is
+mechanical**: recompute each record's canonical serialization and its
+hash; check that record *N*'s stored predecessor hash equals record
+*N−1*'s computed hash; check contiguity from 1 with no gaps or
+duplicates (A5-C4); check that a `null` predecessor appears at sequence 1
+and nowhere else (A5-C5). This detects mutation, reorder, insertion,
+interior deletion and a forged predecessor — and it detects **nothing**
+about the tail. **Anchored verification takes the anchor as an
+argument**: the verifier accepts an expected `(sequence_number,
+head_hash)` pair **supplied by the caller**, a human reading the citation
+from `decision_log.md`, and confirms that the chain retains a record at
+that sequence number whose hash is that value. This is how Phase C's
+*"tail truncation detectable via the anchor"* criterion is satisfied and
+it is the **only** way it is satisfied. **No code reads, parses, or
+writes `decision_log.md`.** The verifier never locates an anchor for
+itself; INV-10 is strengthened rather than strained, since the human
+artifact is not merely un-written-to but un-read-from, so no code path
+can develop a dependency on its formatting. Any future proposal to parse
+`decision_log.md` is a new AD. **The corresponding decomposition of
+AD-050's *"verified intact and anchored"* precondition is recorded in
+AD-050, not here.**
+
+**A5-C10 — anchor lag is inherent, disclosed, and not designed away**
+*(A-5 R-6, §4.6)*. At any moment, **every record above the last cited
+sequence number is unanchored, and during normal operation that is at
+least the newest record**, because the citation is authored after the
+append. This is not a defect to be closed and no mechanism is introduced
+to close it: closing it would require the writer to anchor its own write,
+which is A5-C1's rejected self-witnessing, or an automatic commit, which
+is rejected at A5-C13. Consequently **no text in this AD, and no artifact
+header, describes a chain as "anchored" without qualification.** The
+precise property is **anchored through sequence `N`**, where `N` is the
+last externally cited value. The window is bounded by discipline, not by
+mechanism — the human writes the entry and commits both files in the same
+act — and **nothing enforces that.**
+
+**A5-C11 — the provenance claims, at their true strength** *(A-5 §6.1)*.
+These are the **maximum** this AD asserts, and each names what it needs.
+They are read together with A9-C8, which makes all of them conditional on
+the A9-C4 assumption.
+
+> **Claim 1 — chain alone.** *The records retained in this file form an
+> unbroken chain from sequence 1 to sequence M: no retained record was
+> altered, reordered, or interior-deleted, and no record was inserted
+> between two retained records, without breaking a hash link or a
+> sequence contiguity check.* Needs the file. Proves nothing about
+> records that are not there.
+>
+> **Claim 2 — chain plus a citation.** *If the record at sequence `N`
+> hashes to the cited `H`, then this file still retains, unaltered, the
+> entire prefix of the chain that existed when that entry was authored.
+> Removal of any record at or below `N` is detectable by a human
+> comparing the citation to the file.* Needs the file and an intact
+> `decision_log.md` entry. Answers "a self-contained chain cannot prove
+> its own length" **only up to `N`**, never above.
+>
+> **Claim 2a — the entry-by-entry strengthening.** Because every
+> transition entry cites its own record (A5-C8), *the number of
+> transition entries in `decision_log.md` and the number of records in
+> the chain must agree, and each entry's cited sequence number must match
+> its position in that ordering.* A disagreement is an audit finding on
+> its face, without any judgment about which artifact is wrong.
+>
+> **Claim 3 — chain plus citation plus commit.** *The chain and its
+> witness were co-present in a committed repository state; a subsequent
+> change to either is visible as a diff on a tracked file.* Needs an
+> intact git history, which is why it is stated last and weakest.
+
+**The honest summary, carried in these terms:**
+
+> Anchoring converts silent, single-file tampering into tampering that
+> requires a coordinated and mutually consistent edit to a
+> human-authored, append-only, review-disciplined artifact. **It does not
+> prevent tampering. It makes one specific class of it visible to a human
+> who looks.**
+
+**A5-C12 — what anchoring explicitly does NOT claim** *(A-5 §6.2)*.
+
+| Not claimed | Because |
+|---|---|
+| **Automatic commit** | Nothing commits anything; the recorder never invokes git in any mode. The anchoring commit is a human act outside any run, and if the human does not perform it, no commit occurs and nothing reports that fact |
+| **Automatic immutability** | A JSONL file on disk is fully writable. No filesystem permission is set, no attribute changed, no git hook installed, no CI check added, no lock file written. "Append-only" describes the **discipline**, not a property of the medium |
+| **Immutability conferred by committing** | A commit records a state; it does not freeze a file. History can be rewritten, and in this repository history has already been destroyed once with permanent loss |
+| **Writer enforcement** | A9-C2's, and it is a stated assumption. A-5 assumes a well-formed chain and specifies what a malformed one looks like; it prevents nothing |
+| **Runtime guarantees** | No daemon, monitor, scheduled verification, CI job, or startup check. Verification runs when a human runs it; a chain can sit tampered and unexamined indefinitely |
+| **Proof of time** | Record timestamps are injected and self-asserted. There is no trusted clock and no notarization; a timestamp is a claim by the writer, not evidence |
+| **Completeness above the last cited `N`** | Structural, not incidental (A5-C10) |
+| **That the transcribed content is true** | Unchanged from this AD's transcription-not-certification ruling: Governance cannot re-derive a gate outcome, so the chain attests to bytes, never to whether a transcribed gate status is correct |
+| **That a `decision_log.md` citation is itself protected** | The witness is a text file the same actor can edit. Claim 2 is conditional on the entry being intact and says so. The protection is review discipline and visibility, not enforcement |
+| **Anything about the three legacy archives** | They have no transition records and never will. Their absence of a chain is the true state, not a gap |
+
+**A5-C13 — re-affirmed rejections, each closed rather than deferred**
+*(A-5 R-7, §4.7)*. **Automatic commit on append remains rejected**, on
+Resolution §2.2's two grounds re-verified in A-5: the Governance domain's
+read-only posture, and the fact that a mid-run commit mutates the
+working-tree state `verify_freeze` reads. Not reopened, not softened, not
+made configurable. **The git commit is not the anchor** (A5-C1). **No
+external timestamping, notary, blockchain, or third-party attestation
+service** — no such dependency exists, it would put a network call inside
+the domain that exists to be auditable, and no claim in A5-C11 requires
+it. **No filesystem-level immutability, no read-only permissions, no git
+hook, no CI check.** Each requires a new AD to reopen; none may be
+treated as an obvious extension of this one.
+
+#### A-8 — machine-artifact location (A8-C1 … A8-C11)
+
+**A8-C1 — the partition rule, and no platform-level machine artifact**
+*(A-8 R-1, §4.1)*. An artifact whose subject is a **single cycle** lives
+inside that cycle's evidence package, `research_archive/<cycle_name>/`;
+an artifact whose subject **spans cycles and outlives any one of them**
+is platform-level and lives in `docs/`. The rule is adopted from
+`RESEARCH_LINEAGE_REGISTER.md`'s own scope paragraph, not invented. Under
+it, **every governance machine artifact is per-cycle**; the platform-level
+tier is human prose and stays that way, and **Step 9 introduces no
+platform-level machine artifact.** No record of this AD is ever written
+to `docs/`.
+
+**A8-C2 — the canonical path** *(A-8 R-2, §4.2)*. The transition chain is
+**one file per cycle**, at
+
+```
+<archive_root>/<cycle_name>/transition_records.jsonl
+```
+
+where `<archive_root>` is `research_archive/` in this repository and is
+**supplied as an injected parameter, never a module-level constant** —
+the discipline `scaffold_project_archive` already follows. Never one
+global chain, never one per lineage, never one per attempt. The file sits
+at the **cycle directory root**, sibling of `decision_log.md`, not inside
+`dataset_hashes/`, `experiment_results/`, or `reviewer_reports/`, each of
+which has a defined meaning under Standard §5 that a governance chain is
+not; `reproduction_record.json` is the existing precedent for a
+fixed-name machine artifact at the cycle root. The filename is
+`transition_records.jsonl` rather than `decision_records.jsonl` or
+`decision_chain.jsonl` because a name reading as a sibling of
+`decision_log.md` invites the conflation AD-045 and this AD exist to
+guard against.
+
+**A8-C3 — the filename is undated, and a dated file per append is
+rejected** *(A-8 R-2, §4.2)*. Standard §5 requires each file to be dated
+*"in its own content **or** filename"*; every record carries an injected
+UTC timestamp, so the file is dated in its content, per record, which is
+the stronger limb. **A dated file per append is affirmatively rejected:**
+it would make every append its own genesis chain, and a chain that cannot
+reference its predecessor file proves nothing — the naming convention
+would destroy the mechanism it was meant to protect. The file is the
+machine counterpart of `decision_log.md`, the one file Standard §5
+already recognizes as literally append-only rather than
+superseded-by-new-file, and it inherits that discipline. **This is a
+reading of §5, not an amendment to it.**
+
+**A8-C4 — the recorder never creates a directory** *(A-8 R-3.1, §4.3)*.
+`write_canonical_jsonl` silently `mkdir`s its parent. Left unguarded, a
+mistyped or unregistered `cycle_name` would **manufacture an archive
+directory with no `archive_manifest.json`** — precisely the
+archive↔registry divergence class A-6 R-2 ruled on and declined to
+mechanize. **The cycle directory's existence is a precondition of the
+first record, never a consequence of it.**
+
+**A8-C5 — the write precondition** *(A-8 R-3.2, §4.3)*. A chain is
+written **only into a directory that already contains
+`archive_manifest.json`**. This single condition **excludes the three
+legacy archives by construction** — they have no manifest and will never
+be given one — with **no hardcoded name list**, and therefore without
+`core/governance/` needing anything from `tools/archive_manifest.py`. It
+is consistent with AD-050's position that the three historical projects
+have no transition records at all.
+
+**A8-C6 — identity is checked; completeness is not** *(A-8 R-3.3, §4.3)*.
+The manifest is read for exactly one purpose: confirming that
+`manifest.project_id`, the directory name, and the record's `project_id`
+are **byte-identical**. `lifecycle_version` is **deliberately not
+consulted** — interpreting it is `ArchiveVerifier`'s job, and
+`ArchiveVerifier` is on Step 9's may-not-implement list. Disclosed: this
+makes the recorder the **first component in the repository to read an
+existing manifest**, which `RESEARCH_ARCHIVE_MANIFEST.md` anticipated
+only for a future `ArchiveVerifier`. It is a three-way identity check,
+not a completeness check, and **it must not grow into one.**
+
+**A8-C7 — `RESEARCH_ARCHIVE_MANIFEST.md` is unamended and its
+`schema_version` unchanged** *(A-8 R-3.4, §4.3)*. The manifest is a
+four-field index that does not enumerate its directory's contents, so a
+new file beside it changes nothing the manifest asserts. **The chain sits
+inside the directory the manifest indexes, and outside the manifest's
+schema.**
+
+**A8-C8 — no new top-level directory, and nothing outside the
+repository** *(A-8 R-3.5, §4.3)*. No `governance_records/`, no
+`.governance/`, no untracked or out-of-repository store. The retention
+half of anchoring requires a **human-performed commit** of the artifact
+under existing archive discipline, and **an artifact that git does not
+track cannot be anchored that way at all.** A5-C1's demotion of the
+commit from anchor to retention does **not** relax this: co-visibility in
+a tracked state is still required.
+
+**A8-C9 — the identity relation** *(A-8 R-4, §4.4)*. `cycle_name` is the
+**partition key** — the one path segment between the archive root and the
+filename — and it is the same identity phase attaches to, so the file is
+one-to-one with it. `project_id` is **not a second key**: it is
+byte-identical to `cycle_name` and appears in the path exactly once, as
+that segment; **the `project_id` field nevertheless stays in the record**,
+because the field set is closed and pinned by test, removing a field is a
+new AD, and the redundancy keeps a record self-describing if it is ever
+quoted outside its file. **`lineage_id` never appears** — not in the
+path, not in the filename, not in the record — because a lineage spans
+cycles that were in different phases, and a lineage-partitioned chain
+would interleave transitions from which no cycle's current phase could be
+derived; **the lineage view is obtained by joining in the Register, never
+by partitioning the machine artifact.** **`attempt_number` never
+appears**, because an attempt does not advance the governance process.
+
+**A8-C10 — `sequence_number` is scoped to the per-cycle file** *(A-8
+R-4, §4.4)*. A cycle's sequence numbers are monotonic **within that
+cycle**; they are not global and do not order transitions across cycles.
+A-8 recorded that the numbering **origin** and the anchor's **format**
+remained A-5's to decide; they have since been decided and are carried
+here at **A5-C4** (origin 1, contiguity) and **A5-C7** (the citation
+grammar). A8-C10 is not merged into those items: it fixes the *scope* of
+the numbering, and A5-C4/A5-C7 fix its *origin* and its *citation form*.
+
+**A8-C11 — `Project.repository_path` is a second stored representation,
+and nothing binds it** *(A-8 R-4, §4.4)*. Governance may import only
+`data`, so the recorder never sees a `Project` and **cannot consult
+`repository_path`**; the path is computed from the injected archive root
+and the `cycle_name` string. Disclosed: `repository_path` stores the same
+location, it agrees with this rule for all three backfilled entries,
+**nothing enforces that agreement, and no invariant binding them is
+created** — consistent with A-6 R-2's refusal to mechanize the
+archive↔registry relation. The only place the two could ever be
+reconciled is `core/research/lifecycle.py`.
+
+#### A-9 — single-writer enforcement (A9-C1 … A9-C10)
+
+**A9-C1 — "single writer" is never printed undifferentiated** *(A-9 R-1,
+§4.1)*. The phrase conflates three separable properties, and answering
+them with one word would produce a claim stronger than its mechanism.
+Every sentence in this AD that uses it says which one it means.
+
+| Property | Question it asks | Answer | Mechanism? |
+|---|---|---|---|
+| **Authority** | Which code path may append to a transition chain? | Exactly one module, reachable through exactly one caller (A9-C3) | **Yes** — a design property, statically checkable and pinnable by test |
+| **Exclusivity in time** | Can two appends to one chain file interleave? | Assumed not to; **nothing prevents it** (A9-C4) | **No** — a runtime property, unenforced, knowingly |
+| **Ownership / accountability** | Who is answerable for a record having been written? | The single human operator who authorized that transition, never the module | **Partly** — the authorization record is stored; the identity claim in it is self-asserted |
+
+Exclusivity may not borrow the credibility of authority. A reader
+encountering an undifferentiated "single writer" will take it to mean the
+strongest of the three, which is precisely the one that is not true.
+
+**A9-C2 — the ruling is stated assumption, not mechanical lock, and the
+lock is closed rather than deferred** *(A-9 R-2, §4.2)*. Resolution §4.1
+posed A-9 as a binary; the answer is **stated assumption**. **No lock is
+introduced, in Step 9 or by this decision.** Five grounds, the fourth
+decisive:
+
+1. **No lock primitive exists to adopt.** Nothing in `core/` or `tools/`
+   imports `fcntl`, `msvcrt`, `flock`, `filelock` or `portalocker`, and
+   nothing performs an `os.replace`. A lock is new machinery, with a new
+   dependency or new platform-conditional code, in the domain that exists
+   to be audited.
+2. **A lock is a write, in the domain whose value is not writing.** An
+   advisory lock file placed at the cycle root is an undeclared item in
+   an evidence package; placed outside the repository it is untracked,
+   and an untracked artifact can neither be shown to have been held nor
+   be shown to have been absent — the appearance of discipline with none
+   of the evidence.
+3. **The contention it defends against does not occur.** The platform
+   runs with a single human operator directing all sessions, the chain is
+   per-cycle so distinct cycles do not contend at all (A8-C2), and no
+   transition happens without explicit authorization. Building it would
+   be a component whose only designed trigger does not exist — **AD-045's
+   surviving objection, applied to the very AD that had to answer it.**
+4. **A lock cannot deliver the property the chain needs.** The threat
+   model is that *the actor who would author retroactively is the same
+   actor who can truncate*. A lock acquired by that actor's own process
+   constrains that actor not at all. A lock defends against *accidental*
+   interleaving by *cooperating* writers, and the chain's adversary is
+   neither. **A mechanism that raises the apparent strength of a claim
+   without raising its actual strength is worse than no mechanism.**
+5. **A lock here would be untestable in the environment that has it.** A
+   single-operator platform cannot exercise real contention, so it would
+   ship as load-bearing-looking code covered only by simulated tests.
+
+Reopening requires a new AD arguing against those five grounds on their
+merits. **"Stated assumption" is not permitted to mean *unstated*:**
+A9-C4 fixes the words, A9-C5 fixes what happens when the assumption is
+false.
+
+**A9-C3 — the authority model binds the design, not the filesystem**
+*(A-9 R-3, §4.3)*. Exactly **one module**,
+`core/governance/decision_recorder.py`, may write a
+`transition_records.jsonl`; no other module in any domain reads-modifies
+or writes that file, and Phase C pins this by test. That module is
+reachable **only through `core/research/lifecycle.py`**, which is already
+the only module permitted to import Validation and Governance together
+and therefore the only legal binding point that exists at all — this is
+the existing import boundary doing the work, not a new restriction.
+**Every append carries one explicit human authorization** (AD-050): there
+is no writer without an authorizer, and a record with no authorization
+record is not a record this system can produce. **The human operator, not
+the module, owns the chain; the module is an instrument.** This
+constrains what this system does, **not what can happen to the file**.
+
+**A9-C4 — the assumption, in the words it must be stated in** *(A-9 R-4,
+§4.4)*. Carried substantively unchanged, and carried in the artifact
+header beside the chain's narrow tamper-evidence claim:
+
+> **Single-writer assumption.** At most one process appends to any one
+> `transition_records.jsonl` at any one time, and it does so on behalf of
+> the single human operator who authorized that transition. **Nothing
+> enforces this.** There is no lock, no advisory file, no process
+> registry, and no runtime check. A violation is not prevented. It is
+> either detected after the fact by chain verification, or — in the case
+> named in A9-C7 — it is not detected at all.
+
+Its scope is **one chain file**, not global: two cycles advancing
+concurrently do not violate it, because they touch different files
+(A8-C2). This is a real narrowing and is claimed as one. It is an
+assumption about the **system's own writers** and says nothing about a
+human editing the file by hand. It **names the operator, not a process
+identity** — no field records which process wrote a line — so it is a
+property of practice, not a checkable property of a record.
+
+**A9-C5 — enforcement is detection, not prevention, and the detection is
+A-5's** *(A-9 R-5 and R-6.1, §4.5 – §4.6)*. **A-9 introduces no new
+detection mechanism.** What serves it is A5-C4's contiguity rule, ruled
+for a different reason and covering two of the three concurrency failure
+shapes:
+
+| Concurrency failure shape | Detected by | Disposition |
+|---|---|---|
+| Two writers assign the **same** `sequence_number` and both records land | A5-C4 duplicate check | **Chain-invalid.** Verification refuses |
+| A write is lost such that a number is **skipped** | A5-C4 gap check | **Chain-invalid.** Verification refuses |
+| Two writers assign the same `sequence_number` and the **second rewrite discards the first record** | **Nothing** | **Undetectable** — A9-C7 |
+
+**The actual enforcement is that an invalid chain blocks further
+advancement**, via AD-050's precondition that the chain be verified
+intact before any append, and **it is deliberately after the fact**.
+
+**A9-C6 — "written atomically" is disambiguated** *(A-9 R-5, §4.5)*. The
+storage clause above requires the append to be *"written atomically
+(temp + replace)"*. **Temp-plus-replace makes the *replacement* atomic —
+a reader never sees a half-written file. It does not make the
+*read-modify-write* atomic, and it therefore does nothing about
+last-writer-wins.** A reader who takes "atomic" as "concurrency-safe"
+would be wrong. Phase C's docstrings and test names say *"atomic
+replacement"*, never *"atomic append"* and never *"concurrency-safe"*.
+
+**A9-C7 — the one failure that is invisible, stated as a non-claim**
+*(A-9 §6.3)*. Carried in substantially these terms and not softened:
+
+> If two authorized appends to the same chain interleave such that the
+> second rewrite is computed from a prefix that does not include the
+> first, the first record is lost and the resulting file is contiguous,
+> correctly chained, and internally valid. **No mechanical check in this
+> design detects that.** The anchor cannot cover it either, because the
+> lost record is by definition the newest and the newest record is always
+> unanchored (A5-C10). The only thing standing between this design and
+> that outcome is the A9-C4 assumption, and the assumption is not
+> enforced.
+
+This is a **non-claim, not a risk with a mitigation.** A risk invites a
+mitigation and a residual-risk rating; a non-claim states that the system
+does not know, which is the true position. **No mitigation is built, and
+this AD may not convert it into a risk.**
+
+**A9-C8 — the whole of A5-C11 is conditional on the A9-C4 assumption**
+*(A-9 R-7.5, §8)*. A-5 §9 pre-committed that if A-9 ruled "stated
+assumption", A-5 §6.1's claims become conditional on that assumption **and
+this AD must say so in those words**. A-9 rules stated assumption, so the
+branch fires. **Claim 1, Claim 2, Claim 2a, Claim 3, and the honest
+summary — all of A5-C11, none omitted — are conditional on the
+single-writer assumption stated at A9-C4.** A-5's trigger names *"§6.1's
+claims"* without qualification and is discharged without qualification:
+**the condition may not be carried on a subset**, because an A5-C11 claim
+printed unconditionally beside conditional ones will be read as the one
+that survived the assumption.
+
+One correction A-9 owes A-5 and states rather than elides: A-5 §9's row
+describing a lost interleaved write as appearing "as a gap" holds **only
+where the two writers assigned different sequence numbers.** In the
+last-writer-wins shape both assign the same number and the survivor
+leaves **no gap at all** (A9-C7). This corrects the *coverage
+description* of a detection mechanism — not the mechanism, not A5-C4, and
+not any A5-C11 claim.
+
+**A9-C9 — what writer discipline explicitly does NOT claim** *(A-9 §7.2)*.
+
+| Not claimed | Because |
+|---|---|
+| **OS-level locking** | No `fcntl`, `msvcrt`, `flock`, `filelock` or `portalocker` appears anywhere in `core/` or `tools/`, and A9-C2 introduces none. No advisory lock, mandatory lock, lock file, PID file, or sentinel |
+| **Database locking** | There is no database on this path. Project storage is a plain in-memory dict; the chain is a flat file rewritten by `path.write_bytes`. No transaction, no row lock, no isolation level |
+| **Runtime prevention** | No mutex, semaphore, queue, single-instance guard, process registry, daemon, or supervisor. Nothing runs between operator sessions to prevent anything |
+| **Automatic enforcement** | Nothing checks the assumption at write time. `advance_phase()` verifies the chain is *intact* before appending; it cannot verify that no one else is appending *concurrently*, and it does not try |
+| **Atomicity of the read-modify-write** | A9-C6. The lost-update window is unaffected by temp-plus-replace |
+| **Detection of a lost update** | Structural, not incidental (A9-C7). The surviving file is valid on every check the design has |
+| **Any claim about who wrote a record** | No writer-identity field exists and none is added. **The chain attests that bytes were not altered since they were written; it never attests who wrote them.** A record's `project_id`, timestamp and authorization record are claims made by whatever produced the line |
+| **That the declared authorizer is who they claim** | Standard §4 stores the declared reviewer level verbatim and does not validate the independence claim. Authorization is recorded, never adjudicated |
+| **Protection against a hand edit** | A JSONL file on disk is writable by any process with filesystem access. A9-C3 binds this system's design, not the operating system |
+| **That an invalid chain can be made valid** | It cannot, and no tool is provided that would try (A9-C10) |
+| **Anything about the three legacy archives** | They have no transition records and never will; they have no writer to be single |
+
+**A9-C10 — conflict handling** *(A-9 R-6, §4.6)*. Governing principle:
+**an invalid chain is evidence of a governance event, and evidence is not
+repaired — it is disclosed.** Editing a chain to make verification pass
+destroys the only record that the violation occurred, by the same act
+that would conceal it. Therefore:
+
+1. **Duplicates and gaps are chain-invalid and verification refuses**
+   (A5-C4, adopted unchanged and not softened).
+2. **Not repaired.** No renumbering, no deduplication, no
+   "keep the one with the correct predecessor hash", no
+   truncate-to-last-valid, no `--force`. None is built, and building one
+   later is a new AD.
+3. **The invalid chain is retained exactly as it is** — not deleted, not
+   truncated, not moved aside. It is the artifact of record.
+4. **The response is a governance act:** a dated disclosure under
+   Standard §5's correction-is-a-new-file discipline, plus a
+   `decision_log.md` entry recording that the chain went invalid, when it
+   was noticed, and what is consequently unknown — stating what cannot be
+   reconstructed as unreconstructable rather than supplying a
+   reconstruction.
+5. **The cycle stops advancing**, via AD-050's intact-chain precondition.
+6. **The derived phase becomes unknown, and unknown is correct.** Phase
+   is derived, not stored, and the failure direction under-claims by
+   design; a cycle whose chain is invalid has no provable current phase.
+7. **An unauthorized writer is not reached by A9-C3 at all.** A hand
+   edit, an ad-hoc script, or any process with filesystem access is
+   caught only by what catches tampering generally — and a **well-formed
+   record appended by hand is caught by none of it.**
+8. **Ambiguity is never tiebroken.** A citation naming a duplicated
+   sequence number is ambiguous and verification refuses rather than
+   picking a record. **No tiebreak by timestamp** (that trusts exactly
+   the field a compromised writer controls); **no tiebreak by "the one
+   whose hash matches the citation"** (circular — it makes the citation
+   define which record is real, when its entire evidentiary value is
+   being an independent witness of a record that already was); **no
+   tiebreak by file order, longest valid prefix, or plausibility** (each
+   invents a fact). Resolution is a human governance act whose
+   permissible outcomes include *"the true state cannot be
+   reconstructed"*. **An ambiguous anchor does not invalidate the
+   citation:** the `decision_log.md` entry stands as written and is never
+   edited; what is recorded is that the chain can no longer be matched
+   against it.
+
+---
+
 **Migration Plan §10 item 4 is NOT satisfied by this AD.** Item 4
 requires transitions logged "not hand-authored into a `decision_log.md`
 after the fact." This AD **rejects that clause on governance grounds**,
@@ -426,7 +1055,13 @@ is the violation the Migration Plan §10 itself names.
 
 **Migration/status.** `docs/templates/decision_log_template.md` and the
 per-project `decision_log.md` files remain the canonical decision-log
-mechanism, unchanged. `PLATFORM_ARCHITECTURE_V1.md` §4.4's
+mechanism. **One amendment to the template is required by A5-C7 and is
+the only change to it:** it gains one required entry field,
+`**Machine chain anchor.**`, carrying the citation grammar defined at
+A5-C7, in the increment that accepts this AD. The template is otherwise
+unchanged, no `decision_log.md` is edited or retrofitted (A5-C8), and no
+code writes or reads either file (INV-10, A5-C9).
+`PLATFORM_ARCHITECTURE_V1.md` §4.4's
 `DecisionLogger` Protocol and the Migration Plan's references to it are
 left as-written, per the convention that ADs record divergence rather
 than editing those two documents (AD-036, AD-040, AD-044, AD-045).
@@ -542,6 +1177,46 @@ what calling the function directly returns. `PLATFORM_ARCHITECTURE_V1.md`
 §5's prose and §4.2's sketches are left as-written, per the recording
 convention.
 
+**Requirement transcribed from the A-8 ruling record — A-8 R-5, carried
+here rather than on AD-048.**
+[`PHASE_4_A8_MACHINE_ARTIFACT_LOCATION_RULING_2026-07-22.md`](PHASE_4_A8_MACHINE_ARTIFACT_LOCATION_RULING_2026-07-22.md)
+§4.5 (R-5) and its §6 closing paragraph place one consequence on
+**AD-049**, not AD-048, because `GateRunRecord` is this AD's object. It is
+transcribed here verbatim in effect, under the same
+prefix-and-source convention the other transcriptions use, as **A8-R5**:
+
+**A8-R5 — a persisted `GateRunRecord` takes the same per-cycle partition
+as every other archive artifact** *(A-8 R-5, §4.5)*. *If* a
+`GateRunRecord` is persisted to disk at all, its location is per-cycle,
+at `research_archive/<cycle_name>/experiment_results/`, with a **dated
+filename**. Standard §5 already assigns `experiment_results/` this exact
+meaning — "raw, unmodified Validation output (Phase 6), append-only" — and
+a gate run record is raw Validation output, so **no new location is
+introduced**. The filename **is** dated (unlike the transition chain of
+A8-C2/A8-C3, which is undated because it is a chain): each run record is a
+discrete artifact superseded file-by-file under §5's convention, matching
+the existing dated result JSONs under `reference_h3`.
+
+This item is a **location/disclosure rule only**, and its scope is
+expressly narrow:
+
+- **Whether a `GateRunRecord` is persisted at all is a Phase D question
+  and is *not* decided here.** A8-R5 fixes only *where* such a record
+  goes *if* it is written, so that Phase D does not make a second, ad-hoc
+  location choice.
+- It asserts **no enforcement**: nothing in this AD makes the recorder,
+  the runner, or any check reject a record written elsewhere; the rule
+  records the correct location, it does not police it.
+- It asserts **no automatic creation**: the `experiment_results/`
+  directory is not created by this item, and this AD does not direct any
+  component to create it.
+- It confers **no path authority** on `GateRunner` or on Validation over
+  the archive layout; the partition it names is Standard §5's, restated,
+  not one this AD originates.
+- It adds **no invariant** to `GateRunRecord` or to the record's field
+  set — the closed field set and the INV-11 restatement above stand
+  exactly as written.
+
 ---
 
 ### AD-050: Research cycle identity, derived phase state, and human-authorized transitions
@@ -569,6 +1244,166 @@ rules on that divergence before H4 adds a fifth directory.
 **H4 must be registered** before Step 9 §10 item 1 can be met, under a
 naming convention reconciled with the existing three — none of which use
 bare H-numbering.
+
+**Requirements transcribed from the A-6 ruling record — prefixed, never
+merged.** The identity content of part 1 above is decided by
+[`PHASE_4_A6_RESEARCH_IDENTITY_RULING_2026-07-22.md`](PHASE_4_A6_RESEARCH_IDENTITY_RULING_2026-07-22.md)
+§6, whose consequence list numbers from `C-1` and therefore collides in
+label with A-5's and A-8's lists on AD-048. Under the same prefix
+convention A-9 §9 directs for those (see AD-048), A-6's items are carried
+here as **A6-C1 … A6-C8**, each naming the ruling section it is drawn
+from. **No item is merged with another.** A-6 §6 also mandates three
+textual changes to this draft; they are applied below as **A-6 textual
+change 1 – 3**, each quoting the draft sentence it governs so the change
+is deliberate rather than silent. One further item, **A5-C9 (AD-050
+limb)**, arrives from the A-5 ruling and is recorded with the evidence
+preconditions at the end of this AD rather than here.
+
+**A6-C1 — the canonical identity vocabulary is the Register's three
+fields** *(A-6 R-3, §4.3)*. `lineage_id`, `cycle_name` and
+`attempt_number` — already defined in `RESEARCH_LINEAGE_REGISTER.md`'s
+Schema — are adopted verbatim, with their existing definitions, and **no
+others are defined**. `cycle_name` is canonical with the strongest anchor
+of the three: it originates in Standard §5, which outranks the Register
+and predates it. This AD's terms map exactly onto them:
+
+| Term used in this AD | Canonical field | Governing definition |
+|---|---|---|
+| "lineage" | `lineage_id` | The Register's: a **mechanism / target-function space** under a Phase 3 attempt cap, *"chosen to identify the mechanism being corrected, not the cycle or document that first defined it"* |
+| "cycle" | `cycle_name` | Standard §5's: the research cycle whose evidence package is `research_archive/<cycle_name>/` |
+| "attempt" | `attempt_number` | The Register's: an ordered attempt within a `lineage_id`, carrying `counted_against_cap` |
+
+Two precisions attach. **`ProjectId` / `project_id` is a type and a key,
+not a fourth identity concept:** where a cycle is registered, both carry
+a string **byte-identical to its `cycle_name`**, the same identity in a
+typed and a serialized position. **Attempt numbering outside a registered
+lineage is cycle-local and caps nothing across cycles:** only attempts
+recorded under a `lineage_id`, with `counted_against_cap`, consume a
+cross-cycle cap, so `reference_h3`'s "attempt 1 of a maximum three" is a
+real governance artifact but is not a Register entry and must not be
+cited as though a lineage cap governed it.
+
+**A6-C2 — no second identity vocabulary is created** *(A-6 R-3, §4.3)*.
+This AD introduces **no** new identity field, type, enum, dataclass,
+registry, or synonym for `lineage_id`, `cycle_name`, or
+`attempt_number`. `Project` is unmodified and `ProjectRegistry`'s three
+methods are unmodified. `LifecyclePhase` (part 2) is **phase**
+vocabulary transcribed from Standard §2 and is orthogonal to identity —
+it names *where a cycle is*, never *which cycle it is* — and nothing
+here extends or constrains it beyond that boundary.
+
+**A6-C3 — phase attaches to the `cycle_name`** *(A-6 R-3, §4.3;
+Resolution D-15)*. D-15 — *phase belongs to the cycle* — is affirmed
+unchanged and stated in canonical terms: phase attaches to a
+`cycle_name`, **not** to a `lineage_id` (which spans cycles that were in
+different phases) and **not** to an `attempt_number` (which does not
+advance the governance process on its own).
+
+**A6-C4 — H4's identifier is `reference_h4`** *(A-6 R-1, §4.1)*. The
+form is `reference_<hypothesis-label>`, lowercase, satisfying
+`^[a-z][a-z0-9_]*$`, following the most recent precedent `reference_h3`
+and dropping the profile-version segment, which was already dropped and
+did not return. **One string, four places:** the same literal
+`reference_h4` is the `research_archive/` directory name, the
+`cycle_name`, the `ProjectId` string, and `archive_manifest.json`'s
+`project_id` field — **byte-identical**, never four independently-chosen
+names. **Bare `h4` is rejected**: it matches none of the three existing
+directory names and would be the sole exception to a format rule whose
+own docstring records that no exception exists for any project. The
+`"project_id": "h4"` in `RESEARCH_ARCHIVE_MANIFEST.md`'s schema example
+is an illustrative field value inside a schema example, **not a naming
+decision**, and that document is not edited; the divergence is disclosed
+rather than corrected in place.
+
+**A6-C5 — the identifier fixes the string, not the hypothesis** *(A-6
+R-1 limitation, §4.1)*. The H-number tracks the **hypothesis label**, not
+the ordinal — `reference_v2_h1` was the second cycle and carries `h1`.
+Roadmap H4 is a specific hypothesis, volume / flow acceleration, which
+was **rejected at H3's selection review on data-reliability grounds** and
+has never had a Phase 1 artifact or a Phase 2 approval of its own.
+Therefore: registering `reference_h4` **asserts nothing** about
+hypothesis content, data adequacy, or Phase 2 selection; and
+**`reference_h4` is not a generic label for "the fourth cycle"** — if the
+next cycle's Phase 2 selects a different candidate, that cycle takes
+`reference_h<n>` for *its own* hypothesis label and `reference_h4` is not
+reused. **The identifier follows the hypothesis; it never follows the
+ordinal.**
+
+**A6-C6 — `positive_control_phase3` is an open cycle, recorded as a
+`cycle_name`, unregistered, and deferred** *(A-6 R-2, §4.2)*. The three
+registers genuinely disagree, and each is answered in its own terms:
+
+| Register | Status of `positive_control_phase3` |
+|---|---|
+| `research_archive/` | **An open cycle's live evidence package — not a historical archive directory.** Its manifest declares `lifecycle_version: "v1"`, and that document defines "legacy" as exactly the three predating directories; its own README states it is not a Methodology Freeze, and the cycle has not reached Phase 4 |
+| `RESEARCH_LINEAGE_REGISTER.md` | **A recorded `cycle_name`** — of both recorded attempts under the `active` lineage `gate2_score_acf_target_fn`. It is recorded *as a `cycle_name`*; it is **not** a `lineage_id` and must never be cited as one |
+| `ProjectRegistry` | **Unregistered, and a future migration target — explicitly deferred** |
+
+Registration is **deferred rather than performed**, on three grounds in
+order of decisiveness: Phase A forbids it (documents only, zero code);
+**no registration path for an open cycle exists**, since
+`backfill_historical_projects()` is the only path, is deliberately
+non-idempotent, and is scoped by its own docstring to closed historical
+cycles; and — stated rather than borrowed — **it is not blocked on
+representability**, because `Project` can already represent an open cycle
+(`lifecycle_state=ACTIVE` with `research_outcome=None`) and `origin_date`
+would be taken from `archive_manifest.json`'s `created_at`, an
+already-recorded evidence date. The deferral rests on the first two
+grounds, which are sufficient, and not on a claimed impossibility that
+does not exist.
+
+**A6-C7 — no archive↔registry invariant is created** *(A-6 R-2, §4.2)*.
+What is absent is an **invariant binding the two**. No such invariant
+exists, nothing detects the divergence, and **Step 9 creates none** —
+creating one is a mechanism, and mechanisms are not Phase A work.
+**`ProjectRegistry`'s contents mean *the set of projects that have been
+registered*, and make no claim about the contents of
+`research_archive/`.** A reader must not infer archive completeness from
+the registry, or registry completeness from the archive.
+
+**A6-C8 — the stale `historical_backfill.py` docstring is disclosed, not
+fixed** *(A-6 R-2, §4.2)*. That module's *"the complete set; no fourth
+candidate exists in `research_archive/`"* was **true when written and is
+stale now**: the module landed 2026-07-19 and
+`research_archive/positive_control_phase3/` landed 2026-07-20, one day
+later. Correcting it is a code edit and belongs to the increment that
+adds a registration path for a non-historical cycle; the correction is a
+docstring edit accompanied by an AD or a dated note, **never a silent
+rewrite**, because the record should say when the sentence stopped being
+true.
+
+**A-6 textual change 1 — the "one research lineage" sentence is not a
+`lineage_id` claim** *(A-6 §6 item 1, R-3 precision 1)*. Part 1 above
+states that `reference_v1` and `reference_v2_h1` are *"two `Project`s
+that are successive **cycles of one research lineage**"*. That sentence
+is retained as the observation it is, and is **not** written as a
+`lineage_id` claim: **no `lineage_id` exists for that succession, and
+none may be opened for it retroactively.** The Register is append-only
+and is written to only when a Phase 3 attempt cap opens, so back-filling
+one now would record a retroactive fact of exactly the class
+`project.py:32-41` already refuses for `origin_date`. **The succession is
+expressed as two `cycle_name`s related by the narrative already in the
+closeout documents** — never as a shared `lineage_id`, and never with a
+second, wider sense of the word "lineage" defined alongside the
+Register's.
+
+**A-6 textual change 2 — "H4 must be registered" stands, and its
+identifier is now fixed** *(A-6 §6 item 2)*. The sentence *"**H4 must be
+registered** before Step 9 §10 item 1 can be met"* stands as a statement
+of Step 9's dependency. The identifier it must be registered under is
+**`reference_h4`** (A6-C4), which discharges "under a naming convention
+reconciled with the existing three". **The registration itself remains
+Phase B work and is not authorized by this AD.**
+
+**A-6 textual change 3 — "rules on that divergence" means disclosed and
+bounded, not eliminated** *(A-6 §6 item 3)*. The sentence *"This AD rules
+on that divergence before H4 adds a fifth directory"* is satisfied by
+**A6-C6 and A6-C7** — a ruling that the divergence is **disclosed,
+bounded, and unmechanized**, **not** that it is eliminated. The archive
+holds four cycles, the registry holds three, the fourth is a live cycle
+whose registration is deferred on stated grounds, and Step 9 may proceed
+on that basis without either silently reconciling the two or treating the
+divergence as an unknown.
 
 **2. `LifecyclePhase` lives in `core/shared/`.** The eight phases of
 `RESEARCH_GOVERNANCE_STANDARD.md` §2 (Hypothesis, Research Proposal,
@@ -677,6 +1512,38 @@ non-empty covered-path set and the full list recorded (AD-047);
 an audit finding; and the decision chain verified intact and anchored
 **before** the append, so a transition is never written onto a broken
 chain.
+
+**A5-C9 (AD-050 limb) — "verified intact and anchored" decomposes into a
+machine half and a human half** *(A-5 R-5 and §7 C-9)*. The A-5 ruling
+places exactly one requirement on this AD rather than on AD-048, and it
+is this: the precondition immediately above is **two conditions, not
+one**, and the word "anchored" must not be read as something the machine
+did.
+
+- ***Verified intact* is mechanical and automatic.** Recompute each
+  record's canonical serialization and hash; check that record *N*'s
+  stored predecessor hash equals record *N−1*'s computed hash; check
+  `sequence_number` contiguity from 1 with no gaps or duplicates; check
+  that a `null` predecessor appears at sequence 1 and nowhere else. This
+  detects mutation, reorder, insertion, interior deletion and a forged
+  predecessor — and **nothing about the tail**.
+- ***Anchored* is a human act.** The verifier takes the expected
+  `(sequence_number, head_hash)` pair **as an argument supplied by the
+  operator**, read by hand from the previous transition entry's
+  `**Machine chain anchor.**` line in the cycle's `decision_log.md`. If
+  the pair is supplied, the verifier additionally confirms that the chain
+  retains a record at that sequence number whose hash is that value.
+  **No code reads, parses, or writes `decision_log.md`**, so the verifier
+  never locates an anchor for itself; INV-10 holds on the read side as
+  well as the write side.
+
+Two consequences follow and are stated rather than left to be inferred.
+**An advance whose operator supplies no expected pair has satisfied
+*verified intact* and has not satisfied *anchored***, and must not be
+recorded as though it had. And because the newest record is always
+unanchored until its entry is written (AD-048's A5-C10), the chain a
+transition is appended to is **anchored through the last cited sequence
+number**, never "anchored" unqualified.
 
 **Migration/status.** `Project`, `ProjectLifecycleState`, and
 `ProjectRegistry`'s existing three methods are unchanged.
