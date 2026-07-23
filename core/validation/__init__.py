@@ -5,18 +5,31 @@ As of Migration Plan Step 7, a minimal increment exists:
 ``DecisionMetadata``) and two concrete gate functions,
 ``core.validation.gates.signal_independence`` and
 ``core.validation.gates.economic_rationale`` -- see
-docs/ARCHITECTURE_DECISIONS.md AD-040 through AD-044.
+docs/ARCHITECTURE_DECISIONS.md AD-040 through AD-044. Both gate
+functions keep their explicit-parameter contract unchanged; they are not
+modified by anything below.
 
-Still reserved, not built: the ``Gate`` protocol, ``GateRunner``,
-``ValidationRegistry``, and ``GateContext`` per
-docs/PLATFORM_ARCHITECTURE_V1.md Section 4.2 -- gates today are called
-directly as functions with explicit typed parameters (AD-044), not
-registered with or dispatched by anything. No ``LifecyclePhase`` enum
-or workflow-state concept exists either. Every gate review performed
-before this increment (signal independence, economic rationale, and
-others) was run by a hand-written ``experiments/validate_*.py`` script,
-which remains unmodified and authoritative for its own historical
-result -- this increment is not backfilled onto that history (AD-044).
+As of Phase 4 / Step 9 increment D (docs/ARCHITECTURE_DECISIONS.md
+AD-049, AD-051, AD-052), the previously-reserved dispatch apparatus is
+built: ``core.validation.gate.Gate`` (protocol), ``core.validation.
+gate_context.GateContext``/``FrozenCriterion``, ``core.validation.
+gate_runner.GateRunner``, ``core.validation.gate_run_record.
+GateRunRecord``/``GateExecutionOutcome``, ``core.validation.
+validation_registry.ValidationRegistry``, and one thin adapter per
+existing gate function (``core.validation.gates.
+economic_rationale_adapter``, ``core.validation.gates.
+signal_independence_adapter``). ``GateRunRecord`` is an **in-memory
+validation artifact only** (R1 ruling, 2026-07-24) -- this domain never
+writes it to disk, never imports ``core.governance.decision_recorder``,
+and never aggregates gate outcomes into a cycle-level verdict (AD-049
+part 3); persistence and aggregation are Phase E's concern, composed in
+``core.research.lifecycle``. No ``LifecyclePhase``-to-gate assignment is
+made here either -- ``ValidationRegistry`` is mechanism only, populated
+by a caller. Every gate review performed before this increment (signal
+independence, economic rationale, and others) was run by a hand-written
+``experiments/validate_*.py`` script, which remains unmodified and
+authoritative for its own historical result -- this increment is not
+backfilled onto that history (AD-044).
 
 Depends on Data, Statistics, and Governance. Per AD-041, gate functions
 compute no statistics themselves and therefore do not import
