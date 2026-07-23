@@ -5,6 +5,8 @@ from pathlib import Path
 import pytest
 
 from core.governance.canonical_jsonl import (
+    canonical_bytes,
+    canonical_line,
     read_canonical_jsonl,
     sha256_of_file,
     write_canonical_jsonl,
@@ -87,3 +89,33 @@ def test_sha256_of_file_changes_when_bytes_change(tmp_path: Path) -> None:
 
     assert hash_a != hash_b
     assert hash_a.startswith("sha256:")
+
+
+def test_canonical_line_sorts_keys_and_has_no_trailing_newline() -> None:
+    line = canonical_line({"b": 1, "a": 2})
+
+    assert line == '{"a":2,"b":1}'
+    assert "\n" not in line
+
+
+def test_canonical_line_sorts_nested_object_keys_too() -> None:
+    line = canonical_line({"outer_b": 1, "outer_a": {"inner_z": 1, "inner_a": 2}})
+
+    assert line == '{"outer_a":{"inner_a":2,"inner_z":1},"outer_b":1}'
+
+
+def test_canonical_bytes_is_utf8_encoded_canonical_line() -> None:
+    row = {"b": 1, "a": "x"}
+
+    assert canonical_bytes(row) == canonical_line(row).encode("utf-8")
+    assert canonical_bytes(row) == b'{"a":"x","b":1}'
+
+
+def test_write_canonical_jsonl_lines_match_canonical_line_per_row(tmp_path: Path) -> None:
+    path = tmp_path / "snapshot.jsonl"
+    rows = [{"b": 1, "a": 2}, {"z": "x", "y": "w"}]
+
+    write_canonical_jsonl(rows, path)
+
+    text = path.read_text(encoding="utf-8")
+    assert text.splitlines() == [canonical_line(row) for row in rows]

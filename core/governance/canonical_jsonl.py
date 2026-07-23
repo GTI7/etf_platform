@@ -21,11 +21,25 @@ from pathlib import Path
 from typing import Any
 
 
+def canonical_line(row: dict[str, Any]) -> str:
+    """The canonical JSON serialization of one row: sorted keys, compact
+    separators, no trailing newline. This is the exact line
+    `write_canonical_jsonl` emits for `row`, minus the terminating LF --
+    the unit it joins with ``"\\n"`` and the hash domain a hash-chained
+    store (``core.governance.decision_recorder``) hashes for that row."""
+    return json.dumps(row, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+
+
+def canonical_bytes(row: dict[str, Any]) -> bytes:
+    """`canonical_line(row)`, UTF-8 encoded."""
+    return canonical_line(row).encode("utf-8")
+
+
 def write_canonical_jsonl(rows: list[dict[str, Any]], path: Path) -> None:
     """Write `rows` as canonical JSONL. An empty `rows` list writes an
     empty (zero-byte) file -- there is no "trailing newline" to speak of
     when there are no rows."""
-    lines = [json.dumps(row, sort_keys=True, ensure_ascii=False, separators=(",", ":")) for row in rows]
+    lines = [canonical_line(row) for row in rows]
     content = "\n".join(lines)
     if lines:
         content += "\n"
