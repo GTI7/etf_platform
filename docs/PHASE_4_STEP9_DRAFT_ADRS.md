@@ -4,12 +4,86 @@
 `docs/ARCHITECTURE_DECISIONS.md`. No code is introduced by this
 document and no existing file is modified by it.**
 
-**Numbering.** The accepted ceiling is **AD-046** (verified:
-`ARCHITECTURE_DECISIONS.md` ends at "AD-046: Reporting input boundary").
-These drafts take **AD-047 … AD-050**. They replace the AD numbering
+**Numbering.** The accepted AD set is **AD-001 … AD-046 plus AD-051**
+(verified at HEAD `7698900`: `ARCHITECTURE_DECISIONS.md` runs to "AD-046:
+Reporting input boundary" and then carries "AD-051: An empty
+`covered_paths` set is `UNVERIFIABLE`, not `VERIFIED`"). **AD-047 …
+AD-050 remain reserved and are not accepted.** That reservation is
+AD-051's own, recorded in its "Numbering" paragraph: AD-051 was taken
+instead of the next-in-sequence AD-047 because AD-047–050 are "left
+reserved for `docs/PHASE_4_STEP9_DRAFT_ADRS.md`, which provisionally
+claims them and is already cross-referenced by those numbers". These
+drafts therefore keep **AD-047 … AD-050**. They replace the AD numbering
 proposed in `STEP_9_VALIDATION_ORCHESTRATION_PROPOSAL.md` §13 and in
 `STEP_9_ARCHITECTURE_RECONCILIATION_REVIEW.md` §6.2, neither of which
 was accepted and which collide with each other.
+
+**Line citations in this document resolve against baseline `2c7fb2c`,
+not against `HEAD`.** Every `core/governance/freeze_verifier.py:N-M`
+citation in the drafts below was taken by reading that file at `2c7fb2c`
+(tag `phase4-final-before-h4-20260722`). Commit `4c7ca8d` (AD-051) then
+changed that file in two additive hunks, so the same content now sits at
+different line numbers. The offset is recorded here once, as a
+navigational aid. **It corrects nothing, reinterprets nothing, and edits
+no other document.**
+
+| Baseline `2c7fb2c` lines | At HEAD `7698900` | Content, and who cites it |
+|---|---|---|
+| 1–58 | **unchanged** | Module docstring, incl. the read-only posture at `40-43` / `41-43`. Text identical at HEAD; citations still resolve as written. |
+| 59–60 | rewritten in place as 59–61 | `FreezeStatus`'s docstring, extended by AD-051. Cited by no document. |
+| 61–153 | **+1** | `_has_uncommitted_drift` `122-126` → `123-127`; `verify_freeze` `129-178` → `130-194`. |
+| 154 onward | **+16** | The fall-through to `VERIFIED`, `154-170` → `170-186`. AD-051's early return occupies HEAD `155-168`. |
+
+**No accepted ruling record is affected, and none is edited.** Checked at
+HEAD: the only `freeze_verifier.py` line citations in accepted ruling
+records are `PHASE_4_A5_CHAIN_ANCHORING_RULING_2026-07-22.md` F-22
+(`41-43`) and `PHASE_4_A9_SINGLE_WRITER_RULING_2026-07-22.md` F-7 and its
+§10 "How to re-run this ruling" paragraph (`40-43`) — all inside the
+unshifted region, all still resolving to the text they quote. The
+shifted citations occur only in `PHASE_4_STEP9_ARCHITECTURE_RESOLUTION.md`
+(§0's table, §2.2), `PHASE_4_PR0_A1_REDISCLOSURE_RECORD.md` §1.4,
+`PHASE_4_PR0_REMEDIATION_PROPOSAL.md`, and
+`STEP_9_ARCHITECTURE_RECONCILIATION_REVIEW.md`. Each of those was
+correct against the state it was verified against and is retained
+unedited, per the supersession discipline
+`PHASE_4_PR0_A1_RULING_RECORD_2026-07-22.md` follows in its header —
+a correction is a new dated writing, never an edit to the record it
+corrects. This table is that writing, and it is a reconciliation of line
+numbers only.
+
+**Citations *into* this file shift by a single uniform offset, and the
+accepted ruling records that carry them are not edited.** Four accepted
+ruling records cite `PHASE_4_STEP9_DRAFT_ADRS.md` by line range, each
+taken against the file as committed at its own HEAD. The AD-047 revision
+above is confined to the AD-047 section, so **every such citation moves
+by exactly +218 and none of them changes what it points at.** Verified
+by matching the cited anchor text line-for-line:
+
+| Cited as | Resolves here to | Anchor content, unchanged | Cited by |
+|---|---|---|---|
+| `:110-115` | `:328-333` | AD-048's consumer-less-abstraction condition ("This AD is void if…") | A-9 F-22 |
+| `:121-128` | `:339-346` | AD-048's closed field set, `project_id` … predecessor SHA-256 | A-5 F-2 and §10 |
+| `:121-131` | `:339-349` | The same field set plus the "Never records" opening | A-9 F-23 and §10 |
+| `:144-150` | `:362-368` | AD-048's canonical-JSONL storage and read-append-rewrite sentence | A-8 F-16; A-9 F-5 and §10 |
+| `:170-178` | `:388-396` | AD-048's external anchoring, all three parts | A-5 F-1 and §10; A-8 F-18 and re-run |
+| `:329` | `:547` | The AD-050 heading | A-6 F-18 |
+| `:336-339` | `:554-557` | AD-050's lineage / cycle / attempt sentence | A-6 F-19 |
+| `:383-403` | `:601-621` | AD-050 part 3's four grounds and its stated cost | A-8 F-24 |
+| `:457-461` | `:675-679` | AD-050's evidence preconditions, incl. "verified intact **and anchored**" | A-5 F-16; A-9 F-11 and §10 |
+
+**Nothing in those rulings is reopened, re-read, or amended by this
+table.** Each finding continues to rest on the text it quoted verbatim
+in its own body; the quoted text is what makes the finding checkable,
+and every quotation still matches this file byte-for-byte. The line
+number is a locator, not the evidence. This note exists so a later
+reader following a locator lands where the ruling meant, without any
+accepted record being touched — which is the least invasive resolution
+available, and the only one consistent with retaining accepted rulings
+unedited.
+
+**A standing consequence for later revisions of this file.** Any future
+edit above AD-048 moves these locators again. The obligation that
+follows is to update **this table**, never the rulings.
 
 **Adoption condition.** All four are Phase A items per
 `docs/PHASE_4_STEP9_ARCHITECTURE_RESOLUTION.md` §4.1. No Step 9 code may
@@ -18,42 +92,139 @@ obligation (A-1) precedes even the acceptance of the other three.
 
 ---
 
-### AD-047: Freeze verification is scope-bounded; the empty-covered-paths hole is disclosed, guarded in new code, and not fixed here
+### AD-047: Freeze verification is scope-bounded; the empty-covered-paths hole at baseline `2c7fb2c` was disclosed, and is guarded in new code
 
-**Decision.** Three parts, and the first is not conditional on the
+**Historical framing, stated first.** This AD was drafted at `8a91d35`
+against baseline **`2c7fb2c`** (tag `phase4-final-before-h4-20260722`).
+Every statement below about `freeze_verifier.py`'s behaviour describes
+the repository **as it stood at that baseline** — not as it stands at
+current `HEAD`. The defect described was subsequently closed by AD-051
+(commit `4c7ca8d`). What this AD contributes is unchanged by that fix:
+the historical disclosure, the guard in new Validation code, and the
+claim bound all still stand.
+
+**Relationship to AD-051: coexisting; neither supersedes the other.**
+AD-051 is **not superseded, not amended, and not renumbered by this
+AD**, and nothing here modifies its accepted meaning. The two sit at
+different layers and both remain in force:
+
+- **AD-047 (this AD)** documents the **historical architectural
+  disclosure** — that the hole existed at `2c7fb2c`, what it made
+  vacuously satisfiable, and what a `VerificationResult` produced under
+  it is and is not worth — and places a guard in **new Validation
+  code**, before any gate runs.
+- **AD-051** records the **implemented remediation** inside
+  `core/governance/freeze_verifier.py` itself: an empty `covered_paths`
+  returns `FreezeStatus.UNVERIFIABLE`.
+
+AD-047 does not supersede AD-051, and AD-051 does not discharge
+AD-047's disclosure obligation — AD-051's own "Scope" paragraph states
+that in terms. Both are needed.
+
+**Decision.** Three parts, and the first was not conditional on the
 other two.
 
-1. **Disclosure.** A dated governance deviation record is re-issued
-   stating that `core/governance/freeze_verifier.py`'s
-   `verify_freeze(commit_ref, [])` returns `FreezeStatus.VERIFIED`, that
-   this behavior is live at `2c7fb2c` with no guard and no test in
-   either direction, that the original remediation record
+1. **Disclosure.** A dated governance deviation record was required to
+   be re-issued, stating that at baseline `2c7fb2c`
+   `core/governance/freeze_verifier.py`'s
+   `verify_freeze(commit_ref, [])` *returned* `FreezeStatus.VERIFIED`,
+   that this behaviour was live at that baseline with no guard and no
+   test in either direction, that the original remediation record
    (`docs/PHASE_4_PR0_GOVERNANCE_DEVIATION_RECORD_2026-07-21.md`) was
-   destroyed in the 2026-07-21 incident and exists in no reachable git
-   ref, and that **every `VerificationResult` in the archive is only as
-   strong as the covered-path set it was called with.** This obligation
-   stands whether or not Step 9 proceeds.
+   destroyed **as a committed object** in the 2026-07-21 incident — **no
+   reachable git ref contains it**, while byte-identical copies of its
+   content survive off-repository as untracked files in non-canonical
+   working trees, so that its content is recoverable and its commit
+   provenance is not — and that **every `VerificationResult` in the
+   archive is only as strong as the covered-path set it was called
+   with.** This obligation stood whether or not Step 9 proceeded, and it
+   is **not weakened, narrowed, or retired by having been met.**
+
+   **What has been filed against this obligation, limb by limb.**
+   Prerequisite A-1 of
+   [`PHASE_4_STEP9_ARCHITECTURE_RESOLUTION.md`](PHASE_4_STEP9_ARCHITECTURE_RESOLUTION.md)
+   §4.1 is two-limbed on its face — done when "The disclosure exists in
+   `docs/`" **and** "the PR0 ruling is closed or confirmed obsolete".
+   The two limbs stand in different states and are stated separately
+   here rather than summed.
+
+   - **Limb 1 — the disclosure — is discharged.** It was closed by
+     [`PHASE_4_PR0_A1_REDISCLOSURE_RECORD.md`](PHASE_4_PR0_A1_REDISCLOSURE_RECORD.md)
+     (`8bd8f8a`), the dated record in `docs/` this part required.
+     [`PHASE_4_PR0_A1_RULING_RECORD_2026-07-22.md`](PHASE_4_PR0_A1_RULING_RECORD_2026-07-22.md)
+     §6 records limb 1 as "**Closed** at `8bd8f8a`", and its §5 states
+     that ruling "does not discharge A-1 limb 1. That limb was closed by
+     `8bd8f8a` and is not re-decided here."
+   - **Limb 2 — the ruling — remains conditional, exactly as the accepted
+     A-1 ruling states it.**
+     [`PHASE_4_PR0_A1_RULING_RECORD_2026-07-22.md`](PHASE_4_PR0_A1_RULING_RECORD_2026-07-22.md)
+     (`aca36fb`) disposes of both items of the 2026-07-21 ruling request
+     — item 1 determined as a statement of fact (§2.1), item 2 VOID for
+     failure of its own stated condition (§2.2) — and its §6 records
+     limb 2 as "**Closed if this ruling is accepted.** On acceptance,
+     limb 2's condition is met by §2 of this record." That condition is
+     restated here without alteration and is **not** read as satisfied
+     by this AD.
+
+   **Consequently, A-1 as a whole is not stated here as discharged.**
+   The accepted ruling's own closing statement governs and is adopted
+   verbatim: "Until that acceptance, limb 2 stays open, A-1 stays
+   undischarged, and Step 9 stays blocked — exactly as it stood at
+   `8bd8f8a`." Resolution §4.1's rule that "Step 9 does not start until
+   every item below is closed **in writing**" is unchanged by this AD,
+   and A-2 … A-9 remain open on their own terms regardless of A-1's
+   disposition.
+
+   The destroyed-record wording above is stated as those records state
+   it (re-disclosure record §1.4 and §1.5 rows 3–4), which corrected
+   this AD's original, broader "exists in no reachable git ref" phrasing
+   on evidence.
 2. **Guard, in new code only.** `GateContext` construction rejects an
    empty `freeze_covered_paths`, and `GateRunner` refuses the run before
    any gate executes. `GateRunRecord` stores the **full covered-path
-   list**, not a count. `freeze_verifier.py` is **not modified** —
-   the guard lives in new Validation code, so the baseline stays
-   untouched and INV-12 holds.
+   list**, not a count. `freeze_verifier.py` is **not modified by this
+   AD** — the guard lives in new Validation code, so the baseline stays
+   untouched by Step 9 and INV-12 holds. That is not asserted here; it is
+   [`PHASE_4_STEP9_ARCHITECTURE_RESOLUTION.md`](PHASE_4_STEP9_ARCHITECTURE_RESOLUTION.md)
+   §3's decision D-2 — "`verify_freeze` is **not modified** by Step 9.
+   New Validation code refuses an empty covered-path set; the full path
+   list is recorded; the permitted claim is the narrow one (§2.3)" —
+   which that decision table binds on AD-047 by name, and which this
+   part restates rather than extends.
+
+   **Why this guard is still required after AD-051: the two act at
+   different layers.** AD-051 prevents empty coverage from being
+   mistaken for success **inside freeze verification** — `verify_freeze`
+   itself now returns `UNVERIFIABLE`. This AD prevents a run with empty
+   coverage from **executing at all**: `GateRunner` refuses **before any
+   gate runs**, rather than letting every gate execute and render
+   `AMBIGUOUS` downstream of an `UNVERIFIABLE` verification.
+   `GateRunRecord`'s full-path-list requirement is a third thing again —
+   an **evidence-recording** obligation that no change to
+   `verify_freeze` can satisfy, because a status value cannot carry its
+   own coverage set (restated INV-3, below). Neither requirement is
+   redundant with AD-051 and neither is weakened by it.
 3. **Claim bound.** A `VERIFIED` result licenses exactly one statement:
    *these named paths were byte-identical to their content at the
    claimed commit, with no committed or uncommitted drift since.* No
    Step 9 artifact may render it as "the methodology was frozen."
 
-**Rationale.** The mechanism is verified by reading
-`freeze_verifier.py:154-170`: `errors` and `drifted` are populated only
-inside `for path in paths`; an empty iterable leaves both empty and the
-function falls through to `else: status = VERIFIED`. This is
-load-bearing rather than cosmetic because AD-043 makes a gate render
-`AMBIGUOUS` when verification is not `VERIFIED` — so a gate with **zero
-freeze coverage** is free to render `PASS`, and any invariant of the
-form "no gate executes against an unverified freeze" is **vacuously
-satisfiable**. A pre/post freeze bracket over an empty set agrees with
-itself perfectly while proving nothing.
+**Rationale.** The mechanism was verified by reading
+`freeze_verifier.py:154-170` **at baseline `2c7fb2c`**
+(`git show 2c7fb2c:core/governance/freeze_verifier.py`): `errors` and
+`drifted` were populated only inside `for path in paths`; an empty
+iterable left both empty and the function fell through to
+`else: status = VERIFIED`. **That line range is a citation into the
+baseline, not into current `HEAD`** — at `HEAD` the same file carries
+AD-051's early return at lines 155-168 and the block cited above has
+moved to 170-186, so reading that line range against `HEAD` would not
+reproduce the finding. This was load-bearing rather than cosmetic
+because AD-043 makes a gate render `AMBIGUOUS` when verification is not
+`VERIFIED` — so at that baseline a gate with **zero freeze coverage**
+was free to render `PASS`, and any invariant of the form "no gate
+executes against an unverified freeze" was **vacuously satisfiable**. A
+pre/post freeze bracket over an empty set agrees with itself perfectly
+while proving nothing.
 
 **Why the guard is not the whole answer.** Non-emptiness is necessary
 and not sufficient. A path set containing only `README.md` satisfies the
@@ -64,20 +235,67 @@ and Step 9 does not mechanize it. Storing a count and calling the
 verification non-vacuous would reproduce, inside the correction, the
 claim-stronger-than-mechanism failure this AD exists to close.
 
-**Why the baseline is not fixed here.** A guard inside `verify_freeze`
-itself is the right long-term answer. It is a baseline modification, it
-requires its own governance ruling, and folding it into Step 9 would
-repeat the exact scope violation PR0 was returned for. It is a separate
-increment with its own AD.
+**Why the baseline is not fixed here.** *(Title retained verbatim.
+[`PHASE_4_PR0_REMEDIATION_PROPOSAL.md`](PHASE_4_PR0_REMEDIATION_PROPOSAL.md)'s
+"Relationship to Step 9" cites this section by that title — "AD-047,
+'why the baseline is not fixed here'" — and that citation must keep
+resolving. "Here" has always meant **this AD and Step 9**, which is the
+sense
+[`PHASE_4_STEP9_ARCHITECTURE_RESOLUTION.md`](PHASE_4_STEP9_ARCHITECTURE_RESOLUTION.md)
+§2.5 uses when it rejects "fixing `freeze_verifier.py` inside Step 9";
+it has never meant "nowhere, ever". The body below records what has
+since happened elsewhere.)*
+
+A guard inside `verify_freeze` itself was identified here as the right
+long-term answer, and was deliberately left out of Step 9: it is a
+baseline modification, it required its own governance ruling, and
+folding it into Step 9 would have repeated the exact scope violation PR0
+was returned for. It was named as a separate increment with its own AD —
+and that is exactly what it became.
+
+**That increment was subsequently completed.** Its proposal landed at
+`ced8636`, its implementation at `4c7ca8d`, and the decision is recorded
+as **AD-051**; the split is determined as a matter of fact in
+[`PHASE_4_PR0_A1_RULING_RECORD_2026-07-22.md`](PHASE_4_PR0_A1_RULING_RECORD_2026-07-22.md)
+§2.1. What survives from this AD is the **architectural disclosure** —
+the scope-bounded reading of freeze verification, the claim bound, and
+the record of what the baseline did — none of which the fix discharges.
+**AD-047 does not supersede AD-051.**
 
 **Invariant restated.** *No gate executes against a freeze verification
 whose covered-path set is empty, unresolved, or drifted, and no
 `VERIFIED` result is admitted as evidence without its covered-path list
 recorded alongside it.*
 
-**Migration/status.** `freeze_verifier.py` is unchanged. No existing
-`VerificationResult` is invalidated by this AD; they are re-scoped by
-the disclosure, which states what they did and did not prove.
+**Migration/status.** `freeze_verifier.py` **was modified by AD-051**
+(commit `4c7ca8d`, one additive early return plus four additive tests);
+**AD-047 introduces no further modification of it.** That modification
+landed as its own increment outside Step 9, under its own proposal and
+its own AD.
+
+**That it is therefore not a Step 9 baseline change is read from the
+Resolution, not asserted here.** INV-12 is a Step 9 invariant, and the
+Resolution fixes its scope in two places, both of which put this
+increment outside it:
+[`PHASE_4_STEP9_ARCHITECTURE_RESOLUTION.md`](PHASE_4_STEP9_ARCHITECTURE_RESOLUTION.md)
+§2.5 rejects "fixing `freeze_verifier.py` inside Step 9" and rules that
+"The baseline fix is a separate increment with its own AD"; §4.1 then
+lists that fix under "**Not a prerequisite, and explicitly deferred:**
+the `freeze_verifier` baseline fix (§2.5), which is its own later
+increment with its own ruling." `4c7ca8d` is that increment — the
+disposition §2.5 ruled for, arrived at as
+[`PHASE_4_PR0_A1_RULING_RECORD_2026-07-22.md`](PHASE_4_PR0_A1_RULING_RECORD_2026-07-22.md)
+§2.1 determines as a matter of fact. What INV-12 constrains — Step 9's
+own work — is untouched. This AD claims nothing beyond that reading, and
+in particular does not rule on how INV-12 would apply to any other
+modification of a baseline file.
+
+Everything this AD requires still lives entirely in new Validation code
+(`GateContext`, `GateRunner`, `GateRunRecord`). No existing
+`VerificationResult` is invalidated by this AD; they are re-scoped by the
+disclosure, which states what they did and did not prove — and, as the
+re-disclosure record §4.2 states, no historical result is retroactively
+improved by the fix either.
 
 ---
 
