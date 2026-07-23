@@ -2831,3 +2831,266 @@ binding at all. Deliberately **not** built: any `Phase` class hierarchy,
 transition-table object, event bus, phase-entry/exit hooks, or
 `LifecycleEngine` — the same discipline AD-033/AD-036/AD-040/AD-044
 applied.
+
+---
+
+## Phase 4 / Step 9 — Phase E decisions (accepted 2026-07-24)
+
+Phase D is complete and frozen (HEAD `c6b9682`, tag
+`phase4-phase-d-complete`). Phase E composes the frozen Validation
+apparatus (`GateRunner`, `GateRunRecord`) with the frozen Governance
+apparatus (`DecisionRecorder`) at the single legal binding point
+`core/research/lifecycle.py` (AD-050 Migration/status). The four ADRs
+below are accepted here, in this reserved sequence, before any Phase E
+code is written. The governing principle for all four is stated once and
+applies to each: **the system must never record a claim stronger than
+the mechanism that produced the evidence.**
+
+### AD numbering — AD-052 … AD-055 are retired, not available
+
+**Decision.** AD-052, AD-053, AD-054, and AD-055 are **reserved and
+retired**; no ADR is ever created under those numbers. They were draft
+numbers in `docs/STEP_9_ARCHITECTURE_RECONCILIATION_REVIEW.md` §6.2 and
+`docs/STEP_9_VALIDATION_ORCHESTRATION_PROPOSAL.md` §14 that collided with
+the reserved AD-047 … AD-050 block (AD-047's "Numbering" paragraph) once
+AD-051 was accepted at `4c7ca8d` and AD-047 … AD-050 were accepted into
+this log. The accepted ceiling before Phase E is **AD-051**; Phase E
+therefore takes **AD-056 … AD-059** and steps over the retired block
+rather than reusing a number whose draft meaning already lives, in
+amended form, inside an accepted AD. New ADRs number from AD-056.
+
+**AD-052 citation correction (dated governance note, 2026-07-24).** Every
+reference to "AD-052" — including the ones still present in the frozen
+Phase D files `core/validation/gate_context.py`,
+`core/validation/__init__.py`, and `tests/test_gate_context.py` — is to
+be read as **AD-047 part 2**. Draft AD-052 ("freeze-stability bracket / a
+bracket over an empty covered-path set proves nothing") was subsumed,
+amended, into AD-047 part 2 (the empty-covered-paths hole and its
+non-emptiness precondition) when AD-047 was accepted. History is **not
+rewritten**: the retired number is disclosed and mapped, not deleted from
+the record. The literal in-code citation strings are **not corrected in
+place** here, because those files are frozen for Phase E; correcting the
+strings is a separate, non-Phase-E change (see this section's
+"Governance risks carried forward").
+
+**AD-055 citation correction (dated governance note, 2026-07-24).** Every
+reference to "AD-055" — including the ones still present in the frozen
+Phase D files `core/validation/gate.py` and
+`core/validation/__init__.py` — is to be read as **AD-049 part 4**. Draft
+AD-055 ("`ReviewLevel` is not introduced; review level stays `str`") was
+subsumed, unchanged, into AD-049 part 4 (the runner's scope limits,
+which include "`ReviewLevel` is not introduced … `review_level` stays
+`str`") when AD-049 was accepted. Same disclosure discipline as AD-052:
+mapped, not deleted; strings not rewritten in the frozen files.
+
+### AD-056: A crashed `GateExecutionOutcome` is inadmissible evidence, not `AMBIGUOUS`
+
+**Decision.** A crashed gate — a `GateExecutionOutcome` whose `error`
+field is set and whose `result` is `None` (`core/validation/
+gate_run_record.py`) — is **not** a `GateStatus`. It must never be
+mapped, coerced, or "converted" to `PASS`, `FAIL`, `AMBIGUOUS`, or any
+fourth governance status. A crash means the mechanism **failed to
+produce a verdict** for that gate, which is categorically different from
+the gate mechanically concluding one (INV-4, restated for the
+composition layer; AD-043's "AMBIGUOUS is a process gap, not evidence"
+does **not** extend to a crash — a crash produced no evidence at all).
+
+**Consequences.**
+
+- A crash in any outcome of the `GateRunRecord` being composed **blocks
+  the transition**: `core/research/lifecycle.py` raises and returns no
+  value.
+- **No `DecisionRecord` is written.** The refusal happens strictly before
+  the single `DecisionRecorder.append()` call, so the chain is left
+  byte-for-byte unchanged — a crashed run leaves no trace in the
+  governance chain, exactly as it should.
+- The crash is rejected **before aggregation**. `aggregate_sequence_
+  status()` takes `GateStatus` values only and never sees an envelope
+  error; a crash cannot influence an aggregate because it is refused one
+  layer earlier.
+
+### AD-057: Governance `GateOutcome.status` is a closed transcription vocabulary
+
+**Decision.** The persisted `core.governance.decision_recorder.
+GateOutcome.status` string is drawn from a **closed three-value
+vocabulary — exactly `"pass"`, `"fail"`, `"ambiguous"`** (the wire values
+of `GateStatus`). No fourth value is ever transcribed; in particular a
+crash never reaches this field (AD-056), and there is no `"crashed"`,
+`"error"`, `"unknown"`, or `"inconclusive"` status here. Governance
+cannot import Validation (`ALLOWED_DEPENDENCIES["governance"] ==
+{"data"}`), so it stores the **string** rather than the enum; the closed
+vocabulary is therefore an obligation on the **only writer**,
+`core/research/lifecycle.py`, which transcribes each admitted gate's
+`GateStatus.value` and nothing else.
+
+**Consequences.**
+
+- The composition layer never invents a status string; it reads
+  `GateResult.status.value` for each admitted (non-crashed) gate.
+- This is transcription, not certification (AD-048): the recorder cannot
+  re-derive whether a transcribed status is true, so the correctness of
+  the closed vocabulary rests entirely on this single writer honouring
+  it. Widening the set would require reopening this AD.
+
+### AD-058: Genesis `from_phase` is an explicit human assertion; an empty chain derives `UNKNOWN`
+
+**Decision.** Current phase is **derived** from the transition-record
+chain, never stored on `Project` (AD-050 part 3; D-14). An **empty
+decision chain derives to `UNKNOWN`** — not to `Hypothesis`, not to any
+other phase. Registering a cycle (e.g. `reference_h4`) **does not imply
+`Hypothesis`** or any phase (AD-050 A6-C5). There is **no hidden phase
+default** anywhere: no `Project.current_phase` field, and no fallback
+that substitutes a phase the operator did not supply.
+
+- `UNKNOWN` is a **research-domain derived-state value, not a ninth
+  `LifecyclePhase`.** `core/shared/lifecycle_phase.py` remains exactly the
+  eight phases transcribed from `RESEARCH_GOVERNANCE_STANDARD.md` §2 and
+  pinned by test; adding `UNKNOWN` to that enum would corrupt the
+  transcription invariant, so `UNKNOWN` lives outside it as a typed
+  sentinel.
+- **The first transition requires an explicit `from_phase` argument.**
+  Because an empty chain derives `UNKNOWN`, the machine cannot derive a
+  genesis `from_phase`; the operator asserts it, and the primitive
+  `advance_phase(from_phase, …)` (AD-050 part 4) already takes it as a
+  required parameter. Genesis is therefore a human assertion of the
+  starting phase, recorded as supplied.
+- **Non-genesis transitions must not contradict the chain.** When the
+  chain is non-empty, the derived current phase is authoritative and the
+  supplied `from_phase` must equal it, or the transition is refused —
+  this is what stops a stored/supplied phase from over-claiming past what
+  the chain proves.
+- **Failure direction is safe by construction** (AD-050 part 3): a
+  damaged or truncated chain under-claims (regresses toward `UNKNOWN` or
+  the last provable phase), never over-claims. `INV-12` is preserved:
+  `Project` is not modified and no INV-12 exception is created.
+
+### AD-059: The research lifecycle is the sole Validation + Governance composition boundary
+
+**Decision.** `core/research/lifecycle.py` is the **only** module that
+imports Validation and Governance together and is therefore the **only**
+legal place a gate-outcome run (`GateRunRecord`) is bound to a governance
+record (`DecisionRecord`) (AD-050 Migration/status; the import table
+makes any other binding point impossible, since Governance cannot import
+Validation). Phase E adds this composition **without modifying** any
+frozen Phase D module — `decision_recorder.py`, `gate_runner.py`,
+`gate.py`, `gate_result.py`, `gate_context.py`, `freeze_verifier.py`,
+the `Project` model, and the import-boundary rules are all untouched.
+
+The composition performs, in order, and refuses (writing no
+`DecisionRecord`) at the first failure:
+
+1. **Gate completeness** — a `GateRunRecord` result exists for **every**
+   gate the target phase requires; a missing required gate is a refusal,
+   never an `AMBIGUOUS` (AD-050 evidence preconditions). What a phase
+   requires is `ValidationRegistry`'s to state, not the lifecycle's to
+   invent.
+2. **Crash rejection** — any crashed outcome refuses the transition
+   (AD-056), before aggregation.
+3. **Bracket rejection** — `GateRunRecord.bracket_invalidated is True`
+   refuses the transition.
+4. **Freeze projection from stored artifacts only** — the freeze status
+   is projected from the **stored** `pre_freeze_verification` and
+   `post_freeze_verification` on the `GateRunRecord`. `verify_freeze` is
+   **never called again** during composition. The projected
+   `freeze_verification_status` is `"verified"` **only** when both stored
+   verifications are `VERIFIED` and their `resolved_hash` values are
+   equal; otherwise the transition is refused. There is **no** conversion
+   of a non-verified bracket to `AMBIGUOUS`.
+5. **Aggregation** — `aggregate_sequence_status()` (pure: `GateStatus`
+   inputs only, no IO, no git, no clock, deterministic) computes the
+   sequence status: `PASS` iff every gate passed, `FAIL` if any gate
+   failed (**FAIL dominates AMBIGUOUS**), `AMBIGUOUS` otherwise. It
+   **refuses an empty input** rather than returning a vacuous `PASS`,
+   mirroring AD-047/AD-051's refusal of vacuous verification — an empty
+   sequence is never permitted to reach it in any case, because
+   completeness (step 1) is checked first.
+6. **Authorization** — the pure `advance_phase()` primitive (AD-050 part
+   4) decides legality and record kind from the aggregate and the
+   recorded human `Authorization`; an unauthorized status raises.
+7. **Provenance pass-through** — `DecisionRecord.evidence_refs` are
+   **pass-through only**: collected from the admitted gate results in
+   requested-gate order, **stably deduplicated**, with **no generated
+   strings**. `reproduction_record_ref` is **exactly**
+   `GateRunRecord.measurement_provenance` (which may be `None`; its
+   absence is recorded as-is, an audit finding per AD-050, never
+   invented).
+8. **Append** — the chain is verified intact, and (for a non-genesis
+   transition) anchored against the operator-supplied `(sequence_number,
+   head_hash)` pair (AD-050 A5-C9), **before** the single
+   `DecisionRecorder.append()` call. Genesis (empty chain) has nothing to
+   anchor and its `predecessor_hash` is `None` by the recorder's own
+   construction.
+
+**Aggregation lives in Research, never Validation** (AD-049 part 3):
+`GateRunRecord` still carries no aggregate field, and the aggregate is
+recomputed under this documented rule rather than stored — mirroring
+`DecisionRecord`, which also stores per-gate outcomes only.
+
+### Governance risks carried forward (2026-07-24)
+
+- **Stale in-code AD citations.** `core/validation/gate.py`,
+  `core/validation/gate_context.py`, `core/validation/__init__.py`, and
+  `tests/test_gate_context.py` still cite the retired numbers AD-052 /
+  AD-055. The mapping above (→ AD-047 part 2 / AD-049 part 4) is the
+  governing correction; the literal strings are left in place because
+  those files are frozen for Phase E. Correcting them is a separate,
+  disclosed, non-Phase-E change.
+
+### AD-060: `VerificationResult.covered_paths` closes the Phase E freeze covered-path binding gap (accepted 2026-07-24, Remedy A)
+
+**Finding.** A governance audit of the Phase E composition
+(`compose_transition()`) found that `DecisionRecord.freeze_covered_paths`
+was populated directly from the caller-supplied `GateContext`, guarded
+only by a `freeze_commit_ref` equality check. `VerificationResult` (the
+type stored on `GateRunRecord.pre_freeze_verification` /
+`post_freeze_verification`) never recorded which paths a given
+`verify_freeze()` call actually covered, and `GateRunner._context_digest`
+deliberately excludes the freeze basis from its hash (its docstring's
+premise -- that the freeze basis is "recorded on the envelope in its own
+field already" -- holds for `freeze_commit_ref` but not for
+`freeze_covered_paths`). The result: a `GateContext` sharing the run
+record's commit ref but naming different, wider, or entirely unverified
+paths would be recorded as though those paths had passed freeze
+verification, with nothing to catch it. This violates this log's
+governing principle for Phase E (stated where AD-056 … AD-059 were
+accepted): **the system must never record a claim stronger than the
+mechanism that produced the evidence.**
+
+**Decision (Remedy A — the approved remedy; no alternative remedy is
+implemented).** `core.governance.freeze_verifier.VerificationResult`
+gains one additive field, `covered_paths: tuple[str, ...]`, set by
+`verify_freeze()` to the exact `covered_paths` it was called with (not
+deduplicated, not sorted, recorded even when the result is `DRIFTED` or
+`UNVERIFIABLE`). This is a scoped, disclosed amendment to AD-059's
+frozen-file list for `freeze_verifier.py` — the addition is the sole
+Phase E change to that file, and it does not touch `verify_freeze`'s
+verification logic, `FreezeStatus`, or any existing field's meaning.
+`GateStatus`, `DecisionRecord`'s field set, and AD-047 … AD-059's own
+text are unchanged.
+
+`core/research/lifecycle.py`'s `compose_transition()` uses the new field
+to close the gap in two ways:
+
+1. **Guard, before trusting `context`.** In addition to the existing
+   `freeze_commit_ref` check, `context.freeze_covered_paths` (as a set)
+   must equal *both* `run_record.pre_freeze_verification.covered_paths`
+   and `run_record.post_freeze_verification.covered_paths` (as sets), or
+   `ContextRunRecordMismatch` refuses the transition before any
+   `DecisionRecord` is written. Checking both bracket ends catches a
+   hand-built run record whose two ends disagree, not just a
+   context/run-record mismatch.
+2. **Source of truth for the persisted field.** `DecisionRecord.
+   freeze_covered_paths` is written from
+   `run_record.pre_freeze_verification.covered_paths` — the run record's
+   own verified evidence — never from `context.freeze_covered_paths`
+   directly. Once the guard above holds, the two sets are equal, but the
+   value actually persisted is mechanically the verified one.
+
+**Consequences.** A context claiming coverage broader than, narrower
+than, or merely different from what was actually run through
+`verify_freeze()` now refuses the transition instead of being recorded
+as verified. Matching coverage continues to pass unchanged, and the
+persisted path list may differ in *order* from `context`'s (it reflects
+the verified evidence's own order), which is expected and covered by
+regression tests. This closes the gap without reopening `GateStatus`,
+`DecisionRecord`'s schema, or any accepted AD's semantics.

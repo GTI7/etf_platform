@@ -45,6 +45,20 @@ def test_unmodified_frozen_file_verifies(repo: Path) -> None:
     assert result.drifted_files == ()
     assert result.errors == ()
     assert result.resolved_hash == freeze_hash
+    assert result.covered_paths == ("frozen.md",)
+
+
+def test_covered_paths_recorded_verbatim_including_order_and_duplicates(repo: Path) -> None:
+    """`covered_paths` on the result is the exact input, un-normalized --
+    this is the ground truth Phase E's composition layer binds a
+    DecisionRecord's freeze_covered_paths to (AD-060), so it must reflect
+    what was actually passed in, not a deduplicated or sorted copy."""
+    freeze_hash = _commit(repo, "a.md", "a content\n", "freeze")
+    _commit(repo, "b.md", "b content\n", "freeze b")
+
+    result = verify_freeze(freeze_hash, ["b.md", "a.md", "a.md"], repo_root=repo)
+
+    assert result.covered_paths == ("b.md", "a.md", "a.md")
 
 
 def test_committed_change_after_freeze_is_drift(repo: Path) -> None:
@@ -91,6 +105,7 @@ def test_empty_covered_paths_is_unverifiable(repo: Path) -> None:
     assert not result.verified
     assert result.resolved_hash == freeze_hash
     assert result.drifted_files == ()
+    assert result.covered_paths == ()
     assert any("empty" in error for error in result.errors)
 
 

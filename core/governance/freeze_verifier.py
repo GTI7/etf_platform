@@ -67,13 +67,24 @@ class FreezeStatus(str, Enum):
 
 @dataclass(frozen=True, slots=True)
 class VerificationResult:
-    """Plain, serializable outcome of one freeze-verification run."""
+    """Plain, serializable outcome of one freeze-verification run.
+
+    **``covered_paths`` (AD-060, added 2026-07-24).** The exact
+    ``covered_paths`` this run was called with, recorded as given -- not
+    deduplicated, not sorted, not otherwise normalized. Before this field
+    existed, nothing downstream of ``verify_freeze`` retained which paths
+    produced a given result: a ``GateRunRecord`` bundled the verdict but
+    not its own evidence set, leaving Phase E's composition layer no way
+    to mechanically confirm that a caller-supplied path list was the one
+    actually verified, rather than merely sharing the same
+    ``commit_ref``. Additive only: no existing field changed meaning."""
 
     commit_ref: str
     resolved_hash: str | None
     status: FreezeStatus
     drifted_files: tuple[str, ...]
     errors: tuple[str, ...]
+    covered_paths: tuple[str, ...]
 
     @property
     def verified(self) -> bool:
@@ -150,6 +161,7 @@ def verify_freeze(
             status=FreezeStatus.UNVERIFIABLE,
             drifted_files=(),
             errors=(f"commit ref {commit_ref!r} does not resolve to a commit",),
+            covered_paths=tuple(paths),
         )
 
     if not paths:
@@ -165,6 +177,7 @@ def verify_freeze(
             status=FreezeStatus.UNVERIFIABLE,
             drifted_files=(),
             errors=("covered_paths is empty; a freeze verification with zero covered paths cannot be VERIFIED",),
+            covered_paths=(),
         )
 
     errors: list[str] = []
@@ -191,4 +204,5 @@ def verify_freeze(
         status=status,
         drifted_files=tuple(drifted),
         errors=tuple(errors),
+        covered_paths=tuple(paths),
     )
