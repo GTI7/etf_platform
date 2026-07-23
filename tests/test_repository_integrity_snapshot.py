@@ -87,6 +87,8 @@ def test_no_protected_directory_gained_or_lost_files() -> None:
                     continue  # new, open Phase 3 cycle -- see addendum above
                 if relative_path == "experiments/positive_control_phase3_pilot.py":
                     continue  # new, open Phase 3 cycle -- see addendum above
+                if relative_path == "research_archive/reference_h4/archive_manifest.json":
+                    continue  # write-once archive identity artifact introduced by B-3b, not an evolving research artifact
                 current_files.add(relative_path)
 
     assert current_files == set(EXPECTED_HASHES)

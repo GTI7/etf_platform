@@ -2,13 +2,29 @@
 
 Registers the three existing, closed research cycles --
 `research_archive/reference_v1/`, `research_archive/reference_v2_h1/`,
-`research_archive/reference_h3/` -- the complete set; no fourth
-candidate exists in `research_archive/`. Every field below traces to a
-specific, already-committed file (cited in each project's own
-`metadata`); nothing is invented. This module **points to** that
-existing evidence -- it does not duplicate, summarize, or re-derive any
-of it, per Migration Plan Step 5's own framing ("the registry should
-point to existing evidence, not duplicate it").
+`research_archive/reference_h3/`.
+
+**Dated correction (2026-07-23, AD-050 A6-C8).** This module's docstring
+originally claimed these three were "the complete set; no fourth
+candidate exists in `research_archive/`". That was true when the module
+was authored (2026-07-19) and stopped being true the next day, when
+`research_archive/positive_control_phase3/` landed (2026-07-20) -- an
+open cycle, deliberately left unregistered (AD-050 A6-C6: no
+Phase-B-legal registration path for an open cycle existed at the time).
+It stopped being true a second way on 2026-07-23, when `reference_h4`
+was registered via the separate, non-historical registration path
+`core/research/reference_h4_registration.py` -- kept out of this module
+because `backfill_historical_projects()` is deliberately non-idempotent
+and scoped, by design, to closed historical cycles only. This correction
+is documentation only: `HISTORICAL_PROJECTS` and
+`backfill_historical_projects()` below are unchanged.
+
+Every field below still traces to a specific, already-committed file
+(cited in each project's own `metadata`); nothing is invented. This
+module **points to** that existing evidence -- it does not duplicate,
+summarize, or re-derive any of it, per Migration Plan Step 5's own
+framing ("the registry should point to existing evidence, not duplicate
+it").
 
 `origin_date` per project (see `core/research/project.py` for why this
 is not called "created_at"):
