@@ -8,11 +8,18 @@ as one of the two enforcement mechanisms for domain boundaries (Section
 5, "Enforcement", item 1).
 
 Domain mapping. Each top-level package directly under ``core/`` is
-assigned to one of the six architecture domains, or to ``None`` for the
-cross-cutting shared kernel (``core.shared``, ``core.domain``), which
-is exempt from the dependency table entirely -- every domain is allowed
-to depend on it, per docs/ARCHITECTURE_DECISIONS.md AD-003/AD-007's
-existing "inject the primitive, no domain owns it" pattern.
+assigned to one of the six architecture domains, or to the special
+``"kernel"`` domain for the cross-cutting shared kernel (``core.shared``,
+``core.domain``). The kernel is exempt from the dependency table only as
+an import *target* -- every domain is allowed to depend on it, per
+docs/ARCHITECTURE_DECISIONS.md AD-003/AD-007's existing "inject the
+primitive, no domain owns it" pattern -- never as an import *source*: the
+kernel may depend on nothing under ``core/`` (AD-049 part 5).
+
+A top-level package under ``core/`` that is *not* in ``DOMAIN_OF_TOPLEVEL``
+is a hard error (``UnmappedPackageError``), not a silent exemption
+(AD-049 part 5): a new package must be classified before this checker can
+run, so it cannot fall through unnoticed in either import direction.
 
 ``core.market_data`` and ``core.analytics`` are both mapped to the
 ``data`` domain. Per docs/RESEARCH_PLATFORM_MVP_MIGRATION_PLAN.md
@@ -42,9 +49,10 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CORE_ROOT = REPO_ROOT / "core"
 
-# Top-level package name under core/ -> domain name, or None for the
-# shared kernel (exempt from the dependency table).
-DOMAIN_OF_TOPLEVEL: dict[str, str | None] = {
+# Top-level package name under core/ -> domain name, or "kernel" for the
+# shared kernel (exempt from the dependency table as an import target
+# only -- see ALLOWED_DEPENDENCIES["kernel"] below).
+DOMAIN_OF_TOPLEVEL: dict[str, str] = {
     "market_data": "data",
     "analytics": "data",
     "statistics": "statistics",
@@ -52,12 +60,15 @@ DOMAIN_OF_TOPLEVEL: dict[str, str | None] = {
     "validation": "validation",
     "research": "research",
     "reporting": "reporting",
-    "shared": None,
-    "domain": None,
+    "shared": "kernel",
+    "domain": "kernel",
 }
 
 # docs/PLATFORM_ARCHITECTURE_V1.md Section 5's allowed-dependency table.
-# Same-domain imports are always allowed and are not listed here.
+# Same-domain imports are always allowed and are not listed here. The
+# kernel is exempt as an import *target* for every domain (checked
+# directly in check_repository, not via this table) but may itself
+# depend on nothing under core/ -- AD-049 part 5.
 ALLOWED_DEPENDENCIES: dict[str, frozenset[str]] = {
     "data": frozenset(),
     "statistics": frozenset(),
@@ -65,7 +76,15 @@ ALLOWED_DEPENDENCIES: dict[str, frozenset[str]] = {
     "validation": frozenset({"data", "statistics", "governance"}),
     "research": frozenset({"data", "statistics", "governance", "validation"}),
     "reporting": frozenset({"data", "statistics", "governance", "validation", "research"}),
+    "kernel": frozenset(),
 }
+
+
+class UnmappedPackageError(Exception):
+    """Raised when a top-level package under ``core/`` is not present in
+    ``DOMAIN_OF_TOPLEVEL``. AD-049 part 5: an unrecognized package must
+    fail the check loudly rather than being silently exempted -- silent
+    exemption was the escape hatch this tightening closes."""
 
 
 @dataclass(frozen=True)
@@ -95,24 +114,59 @@ def _domain_of_file(path: Path, core_root: Path) -> str | None:
     relative_parts = path.relative_to(core_root).parts
     if len(relative_parts) < 2:
         return None  # core/__init__.py itself -- not inside any subpackage
-    return DOMAIN_OF_TOPLEVEL.get(relative_parts[0])
+    toplevel = relative_parts[0]
+    if toplevel not in DOMAIN_OF_TOPLEVEL:
+        raise UnmappedPackageError(
+            f"core/{toplevel} is not in DOMAIN_OF_TOPLEVEL -- add it to the "
+            "mapping (as a domain or as \"kernel\" for shared-kernel) before "
+            "this checker can run"
+        )
+    return DOMAIN_OF_TOPLEVEL[toplevel]
 
 
 def _domain_of_imported_module(dotted_module: str) -> str | None:
     parts = dotted_module.split(".")
     if len(parts) < 2 or parts[0] != "core":
         return None
-    return DOMAIN_OF_TOPLEVEL.get(parts[1])
+    toplevel = parts[1]
+    if toplevel not in DOMAIN_OF_TOPLEVEL:
+        raise UnmappedPackageError(
+            f"import target core.{toplevel} is not in DOMAIN_OF_TOPLEVEL -- "
+            "add it to the mapping (as a domain or as \"kernel\") before "
+            "this checker can run"
+        )
+    return DOMAIN_OF_TOPLEVEL[toplevel]
 
 
-def _imported_core_modules(tree: ast.AST) -> list[tuple[str, int]]:
+def _resolve_relative_import(file: Path, core_root: Path, node: ast.ImportFrom) -> str | None:
+    """Resolve a relative ``ImportFrom`` (``node.level > 0``) found in
+    `file` to its absolute dotted module string, e.g. ``'core.validation.
+    gate'``. Returns None if the import climbs above ``core/`` itself
+    (not resolvable to a core module; treated as out of scope rather than
+    silently ignored, per AD-049 part 5's "resolved or rejected")."""
+    relative_parts = list(file.relative_to(core_root).parts)
+    # A module's own package is its parent directory; for `__init__.py`
+    # that parent directory is also the package's own dotted name, so
+    # dropping the filename gives the correct level=1 base in both cases.
+    package_parts = relative_parts[:-1]
+
+    base = ["core", *package_parts]
+    climb = node.level - 1
+    if climb:
+        if climb >= len(base):
+            return None
+        base = base[: len(base) - climb]
+    if node.module:
+        base = base + node.module.split(".")
+    return ".".join(base)
+
+
+def _imported_core_modules(tree: ast.AST, file: Path, core_root: Path) -> list[tuple[str, int]]:
     """Every dotted module string of the form 'core...' referenced by an
-    absolute import in `tree`, paired with its line number. Relative
-    imports (``level > 0``) are not resolved -- none exist under core/
-    today (verified by direct inspection), and a relative import can
-    never cross a top-level package boundary in a way this checker
-    would need to catch beyond what its own directory already implies.
-    """
+    import in `tree` (absolute or relative), paired with its line number.
+    Relative imports are resolved to their absolute target rather than
+    skipped -- AD-049 part 5: a relative import must not be invisible to
+    the checker."""
     found: list[tuple[str, int]] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
@@ -120,8 +174,13 @@ def _imported_core_modules(tree: ast.AST) -> list[tuple[str, int]]:
                 if alias.name == "core" or alias.name.startswith("core."):
                     found.append((alias.name, node.lineno))
         elif isinstance(node, ast.ImportFrom):
-            if node.level == 0 and node.module and (node.module == "core" or node.module.startswith("core.")):
-                found.append((node.module, node.lineno))
+            if node.level == 0:
+                if node.module and (node.module == "core" or node.module.startswith("core.")):
+                    found.append((node.module, node.lineno))
+            else:
+                resolved = _resolve_relative_import(file, core_root, node)
+                if resolved and (resolved == "core" or resolved.startswith("core.")):
+                    found.append((resolved, node.lineno))
     return found
 
 
@@ -133,12 +192,14 @@ def check_repository(core_root: Path = DEFAULT_CORE_ROOT) -> list[Violation]:
     for file in _iter_python_files(core_root):
         from_domain = _domain_of_file(file, core_root)
         if from_domain is None:
-            continue  # shared kernel or unrecognized top-level package -- exempt
+            continue  # core/__init__.py itself -- not inside any subpackage
         tree = ast.parse(file.read_text(encoding="utf-8"), filename=str(file))
-        for dotted_module, lineno in _imported_core_modules(tree):
+        for dotted_module, lineno in _imported_core_modules(tree, file, core_root):
             to_domain = _domain_of_imported_module(dotted_module)
             if to_domain is None or to_domain == from_domain:
                 continue
+            if to_domain == "kernel":
+                continue  # kernel is exempt as an import target for every domain
             if to_domain not in ALLOWED_DEPENDENCIES.get(from_domain, frozenset()):
                 violations.append(
                     Violation(
