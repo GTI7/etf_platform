@@ -1,0 +1,12 @@
+{
+  "commit_hash": "3d586ded4aad31201cc4e3a349ff7e5d766ba8f5",
+  "dataset_content_hashes": {
+    "ETF": "sha256:8a4ec0c201a6377a528ee76b7192f990451615fc5f40f4c8f16e96d185059ced",
+    "PriceBar": "sha256:132befd87b4f6095157701dd4e9d45eb5d9808bba21b9dbda65c24ad95b238c0",
+    "TradingSession": "sha256:e6dbc91aaf9636b6ce93b3a8b89e05ac1d5c0cab7a086baea7ac429101cb7a89"
+  },
+  "notes": "core.governance.reproduction_runner.run_reproduction() executed against a pinned detached worktree at commit_hash and a scratch DB reconstructed from dataset_manifest.json; outcome VERIFIED (frozen identities unchanged, no exception).",
+  "reproduction_status": "verified",
+  "result_report_hash": "sha256:bdc58eafa2f75deb1918e2e5a88ee321e59c76206c081579b98a665cccccf7b9",
+  "verified_at": "2026-07-25T00:55:00Z"
+}
