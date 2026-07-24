@@ -3135,3 +3135,138 @@ The two blocks differ in one respect worth stating — AD-052 … AD-055 are
 retired *permanently* and no ADR will ever be created under them, while
 AD-061 … AD-067 are held *for a named owner* and would be written under
 those numbers if F-0 were ever accepted.
+
+### AD-068: ETF is a domain distinct from Data, identified by symbol until it is identified by path (accepted 2026-07-24)
+
+**Review basis.** `docs/PHASE_4_STORE_EXTRACTION_GOVERNANCE_RESOLUTION_2026-07-24.md`,
+findings GR-04, GR-05, GR-08, GR-09, GR-11, and test T-1. That document
+is **Level 1** — one reader with repository access — and discharges no
+independent-review requirement. It must never be cited as an independent
+review of this decision, and this AD is accepted on that understanding.
+
+**Context.** `docs/PLATFORM_ARCHITECTURE_V1.md` Section 1 states the
+platform's goal directly: "adding a new asset class (equities, crypto,
+bonds) never requires touching Research, Validation, Statistics,
+Governance, or Reporting — only a new Data-domain provider". Section 3
+requires Statistics to have "no knowledge that 'ETF' or 'H3' exist".
+Both statements are only meaningful if **ETF names something distinct
+from generic market data** — and until this decision, nothing in the
+repository made that distinction. The import checker mapped
+`core.analytics` (ETF scoring and ranking) to the `data` domain, and the
+ETF-specific types living inside `core.market_data` were
+indistinguishable from the asset-class-neutral ones beside them. Every
+platform domain could reach ETF concepts through an edge the Section 5
+table blesses as "→ Data", and the coupling was invisible to the only
+mechanism that could have reported it.
+
+Five decisions are recorded here. None is derivable from any accepted AD.
+
+**Decision 1 — ETF is a domain, and Section 5 gains a row and a column.**
+`core.analytics` maps to `etf`, not to `data`. Per
+`docs/RESEARCH_PLATFORM_MVP_MIGRATION_PLAN.md` Section 1, only
+`core.analytics.persistence` was ever formally Data-domain code; the rest
+is "not yet a domain; stays product logic". Under an ETF/Data split that
+persistence layer is *ETF-scoring* persistence, so the package moves
+whole. ETF may depend on Data and Statistics (and on the kernel, like
+every domain).
+
+**Decision 2 — no domain may depend on ETF.** An asset class is a
+plug-in *above* the platform, never something the platform reaches down
+into. `etf` therefore appears in no other domain's allowed set,
+including Data's. This is a **novel rule with no Section 5 precedent** —
+that document's forbidden list contains no "nothing may depend on X"
+entry — which is why it needs recording rather than assuming. It is the
+executable form of Section 1's asset-class-neutrality goal: if a new
+asset class must never require touching Research, Validation,
+Statistics, Governance, or Reporting, then an edge from any of them into
+ETF is a violation by construction.
+
+**Decision 3 — domain attribution by imported symbol, not by module
+path.** `ETF_SYMBOLS_BY_MODULE` names the ETF-specific symbols that
+physically live in asset-class-neutral modules — `ETFId` in
+`core.shared.ids`, `ETF` in `core.market_data.domain.models`, and the
+`insert_etf` / `get_etf` / `get_etf_by_ticker` repository functions. An
+import is attributed to `etf` by the **name it binds**, not by the module
+that currently hosts the definition, so the checker can report
+`governance -> etf` for a line whose module path reads
+`core.market_data`.
+
+This is a **deliberate departure from Section 5's Enforcement clause**,
+which states the check is "a matter of scanning `import` statements by
+top-level package name, **no AST-level cleverness required**." The
+justification is that step 1 **does not move files** — a path-only
+checker cannot see a domain that has no package of its own, so the
+choice is symbol attribution or no visibility at all. The alternative,
+relocating the symbols first, would make the boundary change and the
+file moves one indivisible diff with no intermediate state in which the
+coupling is measurable.
+
+**The departure has a termination condition, and it is recorded so the
+mechanism does not outlive its reason:** symbol attribution is permitted
+**only for domains not yet separated by package path**, and this use of
+it ends when `ETF_SYMBOLS_BY_MODULE` empties — at which point ETF is
+identified by path like every other domain and the per-alias attribution
+becomes dead code to be deleted. Section 5's Enforcement clause is
+amended in the same commit as this AD to say exactly that. Nothing here
+licenses AST analysis for any other purpose.
+
+**Decision 4 — the pre-existing coupling is inventoried, not
+discharged, and the inventory ships as an `xfail(strict=True)` marker.**
+Step 1's whole thesis is that inventory is not repair. Five
+`data -> etf` and related violations exist in the tree today; this
+decision makes them *named and countable* (`format_inventory` groups
+them by domain edge) and deliberately does **not** fix them. That is
+step 3's work.
+
+The posture is recorded in the test suite by
+`tests/test_import_boundaries.py::test_real_repository_has_no_boundary_violations`
+carrying `@pytest.mark.xfail(strict=True)`. The earlier draft of this
+work shipped the test simply failing. That was rejected: this repository
+has **no CI**, so `pytest` is the only gate, and a permanently red suite
+destroys that gate for every unrelated test, hides the next real
+regression at the summary line, and trains the sole human gate to ignore
+red output. `skip` was also rejected — it removes the assertion, so the
+coupling stops being checked and nothing detects the day it is
+discharged. `strict=True` is what makes the marker better than a red
+test rather than weaker: an **unexpected pass is a failure**, so the day
+the last coupling is discharged the suite forces the marker's removal.
+
+Conditions on this, all binding: `strict=True` is mandatory; the
+`reason` must name the discharging step; the paired green inventory test
+`test_known_etf_coupling_inventory_is_exactly_as_documented` is retained
+(the marker records the aspiration, the inventory test records the exact
+current state, and neither substitutes for the other); the marker is
+scoped to **exactly one test** and is **not** precedent for deferring any
+other failure. AD-005 is unaffected — `pytest` is already the runner and
+no framework is added.
+
+**This is the first `xfail` in the repository.** There is no prior use of
+any test-outcome marker here, so the convention is introduced by this
+decision and is stated rather than left to be inferred.
+
+**Decision 5 — `ETF_SYMBOLS_BY_MODULE` is a hand-maintained shrink
+inventory.** It is not an allow-list and nothing is exempted by
+appearing in it; each entry is a generic module that still declares an
+asset-class-specific name, and the mapping shrinks to empty when the
+split is real. Its accuracy is guaranteed by **no mechanism** — a rename
+or relocation of a listed symbol would silently stop matching,
+violations would drop toward zero, and the `xfail` would pass
+unexpectedly. Under `strict=True` that unexpected pass fails the suite
+loudly, which is the intended interaction, but it reports "split
+complete" for the wrong reason. `test_every_etf_symbol_resolves_in_its_named_module`
+(T-1) closes this by asserting every listed symbol actually exists where
+the mapping says it does. That test guards a **false-success** mode and
+is the highest-value test in this change; if it ever fails it must be
+investigated, never adjusted to pass.
+
+**Consequences.** Section 5's dependency table gains an ETF row and
+column and a "nothing may depend on ETF" forbidden entry; its
+Enforcement clause is amended to permit symbol attribution for domains
+not yet separated by package path, with the termination condition above.
+Both amendments ship in the same commit as this AD, so this AD's claim
+to amend Section 5 is true by construction rather than by intention.
+`core.analytics` is no longer Data-domain code for checker purposes,
+which makes previously-blessed edges into it visible as violations —
+that visibility is the deliverable. This AD does **not** discharge those
+violations, does **not** move any file, and makes no claim about the
+`adapters/` tree, which `check_repository` does not scan.

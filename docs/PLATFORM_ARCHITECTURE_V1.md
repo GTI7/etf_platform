@@ -501,14 +501,20 @@ which research project is consuming it.
 
 **Allowed (per §3's layering):**
 
-| From ↓ / To → | Data | Statistics | Governance | Validation | Research | Reporting |
-|---|---|---|---|---|---|---|
-| Data | — | ✕ | ✕ | ✕ | ✕ | ✕ |
-| Statistics | ✕ | — | ✕ | ✕ | ✕ | ✕ |
-| Governance | ✅ | ✕ | — | ✕ | ✕ | ✕ |
-| Validation | ✅ | ✅ | ✅ | — | ✕ | ✕ |
-| Research | ✅ | ✅ | ✅ | ✅ | — | ✕ |
-| Reporting | ✅ | ✅ | ✅ | ✅ | ✅ | — |
+| From ↓ / To → | Data | Statistics | ETF | Governance | Validation | Research | Reporting |
+|---|---|---|---|---|---|---|---|
+| Data | — | ✕ | ✕ | ✕ | ✕ | ✕ | ✕ |
+| Statistics | ✕ | — | ✕ | ✕ | ✕ | ✕ | ✕ |
+| ETF | ✅ | ✅ | — | ✕ | ✕ | ✕ | ✕ |
+| Governance | ✅ | ✕ | ✕ | — | ✕ | ✕ | ✕ |
+| Validation | ✅ | ✅ | ✕ | ✅ | — | ✕ | ✕ |
+| Research | ✅ | ✅ | ✕ | ✅ | ✅ | — | ✕ |
+| Reporting | ✅ | ✅ | ✕ | ✅ | ✅ | ✅ | — |
+
+The **ETF** row and column were added by AD-068 (boundary-hardening step
+1). ETF is an *asset class*, not a platform layer: it plugs in above the
+platform and reaches down into Data and Statistics, and nothing reaches
+back up into it.
 
 **Forbidden dependencies, stated explicitly:**
 
@@ -518,6 +524,15 @@ which research project is consuming it.
 - **Data → anything.** The foundation never calls upward; if Data code
   needs "what hypothesis is this for," that information is being
   threaded through the wrong layer.
+- **Anything → ETF** (AD-068). No platform domain may depend on an asset
+  class. §1 requires that "adding a new asset class (equities, crypto,
+  bonds) never requires touching Research, Validation, Statistics,
+  Governance, or Reporting", and §3 requires Statistics to have "no
+  knowledge that 'ETF' or 'H3' exist"; an edge into ETF from any of them
+  contradicts both. This includes **Data → ETF**, which the "never calls
+  upward" rule above already covers. This is the table's first
+  "nothing may depend on X" entry, which is why AD-068 records it as a
+  novel rule rather than an application of an existing one.
 - **Governance → Research, Validation, Reporting.** Governance audits
   by re-deriving from Data and from plain artifacts (files, hashes,
   JSON records) — never by calling into another domain's orchestration
@@ -537,7 +552,9 @@ in a higher-numbered layer (§3) to one in an equal-or-lower layer,
 and no domain calls into a same-layer peer (Validation and Governance,
 both Layer 1, never call each other; Data and Statistics, both Layer
 0, never call each other). A cycle would require an edge that violates
-this ordering, and the table above contains none.
+this ordering, and the table above contains none. ETF cannot introduce
+one either: it has out-edges only and no in-edges, so no path can
+return to it.
 
 **Enforcement.** Consistent with AD-005 (no frameworks), this is
 enforced by two cheap, stdlib-only mechanisms rather than a DI
@@ -552,6 +569,24 @@ container or a plugin system:
    `core/validation/`, `core/research/`, `core/reporting/` — so the
    forbidden-edge check is a matter of scanning `import` statements
    by top-level package name, no AST-level cleverness required.
+
+   **Amendment (AD-068).** Item 2 holds for every domain that *has* a
+   package of its own, which is the steady state this document
+   describes. It does not hold during a split. Where a domain has been
+   decided but its symbols still live inside another domain's packages,
+   the check may attribute an import to a domain **by the symbol it
+   binds** rather than by the module path that hosts it, which requires
+   reading imports per-alias rather than per-statement.
+
+   This permission is **narrow and self-terminating**. It applies only
+   to domains not yet separated by package path; the symbols concerned
+   must be enumerated in one place (`ETF_SYMBOLS_BY_MODULE` in
+   `tools/check_import_boundaries.py`), which is an inventory of where
+   the split has not been made and not an exemption list; and the
+   departure **ends when that inventory empties**, at which point the
+   domain is identified by path like every other and the per-alias
+   attribution is deleted. Nothing here licenses AST analysis for any
+   other purpose, and the rest of item 2 is unchanged.
 
 ## 6. Automation Roadmap
 
