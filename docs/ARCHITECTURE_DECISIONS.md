@@ -3136,6 +3136,21 @@ retired *permanently* and no ADR will ever be created under them, while
 AD-061 … AD-067 are held *for a named owner* and would be written under
 those numbers if F-0 were ever accepted.
 
+> **Amendment — 2026-07-24: the next-free-number sentence is stale;
+> nothing else in this block changes.** *"New ADRs therefore number from
+> **AD-068**"* was true when written and is false now — AD-068 (`:3139`
+> below) and AD-069 (`:3274` below) are both accepted since. **The next
+> free number is AD-070.** This corrects only that one status sentence.
+> Every decision sentence above — the reservation of AD-061 … AD-067 to
+> Phase F, the release condition, and the general rule — is unchanged and
+> is not superseded by this note. The reservation block's other stale
+> sentence, describing F-0 as blocked "for want of an independent review
+> that does not exist as a repository artifact," is **not** corrected
+> here: that correction records that F-0's blocker is discharged, which
+> is true only once AD-061 … AD-067 are actually written and accepted,
+> and neither has happened as of this note. It is superseded in the same
+> commit that performs that acceptance, not before.
+
 ### AD-068: ETF is a domain distinct from Data, identified by symbol until it is identified by path (accepted 2026-07-24)
 
 **Review basis.** `docs/PHASE_4_STORE_EXTRACTION_GOVERNANCE_RESOLUTION_2026-07-24.md`,
