@@ -25,8 +25,10 @@ commits** rather than against the current working tree alone.
 from __future__ import annotations
 
 import ast
+import importlib.util
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -190,6 +192,115 @@ def test_legacy_shim_importers_are_exactly_the_frozen_files() -> None:
         "Deleting the shims on the strength of this assertion alone "
         "converts every archived cycle's reproduction into an uncaught "
         "runner crash, silently, with a green suite. See AD-069."
+    )
+
+
+def test_shim_public_surface_is_exactly_one_name() -> None:
+    """T-8. Each shim re-exports one name and defines nothing else.
+
+    ``__all__`` is declarative and enforces nothing -- a shim could
+    regrow a helper, a constant, or a second re-export and no existing
+    test would notice. The module-level surface is checked from the AST
+    rather than from ``dir()`` so that the imported name itself is the
+    only thing that can appear."""
+    expected = {
+        "core/market_data/persistence/database.py": "connect",
+        "core/market_data/persistence/migrations.py": "run_migrations",
+    }
+    for relative_path, name in expected.items():
+        tree = ast.parse(
+            (REPO_ROOT / relative_path).read_text(encoding="utf-8"),
+            filename=relative_path,
+        )
+        bound: set[str] = set()
+        assignments: set[str] = set()
+        for node in tree.body:
+            if isinstance(node, ast.ImportFrom):
+                bound.update(
+                    alias.asname or alias.name
+                    for alias in node.names
+                    if node.module != "__future__"
+                )
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                bound.add(node.name)
+            elif isinstance(node, ast.Assign):
+                assignments.update(
+                    target.id for target in node.targets if isinstance(target, ast.Name)
+                )
+
+        assert bound == {name}, (
+            f"{relative_path} must re-export exactly '{name}' and define nothing "
+            f"else; found {sorted(bound)}. A shim that regrows logic is no longer "
+            "a shim, and the frozen scripts would silently get different behavior "
+            "from the live code."
+        )
+        assert assignments <= {"__all__"}, (
+            f"{relative_path} defines module-level names beyond __all__: "
+            f"{sorted(assignments - {'__all__'})}"
+        )
+
+
+def test_legacy_import_from_a_foreign_worktree_still_binds_core_store(tmp_path: Path) -> None:
+    """T-2. The reproduction path, made executable.
+
+    ``reproduction_runner._load_module_from_worktree`` prepends a pinned
+    worktree to ``sys.path`` and ``exec_module``'s the pinned script. But
+    ``sys.modules['core']`` is already populated with HEAD's package, so
+    ``core.market_data.persistence.database`` resolves through **HEAD's**
+    ``core.__path__`` and binds HEAD's shim -- never the worktree's own
+    copy, whatever ``sys.path`` says.
+
+    This test reproduces that exactly: a synthetic worktree containing
+    its own, differently-behaving copy of the legacy module is placed at
+    ``sys.path[0]``, and a module performing the legacy import is loaded
+    the same way the runner loads one. The bound ``connect`` must be
+    ``core.store.connection.connect`` and the worktree's marker must be
+    absent.
+
+    The existing shim tests cover *static* importers. This covers the
+    dynamic exec path, which is the one AD-069 calls the shims' primary
+    reason for existing -- and the one whose failure mode is an uncaught
+    runner crash rather than a governed status."""
+    worktree = tmp_path / "pinned_worktree"
+    shim_dir = worktree / "core" / "market_data" / "persistence"
+    shim_dir.mkdir(parents=True)
+    for package_dir in (
+        worktree / "core",
+        worktree / "core" / "market_data",
+        shim_dir,
+    ):
+        (package_dir / "__init__.py").write_text("", encoding="utf-8")
+    (shim_dir / "database.py").write_text(
+        "WORKTREE_MARKER = 'this is the worktree copy, not HEAD'\n"
+        "def connect(db_path):\n"
+        "    raise AssertionError('the worktree copy must never be bound')\n",
+        encoding="utf-8",
+    )
+
+    pinned_script = worktree / "pinned_experiment.py"
+    pinned_script.write_text(
+        "from core.market_data.persistence.database import connect\n"
+        "import core.market_data.persistence.database as bound_module\n",
+        encoding="utf-8",
+    )
+
+    spec = importlib.util.spec_from_file_location(pinned_script.stem, pinned_script)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.path.insert(0, str(worktree))
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.path.remove(str(worktree))
+
+    assert module.connect is connect, (
+        "a pinned script's legacy import did not bind core.store.connection.connect. "
+        "The shims are the mechanism that makes archived cycles reproducible "
+        "against HEAD -- see AD-069."
+    )
+    assert not hasattr(module.bound_module, "WORKTREE_MARKER"), (
+        "the worktree's own copy of the legacy module was bound, which "
+        "contradicts the sys.modules resolution AD-069 records"
     )
 
 

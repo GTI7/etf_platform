@@ -28,6 +28,7 @@ deleted together with this note.
 
 from __future__ import annotations
 
+import ast
 import importlib
 from pathlib import Path
 
@@ -555,6 +556,43 @@ def test_store_is_not_a_route_from_a_domain_into_etf(tmp_path: Path) -> None:
     assert len(violations) == 1
     assert violations[0].from_domain == "store"
     assert violations[0].to_domain == "etf"
+
+
+@pytest.mark.parametrize("package", ["statistics", "shared"])
+def test_real_tree_statistics_and_kernel_import_no_store(package: str) -> None:
+    """T-6. The *actual* tree, not a synthetic one.
+
+    ``test_statistics_may_not_depend_on_store`` and
+    ``test_shared_kernel_may_not_depend_on_store`` both build a tree in
+    ``tmp_path``: they prove the checker would report the edge, not that
+    the edge is absent from this repository. The repository-wide check
+    that would cover it is under a strict ``xfail`` for unrelated ETF
+    reasons, so nothing asserts this today. It is cheap and independent
+    of both.
+
+    Statistics and the shared kernel are the two packages whose purity
+    the reproducibility argument rests on: if either acquired a database
+    connection, "pure computational library" would stop being true while
+    the suite stayed green."""
+    package_root = Path(__file__).resolve().parent.parent / "core" / package
+    offenders = {}
+    for path in sorted(package_root.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        reached = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                reached.update(a.name for a in node.names if a.name.startswith("core.store"))
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                if node.module == "core.store" or node.module.startswith("core.store."):
+                    reached.add(node.module)
+        if reached:
+            offenders[path.name] = sorted(reached)
+
+    assert offenders == {}, (
+        f"core/{package}/ must not reach the storage substrate: {offenders}. "
+        "Statistics is denied I/O on purity grounds (AD-069), and the kernel "
+        "is denied it structurally."
+    )
 
 
 def test_format_inventory_groups_by_domain_edge(tmp_path: Path) -> None:
