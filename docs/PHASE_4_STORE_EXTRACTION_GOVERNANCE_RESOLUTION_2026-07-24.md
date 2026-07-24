@@ -407,6 +407,17 @@ than no test.
 - **Reproduction impact:** this finding *is* the reproduction impact. §6 is
   its discharge.
 
+> **Amendment — 2026-07-24: "the predicate" in the bullet above is the
+> file's, not this finding's test.** The bullet is exact at *file*
+> granularity — `tests/test_store_extraction.py` received both the
+> corrected assertion message and, per T-3, the archive-pin predicate. It
+> has been misread as saying that
+> `test_legacy_shim_importers_are_exactly_the_frozen_files`, the test named
+> at the head of this finding, acquired that predicate. It did not: T-3
+> landed as a **separate, new** test,
+> `test_pinned_commits_still_require_the_shims`. See the amendment in §7
+> for the full correction. The GR-07 ruling is unchanged.
+
 ---
 
 ### GR-08 — §5 was never amended · **ACCEPT**
@@ -1044,6 +1055,42 @@ per GR-07, predicate strengthened per T-3),
 `test_store_may_not_depend_on_any_domain`,
 `test_shared_kernel_may_not_depend_on_store`,
 `test_store_is_not_a_route_from_a_domain_into_etf`.
+
+> **Amendment — 2026-07-24: the evidence reference above names the wrong
+> test; the T-3 predicate and every ruling in this document are
+> unchanged.** The entry for
+> `test_legacy_shim_importers_are_exactly_the_frozen_files` reads "(message
+> corrected per GR-07, predicate strengthened per T-3)." The message half
+> is right. The predicate half is not: that test's predicate was never
+> strengthened, and it does not read `research_archive/*/COMMIT.txt`.
+>
+> T-3 is **`test_pinned_commits_still_require_the_shims`**
+> (`tests/test_store_extraction.py:307`), a **separate, new** test that
+> landed in `6f81bf2` alongside the extraction. Its own docstring reads
+> *"T-3. Retirement condition (b) of AD-069, made mechanical,"* and it
+> implements the T-3 row of the table above verbatim.
+>
+> The two predicates are disjoint in code: `_archived_commit_pins()` reads
+> `COMMIT.txt` and is called only from the T-3 test, while
+> `_frozen_python_files()` reads
+> `tests/fixtures/protected_file_hashes.json` and is called only from the
+> named one. The named test therefore operates in retirement condition
+> **(a)**'s territory — which files at HEAD may still import a legacy path
+> — and never in condition (b)'s. What GR-07 changed in it was its
+> assertion **message**, which now directs a reader to the T-3 test for the
+> binding condition. Read that way, its listing under **Retained
+> unchanged** is exact.
+>
+> **The evidence chain is: condition (b) → T-3 →
+> `test_pinned_commits_still_require_the_shims`.**
+>
+> Nothing above is rewritten and no ruling moves. T-3 remains **Blocking**
+> and assigned to C5; GR-07 remains ACCEPT; §6.3's statement that T-3 makes
+> condition (b) executable by reading `research_archive/*/COMMIT.txt` was
+> always correct, as was the T-3 row of the table above. Only the
+> attribution in this list is corrected. This wording is where the drift
+> originated: it reached AD-069, corrected at `546831c`, and
+> `reproduction_runner.py`'s docstring, corrected at `e5b3e96`.
 
 **Retired:** `test_every_domain_may_depend_on_store` — superseded by T-5.
 
