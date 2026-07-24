@@ -3094,3 +3094,44 @@ persisted path list may differ in *order* from `context`'s (it reflects
 the verified evidence's own order), which is expected and covered by
 regression tests. This closes the gap without reopening `GateStatus`,
 `DecisionRecord`'s schema, or any accepted AD's semantics.
+
+### AD numbering — AD-061 … AD-067 are reserved to Phase F, and a reservation is discoverable only here
+
+**Decision.** AD-061, AD-062, AD-063, AD-064, AD-065, AD-066, and AD-067
+are **reserved** to the Phase 4 Phase F Research Execution Engine. The
+reservation is recorded at
+`docs/PHASE_4_PHASE_F_ARCHITECTURE_RESOLUTION.md` §5 ("Required AD
+content, as resolved"), which fixes the required content of all seven and
+states that the accepted ceiling is AD-060 and that this file "contains
+**no occurrence** of AD-061 … AD-067." That statement is true and this
+block exists to keep it true. New ADRs therefore number from **AD-068**.
+
+**The reservation is live but unaccepted, and those are different
+things.** None of the seven is accepted: acceptance is Phase F's F-0,
+which `PHASE_4_PHASE_F_ARCHITECTURE_RESOLUTION.md` §1.2 and §7 record as
+**blocked** for want of an independent review that does not exist as a
+repository artifact. A reservation nevertheless binds from the moment it
+is recorded. Whether Phase F is accepted bears on Phase F's *decisions*;
+it does not bear on Phase F's *claim to the numbers*. Reserved numbers
+are released **only by a recorded decision in this file** — never by a
+later change observing that the numbers are unoccupied and taking them.
+
+**The general rule, which is the actual repair.** A number is reserved
+from the moment any governance document claims it, and
+`docs/ARCHITECTURE_DECISIONS.md` is the **single place a reservation is
+discoverable**. Any document that claims a range must have that claim
+mirrored here, in a block like this one, in the same commit that makes
+the claim. This block is written because that rule was not in force: the
+Phase F reservation lived only inside an unaccepted proposal document,
+invisible to a reader of this file, and boundary-hardening step 2 was
+consequently drafted as "AD-061" and cited under that number from six
+files before the collision was found. Nothing but this rule prevents the
+next one.
+
+**Precedent.** This is the same instrument as the AD-052 … AD-055
+retirement block above, applied to a reservation rather than a
+retirement: the number is disclosed and fenced, not silently skipped.
+The two blocks differ in one respect worth stating — AD-052 … AD-055 are
+retired *permanently* and no ADR will ever be created under them, while
+AD-061 … AD-067 are held *for a named owner* and would be written under
+those numbers if F-0 were ever accepted.
