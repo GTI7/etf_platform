@@ -39,7 +39,10 @@ Verified directly:
   ([migrations/0001_initial_schema.sql:35](../migrations/0001_initial_schema.sql#L35)).
 - Every connection this codebase opens sets `PRAGMA foreign_keys=ON`
   ([core/market_data/persistence/database.py:24](../core/market_data/persistence/database.py#L24)) —
-  this constraint is live, not advisory.
+  this constraint is live, not advisory. *(Line reference accurate as of
+  this document's date; `connect()` moved to `core/store/connection.py`
+  per AD-069, and the pragma is now asserted by
+  `tests/test_store_connection.py`.)*
 - `ETF.etf_id` is minted with `uuid.uuid4().hex`
   ([experiments/daily_etf_universe_update.py:130](../experiments/daily_etf_universe_update.py#L130)),
   and only when `get_etf_by_ticker(conn, ticker)` returns `None`
@@ -549,6 +552,10 @@ implied to be closed:
    and it has a single point of failure.** `PRAGMA foreign_keys=ON` is
    set inside `core.market_data.persistence.database.connect()`
    ([database.py:24](../core/market_data/persistence/database.py#L24)).
+   *(Accurate as of this document's date. `connect()` moved to
+   `core/store/connection.py` per AD-069; the single point of failure
+   described here is unchanged by the move, and the pragma is now
+   asserted by `tests/test_store_connection.py`.)*
    If any future code path opens `sqlite3.connect()` directly instead of
    going through this helper, the pragma is silently off (SQLite's
    default), and the orphan-row protection this design leans on as a
