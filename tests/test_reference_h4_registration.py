@@ -76,13 +76,10 @@ def test_reference_h4_archive_manifest_matches_schema_v1() -> None:
     assert manifest["lifecycle_version"] == "v1"
 
 
-def test_reference_h4_archive_has_no_evidence_subdirectories_scaffolded() -> None:
-    """Manifest creation was identity registration only, not evidence
-    initialization -- no `scaffold_project_archive()` call was made for
-    this cycle, so none of Standard Section 5's evidence subdirectories
-    exist yet."""
-    repo_root = Path(__file__).resolve().parent.parent
-    archive_dir = repo_root / "research_archive" / "reference_h4"
-
-    for subdirectory in ("dataset_hashes", "experiment_results", "reviewer_reports"):
-        assert not (archive_dir / subdirectory).exists()
+# test_reference_h4_archive_has_no_evidence_subdirectories_scaffolded, which
+# pinned "no evidence subdirectories exist yet" as of B-3b's identity-only
+# registration, was removed 2026-07-25: reference_h4 is now the platform's
+# first real governed research cycle (research_archive/reference_h4/decision_log.md),
+# and Standard Section 5's evidence subdirectories are populated for real as
+# that cycle progresses -- the premise this test pinned is now intentionally
+# false, not regressed.
