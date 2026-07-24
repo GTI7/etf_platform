@@ -1,0 +1,6 @@
+# Canonical JSONL (core.governance.canonical_jsonl) and any hash-chained or
+# content-hash-verified governance artifact must stay byte-exact across
+# checkout/clone -- core.autocrlf must never rewrite line endings in these
+# files, or DecisionRecorder's canonical-prefix check and dataset content
+# hashes silently break on a fresh checkout.
+*.jsonl -text
