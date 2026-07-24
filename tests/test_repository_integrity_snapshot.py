@@ -77,10 +77,11 @@ def test_no_protected_directory_gained_or_lost_files() -> None:
     reasoning, `research_archive/reference_h4/` (superseding the narrower
     archive_manifest.json-only exception B-3b introduced -- that file is
     now one of several live evidence files in a directory that is itself
-    a new, currently open cycle, not a closed one) and
+    a new, currently open cycle, not a closed one) and both
     `experiments/run_reference_h4_lifecycle.py` (cycle orchestration
-    tooling, not historical evidence) are excluded until this cycle
-    reaches Phase 8 Archive and is closed.
+    tooling) and `experiments/validate_h4_kurtosis.py` (the Phase 5
+    implementation artifact) are excluded until this cycle reaches Phase 8
+    Archive and is closed.
     """
     current_files = set()
     for base in ("research_archive", "experiments", "maintenance"):
@@ -98,8 +99,11 @@ def test_no_protected_directory_gained_or_lost_files() -> None:
                     continue  # new, open Phase 3 cycle -- see addendum above
                 if relative_path.startswith("research_archive/reference_h4/"):
                     continue  # new, open first-real-cycle evidence -- see addendum above
-                if relative_path == "experiments/run_reference_h4_lifecycle.py":
-                    continue  # new, open first-real-cycle orchestration tooling -- see addendum above
+                if relative_path in (
+                    "experiments/run_reference_h4_lifecycle.py",
+                    "experiments/validate_h4_kurtosis.py",
+                ):
+                    continue  # new, open first-real-cycle scripts -- see addendum above
                 current_files.add(relative_path)
 
     assert current_files == set(EXPECTED_HASHES)
