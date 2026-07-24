@@ -3270,3 +3270,210 @@ which makes previously-blessed edges into it visible as violations —
 that visibility is the deliverable. This AD does **not** discharge those
 violations, does **not** move any file, and makes no claim about the
 `adapters/` tree, which `check_repository` does not scan.
+
+### AD-069: Storage primitives live in `core.store`, a substrate below Data that Data and Governance may reach (accepted 2026-07-24)
+
+**Review basis.** `docs/PHASE_4_STORE_EXTRACTION_GOVERNANCE_RESOLUTION_2026-07-24.md`,
+findings GR-02, GR-03, GR-04, GR-06, GR-07, GR-08, GR-18, GR-19, §5, §6
+and §7. That document is **Level 1** — one reader with repository access
+— and discharges no independent-review requirement. It must never be
+cited as an independent review of this decision.
+
+**Context.** `connect()` and `run_migrations()` sat in
+`core/market_data/persistence/`. Neither has ever had any market-data
+content: `connect()` sets three sqlite3 options, and `run_migrations()`
+applies whatever `*.sql` files it is handed against a `schema_migrations`
+ledger it owns. They lived in the Data domain only because `market_data`
+was the first package that needed a database.
+
+AD-068 made the cost visible. `core.market_data` is **not**
+asset-class-neutral — the checker now reports `data -> etf` violations
+inside it — yet Governance, the CLI, the tests, and every experiment
+script had to import that package merely to open a connection. The
+allowed `governance -> data` edge was therefore carrying two unrelated
+things at once: a legitimate need for the storage substrate, and a
+dependency on an ETF-contaminated package. Neither could be tightened
+without hurting the other.
+
+**Decision.**
+
+1. `connect()` moves to `core/store/connection.py` and
+   `run_migrations()` to `core/store/migrations.py`, **verbatim**. This
+   is a relocation, not a rewrite: the transaction-mode contract
+   documented on `connect()` — `isolation_level=""`, on which every
+   rollback guarantee in this project depends — is unchanged.
+2. `core.store` is a **domain in its own right**, added to the Section 5
+   dependency table. It is **Layer −1**: substrate, below Data and
+   Statistics. Its own allowed set is **empty** — the substrate reaches
+   nothing.
+3. `core.store` is **not** folded into the shared kernel, despite the
+   kernel's "every domain may import it" exemption looking like a free
+   fit. The kernel is a pure value vocabulary (`Money`, `Clock`, ids)
+   with no I/O. Mapping a package that opens files and executes SQL to
+   `"kernel"` would make `kernel -> store` a same-domain import and thus
+   permanently unflaggable, letting `core.shared` acquire sqlite3
+   unnoticed. Keeping them distinct preserves that check
+   (`tests/test_import_boundaries.py::test_shared_kernel_may_not_depend_on_store`).
+4. **Scope is the two primitives and nothing else.** Repository
+   functions know table names and stay in their owning domain —
+   `core.market_data.persistence.repository` for market data,
+   `core.analytics.persistence.repository` for ETF scoring. No dataset
+   abstraction is introduced, and none is reserved for.
+   `tests/test_store_extraction.py::test_store_holds_only_the_two_primitives`
+   fails if a third module appears, so widening the substrate requires a
+   new decision rather than a quiet commit.
+
+**Permission ledger — exactly what this decision changes in Section 5.**
+An earlier draft of this ADR closed with the sentence *"amends
+docs/PLATFORM_ARCHITECTURE_V1.md Section 5's dependency table by
+addition only; no existing edge changes direction or permission."* That
+sentence was **false in both clauses** and is deleted rather than
+softened: adding a column that some existing row is granted *is* a
+permission change to that row, and "addition only" was true of the
+table's shape while false of its content. In a repository with no CI,
+where ADRs are the governing artifact and the reader is a human auditor,
+an ADR that misstates its own effect on the normative table is the
+highest-consequence defect available — it is what a future reader trusts
+*instead of* re-deriving the diff. The replacement is an explicit ledger:
+
+| Row | Before | After | Change |
+|---|---|---|---|
+| Data → Store | ✕ | **✅** | **Loosened.** Demanded by the two shims. |
+| Governance → Store | ✕ | **✅** | **Loosened.** Demanded by `reconstruction_loader` and `reproduction_runner`. |
+| Statistics → Store | ✕ | ✕ | **Unchanged.** |
+| ETF, Validation, Research, Reporting → Store | ✕ | ✕ | **Unchanged.** No importer. |
+| Kernel → Store | ✕ | ✕ | **Unchanged**, and structurally load-bearing (clause 3). |
+| Store → anything | — | ✕ | New row, empty set. |
+| Every pre-existing non-Store edge | — | — | **Unchanged.** No edge changes direction. |
+
+**Two rows are loosened, and no more.** An earlier draft granted `store`
+to **all seven** non-kernel domains. That is rejected. The demonstrated
+demand under `core/` is four import sites in three files across two
+domains; five domains would have received a storage edge no code uses.
+Worse, the broad grant **refuted this ADR's own clause 3 inside the same
+change**: clause 3 argues at length that `store` must stay outside the
+kernel because "the kernel is a pure value vocabulary and must not
+acquire I/O", and the broad grant then handed that exact I/O edge to
+`statistics`, which §4.3 defines by the identical purity property.
+
+**The growth rule is demand-driven.** A domain is added to the grant
+list when a real importer appears, by recorded decision, **in the commit
+that introduces the importer**. Adding a grant later is a one-line
+reviewed change; a granted-but-unused edge is invisible drift that a
+future module can occupy silently. Under a broad grant, a future
+`core/statistics` module opening a database would be architecturally
+legal and would pass the checker — which would contaminate the purity
+claim that this project's reproducibility arguments rest on. This is the
+same shrink-inventory discipline already applied to
+`ETF_SYMBOLS_BY_MODULE` and to the shims.
+
+**The two denials are refused on different grounds, and the distinction
+is recorded so it is not re-litigated:**
+
+- **`data -> store` is not an upward edge.** Section 5 forbids "Data →
+  anything" on the stated rationale that "the foundation never calls
+  upward." Store sits **below** Data — it is substrate, Layer −1 — so
+  the edge is consistent with that rationale while violating its literal
+  wording. The wording was over-broad, and Section 5's entry is reworded
+  to *"Data → anything **above it**"* with its rationale preserved
+  exactly.
+- **`statistics -> store` is denied on purity, not layering.** §4.3
+  defines Statistics as a pure computational library; it is refused I/O
+  for the same reason the kernel is. That is the ground to record
+  because it is the ground that survives future layer changes.
+  **Section 5's "Statistics → anything" entry — the single hard rule —
+  is left textually untouched by this decision**, which is stated
+  explicitly here because the earlier draft did touch it.
+
+**The shims are permanent, and the reason usually given is the secondary
+one.** `core/market_data/persistence/database.py` and `migrations.py`
+survive as re-export shims. The earlier draft gave exactly one reason:
+nine hash-protected Phase-0 `.py` files
+(`tests/fixtures/protected_file_hashes.json`,
+`tests/test_repository_integrity_snapshot.py`) import a legacy path and
+may not be edited, nor may the fixture be regenerated to permit an edit.
+That reason is factually correct but it is **not the binding one**, and
+the inversion matters because the stated reason could in principle
+expire while the real one cannot.
+
+> **PRIMARY — pinned-commit module resolution.**
+> `core/governance/reproduction_runner.py` reproduces archived research
+> cycles by prepending a pinned worktree to `sys.path` and
+> `exec_module`-ing the pinned experiment script. But `sys.modules['core']`
+> is **already populated with HEAD's package** — the runner *is*
+> `core.governance.reproduction_runner`. Python therefore resolves
+> `core.market_data.persistence.database` through **HEAD's**
+> `core.__path__`, not through `sys.path`, so a pinned script's legacy
+> import binds **HEAD's shim** and never the worktree's own copy. There
+> is no `sys.modules` isolation anywhere in `core/`. This is live, not
+> theoretical: all three archived cycles pin resolvable commits
+> (`07f0da3`, `19771d4`, `8831d54`), and all three pin
+> `daily_etf_universe_update.py`, which imports **both** legacy paths.
+>
+> **SECONDARY — hash-protected evidence**, as above.
+
+**The failure mode is a crash, not a governed status.** If the shims
+were deleted, the resulting `ImportError` would not degrade a
+reproduction to `UNVERIFIABLE` or `DRIFTED`. In
+`reproduction_runner.py`, `_load_expected_tickers_from_worktree` wraps
+the load in `except OSError` only, its caller catches
+`ReproductionRunnerError` only, `ImportError` is in neither and is not
+in `_DRIFT_ERRORS`, and it is raised **before** the
+`reconstruct_database` block whose broad `except Exception` maps
+failures to `DRIFTED`. A missing shim therefore propagates out of
+`run_reproduction` as an **uncaught exception**: no governed status, no
+evidence record, nothing auditable. This is what makes the retirement
+condition below a hard prohibition rather than a caution. Widening the
+runner's exception mapping to govern `ImportError` changes that module's
+status semantics and is **out of scope** here; it is recorded as an open
+item.
+
+**Retirement condition — binding.** The shims may be deleted only when
+**both** hold:
+
+> **(a)** no file in the working tree imports either legacy path; **and**
+> **(b)** **no reproducible commit imports either legacy path** — that
+> is, for every cycle under `research_archive/*/` with a `COMMIT.txt`,
+> the pinned commit's own tree contains no import of
+> `core.market_data.persistence.database` or
+> `core.market_data.persistence.migrations`.
+
+Condition (b) is **strictly stronger** than (a) and is the binding one.
+Satisfying (a) alone and deleting the shims is a **prohibited act**: it
+converts every archived cycle's reproduction from a verifiable result
+into an uncaught runner crash, silently, **with a fully green test
+suite**. The earlier draft's shrink message instructed exactly that,
+deriving the deletion premise from the current tree alone; that message
+is corrected, and `test_legacy_shim_importers_are_exactly_the_frozen_files`
+is strengthened to read `research_archive/*/COMMIT.txt` and refuse the
+deletion premise while any pin imports a legacy path (T-3). **Currently
+(a) is satisfied for all non-frozen files and (b) is not satisfied and
+cannot be**, because those three commits are immutable and all three
+import both paths. **The shims are therefore permanent for the
+foreseeable life of the repository, and must not be described as a
+transitional alias.** If (b) ever becomes satisfiable, retirement is a
+governance act requiring a new ADR recording which archived cycles were
+re-verified after deletion and by whom; a green suite is necessary and
+**not sufficient** evidence.
+
+**Carried-forward inaccuracy, disclosed not repaired.**
+`reproduction_runner`'s own docstring claims pinned code comes "never
+from `repo_root`'s current HEAD copy." That is accurate for the
+experiment script, which is loaded by file path, and **inaccurate for
+the `core.*` modules it imports**, per the mechanism above. This is a
+**pre-existing** defect, not introduced here — but this decision makes
+the repository *depend* on it, which converts a latent inaccuracy into a
+load-bearing one. Repairing it is out of scope and is recorded as an
+open item.
+
+**Consequences.** `governance -> data` now means only what it says; the
+storage need has its own edge. `core.store` importing anything this
+repository defines — kernel included — is a test failure
+(`test_store_imports_nothing_from_core`), which is stricter than the
+allowed-dependency table can express, since the kernel is an exempt
+target for every domain. Section 5 gains a Store column granted to Data
+and Governance only, and its "Data → anything" entry is reworded to
+"Data → anything above it"; both amendments ship in the same commit as
+this ADR. The five known ETF violations are untouched — AD-068 exposed
+them and neither decision discharges them. This decision does **not**
+modify `reproduction_runner.py`.

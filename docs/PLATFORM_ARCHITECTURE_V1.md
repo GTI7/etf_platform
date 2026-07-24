@@ -501,29 +501,63 @@ which research project is consuming it.
 
 **Allowed (per §3's layering):**
 
-| From ↓ / To → | Data | Statistics | ETF | Governance | Validation | Research | Reporting |
-|---|---|---|---|---|---|---|---|
-| Data | — | ✕ | ✕ | ✕ | ✕ | ✕ | ✕ |
-| Statistics | ✕ | — | ✕ | ✕ | ✕ | ✕ | ✕ |
-| ETF | ✅ | ✅ | — | ✕ | ✕ | ✕ | ✕ |
-| Governance | ✅ | ✕ | ✕ | — | ✕ | ✕ | ✕ |
-| Validation | ✅ | ✅ | ✕ | ✅ | — | ✕ | ✕ |
-| Research | ✅ | ✅ | ✕ | ✅ | ✅ | — | ✕ |
-| Reporting | ✅ | ✅ | ✕ | ✅ | ✅ | ✅ | — |
+| From ↓ / To → | Store | Data | Statistics | ETF | Governance | Validation | Research | Reporting |
+|---|---|---|---|---|---|---|---|---|
+| Store | — | ✕ | ✕ | ✕ | ✕ | ✕ | ✕ | ✕ |
+| Data | ✅ | — | ✕ | ✕ | ✕ | ✕ | ✕ | ✕ |
+| Statistics | ✕ | ✕ | — | ✕ | ✕ | ✕ | ✕ | ✕ |
+| ETF | ✕ | ✅ | ✅ | — | ✕ | ✕ | ✕ | ✕ |
+| Governance | ✅ | ✅ | ✕ | ✕ | — | ✕ | ✕ | ✕ |
+| Validation | ✕ | ✅ | ✅ | ✕ | ✅ | — | ✕ | ✕ |
+| Research | ✕ | ✅ | ✅ | ✕ | ✅ | ✅ | — | ✕ |
+| Reporting | ✕ | ✅ | ✅ | ✕ | ✅ | ✅ | ✅ | — |
 
 The **ETF** row and column were added by AD-068 (boundary-hardening step
 1). ETF is an *asset class*, not a platform layer: it plugs in above the
 platform and reaches down into Data and Statistics, and nothing reaches
 back up into it.
 
+The **Store** row and column were added by AD-069 (boundary-hardening
+step 2). `core.store` is **Layer −1** — substrate *below* Data and
+Statistics, holding `connect()` and `run_migrations()` and nothing else.
+It depends on nothing, and only the two domains with a demonstrated
+importer may reach it: **Data** (the two permanent re-export shims) and
+**Governance** (`reconstruction_loader`, `reproduction_runner`).
+
+**The Store grant list is demand-driven and grows only by recorded
+decision, in the commit that introduces the importer.** A ✕ in the Store
+column means "no importer today", not "forbidden forever" — except for
+Statistics and the kernel, whose ✕ is on purity grounds and is
+structural (see the forbidden list below). A granted-but-unused edge is
+invisible drift that a future module can occupy silently, which is why
+the list is not widened in advance.
+
 **Forbidden dependencies, stated explicitly:**
 
 - **Statistics → anything.** The single hard rule (§4.3). A pure
   computational library that imports a domain concept stops being
   reusable across hypotheses or asset classes.
-- **Data → anything.** The foundation never calls upward; if Data code
-  needs "what hypothesis is this for," that information is being
-  threaded through the wrong layer.
+- **Data → anything above it.** The foundation never calls upward; if
+  Data code needs "what hypothesis is this for," that information is
+  being threaded through the wrong layer. *(Reworded by AD-069. The
+  rationale is unchanged and is the reason for the rewording: Store is
+  **below** Data, so `Data → Store` does not offend "never calls
+  upward". Only the original wording, which said "anything", was
+  over-broad.)*
+- **Statistics → Store**, specifically — and note this is **not** an
+  application of the layering rule, since Store is below Statistics. It
+  is refused on **purity**: §4.3 defines Statistics as a pure
+  computational library, and it is denied I/O for the same reason the
+  kernel is. Recorded separately because purity is the ground that
+  survives future layer changes.
+- **Kernel → Store.** Structural (AD-069 clause 3). `core.store` is
+  deliberately a domain rather than part of the kernel so that this edge
+  stays *checkable*; folding storage into the kernel would make it a
+  same-domain import, permanently unflaggable, and `core/shared/` could
+  acquire sqlite3 unnoticed.
+- **Store → anything.** The substrate holds no domain knowledge. A
+  repository function knows table names and belongs to its owning
+  domain; it may never be pulled down into `core.store`.
 - **Anything → ETF** (AD-068). No platform domain may depend on an asset
   class. §1 requires that "adding a new asset class (equities, crypto,
   bonds) never requires touching Research, Validation, Statistics,
@@ -554,7 +588,8 @@ both Layer 1, never call each other; Data and Statistics, both Layer
 0, never call each other). A cycle would require an edge that violates
 this ordering, and the table above contains none. ETF cannot introduce
 one either: it has out-edges only and no in-edges, so no path can
-return to it.
+return to it. Store is the mirror image — in-edges only and an empty
+allowed set — so it cannot close a cycle either.
 
 **Enforcement.** Consistent with AD-005 (no frameworks), this is
 enforced by two cheap, stdlib-only mechanisms rather than a DI
