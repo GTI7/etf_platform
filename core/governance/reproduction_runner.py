@@ -23,8 +23,8 @@ resolves ``core.…`` through HEAD's ``core.__path__`` regardless of the
 ``sys.path`` insertion in ``_load_module_from_worktree``. There is no
 ``sys.modules`` isolation anywhere in ``core/``. AD-069 records this as
 a pre-existing property that the legacy re-export shims now depend on;
-``test_legacy_shim_importers_are_exactly_the_frozen_files`` (T-3) pins
-the real behaviour.
+``test_legacy_import_from_a_foreign_worktree_still_binds_core_store``
+(T-2) pins the real behaviour.
 
 Status mapping follows the base proposal's SS 2.2 semantics exactly:
 a missing/unresolvable artifact (including an unresolvable commit_hash,
