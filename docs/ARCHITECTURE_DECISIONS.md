@@ -3151,6 +3151,31 @@ those numbers if F-0 were ever accepted.
 > and neither has happened as of this note. It is superseded in the same
 > commit that performs that acceptance, not before.
 
+> **Amendment — 2026-07-24: F-0 performed; the "independent review"
+> sentence is superseded.** The reservation block's other stale sentence
+> — describing F-0 as blocked "for want of an independent review that
+> does not exist as a repository artifact" — is superseded here, in the
+> leveled terms `RESEARCH_GOVERNANCE_STANDARD.md` §4 requires and
+> `docs/PHASE_F_ACCEPTANCE_CONDITIONS.md` F-C4 §4.3 item 4 binds: F-0's
+> blocker is **discharged, not waived**, and not by the discovery of an
+> independent review — none exists and none can be produced on this
+> platform (Standard §4). It is discharged by
+> `docs/PHASE_F_ARCHITECTURE_ACCEPTANCE.md`, a **Level 2 AI-assisted
+> adversarial architecture review**, having been read and its conditions
+> (C-1 … C-12, extended by `docs/PHASE_F_ACCEPTANCE_CONDITIONS.md`'s
+> F-C1 … F-C4 and by `docs/PHASE_F_IMPLEMENTATION_READINESS_REVIEW.md`'s
+> R-16 … R-23, disposed of by
+> `docs/PHASE_F_PRE_IMPLEMENTATION_AMENDMENT_PLAN.md`) folded into
+> AD-061 … AD-067 below, with **Level 3 review's unavailability on this
+> platform disclosed** rather than papered over.
+> `docs/PHASE_F_ARCHITECTURE_ACCEPTANCE.md` must never be cited as "the
+> independent architecture review." AD-061 … AD-067 are accepted below.
+> Combined with the already-accepted AD-068 and AD-069, every number
+> from AD-047 through AD-069 is now either accepted or permanently
+> retired (AD-052 … AD-055); no reserved-and-unaccepted number remains,
+> and the next free number for any future ADR is **AD-070**, as the
+> prior amendment note already established.
+
 ### AD-068: ETF is a domain distinct from Data, identified by symbol until it is identified by path (accepted 2026-07-24)
 
 **Review basis.** `docs/PHASE_4_STORE_EXTRACTION_GOVERNANCE_RESOLUTION_2026-07-24.md`,
@@ -3565,3 +3590,631 @@ and Governance only, and its "Data → anything" entry is reworded to
 this ADR. The five known ETF violations are untouched — AD-068 exposed
 them and neither decision discharges them. This decision does **not**
 modify `reproduction_runner.py`.
+
+---
+
+## Phase 4 / Phase F — Research Execution Engine, F-0 (accepted 2026-07-24)
+
+Accepts the seven ADs reserved above, per
+[`docs/PHASE_4_PHASE_F_RESEARCH_EXECUTION_ENGINE_PROPOSAL.md`](PHASE_4_PHASE_F_RESEARCH_EXECUTION_ENGINE_PROPOSAL.md)
+(the "Proposal"), as amended by
+[`docs/PHASE_4_PHASE_F_ARCHITECTURE_RESOLUTION.md`](PHASE_4_PHASE_F_ARCHITECTURE_RESOLUTION.md)
+(the "Resolution", findings R-1 … R-7), reviewed and conditioned by
+[`docs/PHASE_F_ARCHITECTURE_ACCEPTANCE.md`](PHASE_F_ARCHITECTURE_ACCEPTANCE.md)
+(conditions C-1 … C-12) and
+[`docs/PHASE_F_ACCEPTANCE_CONDITIONS.md`](PHASE_F_ACCEPTANCE_CONDITIONS.md)
+(conditions F-C1 … F-C4), and closed out for implementation readiness by
+[`docs/PHASE_F_IMPLEMENTATION_READINESS_REVIEW.md`](PHASE_F_IMPLEMENTATION_READINESS_REVIEW.md)
+(findings R-16 … R-23), disposed of by
+[`docs/PHASE_F_PRE_IMPLEMENTATION_AMENDMENT_PLAN.md`](PHASE_F_PRE_IMPLEMENTATION_AMENDMENT_PLAN.md).
+**This is F-0. Docs only — zero production code, zero tests.** Phase F's
+own code (F-1 … F-10) unblocks the instant this section lands; none of it
+is written here.
+
+**Review basis, common to all seven ADs below, stated once rather than
+repeated verbatim seven times.** `docs/PHASE_F_ARCHITECTURE_ACCEPTANCE.md`
+is a **Level 2 AI-assisted adversarial architecture review**
+(`RESEARCH_GOVERNANCE_STANDARD.md` §4): a separate pass over the material
+with every load-bearing claim re-derived from the repository rather than
+read out of the Proposal or the Resolution, but **not organizationally
+independent under any definition §4 recognizes** — same model family and
+vendor, no incentive separation, no accountable persistent reviewer
+identity. It is amended by `docs/PHASE_F_ACCEPTANCE_CONDITIONS.md`
+(F-C1 … F-C4) at the reviewing architect's own authority, and continued —
+at the same Level 2 — by `docs/PHASE_F_IMPLEMENTATION_READINESS_REVIEW.md`
+(R-16 … R-23), whose disposition
+`docs/PHASE_F_PRE_IMPLEMENTATION_AMENDMENT_PLAN.md` records. **Level 3
+review is unavailable on this platform** (Standard §4) and has never been
+performed here. None of these five documents, and no AD below, may ever
+be cited as "the independent architecture review."
+
+**Census dating.** Every repository census below is re-derived and dated
+to **HEAD `74e1693`** — the commit immediately preceding this one, and
+the last commit before F-0's own text was written — superseding every
+earlier dating in the Proposal (`58908fe`), the Resolution (`58908fe`),
+and the Acceptance Review (`befa486`). No code under `core/`, `adapters/`,
+or `tools/` changed between `58908fe` and `74e1693` in any way this AD's
+censuses depend on; the module counts, export surfaces, and import facts
+recorded here were independently re-verified against `74e1693`, not
+carried forward.
+
+### AD-061: Phase F — `ResearchRunner` is an orchestrator with no decision authority (accepted 2026-07-24)
+
+**Review basis.** As stated above this section; Level 2, Level 3
+unavailable, never cited as independent.
+
+**Decision.** `core/research/execution/research_runner.py`'s
+`ResearchRunner` executes one candidate phase transition for one cycle
+and holds no decision authority of its own. It reads the clock once and
+freezes that instant for the run; asks `ValidationRegistry` which gates
+the target phase requires; runs the injected `Experiment` and receives a
+`MeasurementBundle`; assembles a `GateContext` from the bundle plus the
+operator-supplied frozen criteria and archives the bundle; runs
+`GateRunner.run_sequence()` and archives the resulting `GateRunRecord` —
+**before** any governance call; and invokes the injected
+`TransitionComposer` exactly once. Every governance decision —
+completeness, crash rejection, bracket validity, freeze projection,
+aggregation, legality, authorization, anchoring, chain append — remains
+inside `core.research.lifecycle.compose_transition()`, reached through
+one call with the arguments it already accepts. `ResearchRunner` never
+inspects a gate's status and never branches on outcome except to catch a
+declared refusal; holds no state between calls; and never invents a
+value — every string, threshold, path, hash, and timestamp comes from a
+caller, from an artifact, or does not exist. The one string it composes
+is an archive filename, from the frozen instant and a fixed template.
+
+**The persisted measurement artifact carries a closed field set,
+including a code revision reference and a provenance reference (F-C2).**
+The `measurements_<timestamp>.jsonl` artifact `ArchiveWriter` writes is,
+at minimum: `experiment_name`, the frozen `as_of`, `parameters`,
+`measurements`, `evidence_refs`, `dataset_refs`, `provenance_ref`, and a
+**code revision reference**. The set is closed and pinned by test at F-1;
+adding a field fails a test and forces a new AD rather than a commit.
+`parameters` is serialized alongside the measurements it produced — the
+field exists, per `ExperimentSpec`, so an operator can pin a run's inputs,
+and an artifact omitting it would leave that purpose unmet by the design
+that declares it. Persisting the code revision and provenance/environment
+references is **evidence retention**, governed by AD-064's `retention ≠
+reproducibility` terminology: it does not assert the run can be
+re-executed, does not bind Phase F to `core.governance.reproduction_runner`,
+and creates no reproducibility contract. Where any identity element is
+unavailable, it is persisted as an explicit absence — `None` or empty —
+never omitted, never inferred, and never derived by the runner itself (no
+`git rev-parse` inside `ResearchRunner`, no environment sniffing, no
+inference from the archive path). The caller supplies identity, or the
+record says it was not supplied.
+
+**The gate evidence-ref propagation contract (F-C3).** The one ref
+`ResearchRunner` mints — the measurement artifact's own path, appended to
+`GateContext.evidence_refs` after `bundle.evidence_refs` — reaches
+`DecisionRecord.evidence_refs` **only** through the required gates' own
+`GateResult.evidence_refs`; `compose_transition()` builds the record's
+refs from the admitted gates' own results, not from the context directly
+(`core/research/lifecycle.py:384-388`). A gate admitted to a Phase F
+sequence **is required to propagate `context.evidence_refs`** into its
+own result. Both shipped gate adapters do this today
+(`core/validation/gates/economic_rationale_adapter.py:49`,
+`core/validation/gates/signal_independence_adapter.py:44`), but the
+`Gate` Protocol is structural and does not require it, and Phase F cannot
+make it require it — `Gate` lives in frozen Validation and AD-063
+forbids Phase F holding authority there. `ResearchRunner` cannot verify
+the propagation without reaching into adapter internals, for the same
+reason it cannot verify that a gate's private measurement key is present
+in the bundle — a disclosed, unmitigated limitation, not a mechanism.
+The accountable holder of this contract is the
+human act of registering a gate to a phase (AD-066); its
+non-detectability is disclosed under the same discipline as AD-067's
+amendment triggers.
+
+**An empty gate list is legal and reachable, not an oversight (R-5).**
+`ValidationRegistry.register_phase_gates(phase, [])` is legal — no
+non-empty check exists at `core/validation/validation_registry.py:32`. A
+registered-but-empty phase runs zero gates, archives both the measurement
+and the run-record artifacts, and is refused at composition by
+`EmptyGateSequence` from `aggregate_sequence_status`. Phase F adds no
+second non-empty check at the registry, the runner, or
+`build_gate_context` — the refusal already exists at the correct
+altitude, and a duplicated check upstream could drift from the one that
+governs.
+
+**The injected clock must be timezone-aware (R-7).** `FixedClock` raises
+`ValueError` on a naive `datetime` (`core/shared/clock.py:19`). A naive
+instant is refused at step 1, before the experiment runs, rather than
+discovered later after a wasted execution.
+
+**No dependency on `core.store` is acquired by Phase F's own modules; it
+is not inherited by an `Experiment` (R-14, C-5).** The full transitive
+first-party import closure of everything Phase F reaches —
+`core.research.lifecycle`, `core.validation.gate_runner`/
+`validation_registry`, `core.governance.canonical_jsonl`/
+`decision_recorder`/`freeze_verifier`, `core.shared.clock`/
+`lifecycle_phase` — contains no `core.store` module, consistent with
+`ALLOWED_DEPENDENCIES["research"] == {"data", "statistics", "governance",
+"validation"}` (`tools/check_import_boundaries.py:176`, re-verified at
+HEAD `74e1693`), which carries no `store` grant. This is a property of
+**Phase F's own modules**, and must be recorded as exactly that — never
+as a property an `Experiment` implementation inherits: a future
+`Experiment` written under `core/research/` that reads the database
+acquires that dependency, and a direct `core.store` import is a boundary
+violation requiring its own recorded decision in the same commit, while
+an import of the permanent `core.market_data.persistence.{database,migrations}`
+shims (AD-069) is `research → data`, already granted, and reaches
+`core.store` invisibly to the direct-import checker. That is inherent to
+the mechanism, not a defect in Phase F, and no dependency grant is added
+or altered by this AD.
+
+**No ETF `Experiment` implementation that reads ETF data may live under
+`core/research/` (R-16).** `core.analytics` is the `etf` domain
+(`tools/check_import_boundaries.py:109`, `DOMAIN_OF_TOPLEVEL`);
+`ALLOWED_DEPENDENCIES["research"]` holds no `etf` grant (`:176`); and
+AD-068 decision 2 makes that grant **unavailable rather than merely
+absent** — no domain may depend on `etf`, by construction, because an
+asset class is a plug-in above the platform. AD-068 decision 3 closes the
+remaining route: `ETF_SYMBOLS_BY_MODULE` attributes `ETFId`, `ETF`, and
+the `insert_etf` / `get_etf` / `get_etf_by_ticker` repository functions to
+the `etf` domain **by the name bound, not by the module that hosts it**,
+so reaching ETF data through the *granted* `research → data` edge is a
+violation too. An ETF `Experiment` therefore lives **outside `core/`**.
+No grant is added by this AD, no file is moved, and no checker changes;
+this is a structural consequence of AD-068, recorded here because it is
+where a future author would otherwise discover it the hard way.
+
+**§8 non-claims.** Phase F does not claim: that an archived Phase F run
+is reproducible — nothing requires a provenance or code-revision
+reference to be supplied, and nothing validates one that is; that a
+`DecisionRecord` cites the measurement artifact — it does so only if the
+phase's required gates propagate `context.evidence_refs`, which no
+mechanism requires; that the single-writer assumption is enforced, or
+that a lost update is detectable (A-9, unchanged); that Phase F's own
+no-`core.store` property is inherited by any future `Experiment`.
+
+---
+
+### AD-062: Archive write authority — a second writer of a different artifact class, never a second writer of any artifact (accepted 2026-07-24)
+
+**Review basis.** As stated above this section; Level 2, Level 3
+unavailable, never cited as independent.
+
+**Decision.** `ArchiveWriter` (`core/research/execution/archive_writer.py`)
+is a second writer *of a different artifact class* —
+`experiment_results/measurements_*.jsonl` and
+`experiment_results/gate_run_*.jsonl` — never a second writer of any
+artifact `DecisionRecorder` already owns. It can never name
+`transition_records.jsonl`, `decision_log.md`, or `archive_manifest.json`,
+checked by name and by the fact that it writes only inside
+`<archive_root>/<project_id>/experiment_results/`. This extends A-9
+R-3.1's single-writer-per-artifact rule **by analogy, not by amendment** —
+this AD may not be cited as reopening that rule.
+
+**`ArchiveWriter` remains domain-blind (F-C2).** It takes a
+`Mapping[str, Any]` payload and a filename; it knows nothing about gates,
+measurements, phases, or research. AD-061's closed measurement-artifact
+field set does not widen this: serialization of the bundle belongs beside
+the bundle, in `core/research/execution/`, never inside `ArchiveWriter`
+itself.
+
+**Preconditions, checked in this order, each a refusal (R-6):**
+
+0. `filename` is a single path component — no separator, no `..`, no
+   absolute path, no drive letter — refused, never normalized. This is
+   precondition **0**, not a prohibition listed elsewhere: precondition
+   3's guarantee is a statement about the target path's *immediate
+   parent*, and is void unless this check has already established that
+   the parent is `experiment_results/`.
+1. `<archive_root>/<project_id>/` exists — never created. A cycle
+   directory's existence is a precondition of evidence, never a
+   consequence of writing it.
+2. `archive_manifest.json` exists in it, and `manifest.project_id ==
+   directory name == project_id`, byte-identical — a deliberately
+   duplicated guard, not duplicated state: importing `DecisionRecorder`'s
+   private check would put a Governance import into `ArchiveWriter` and
+   violate AD-063's boundary for no benefit.
+3. `experiment_results/` exists — never created.
+4. The target file does not exist.
+
+**Collision is a refusal, never a suffix, and is reachable by automation
+(R-15).** If the target path exists, `ArchiveWriter` raises — it never
+appends `_2`, overwrites, or increments, mirroring `write_manifest()`'s
+existing `ManifestAlreadyExistsError` precedent. Filenames are dated to
+the second; two runs of one project inside one second refuse. This was
+previously unreachable at human speed and is reachable by an automated
+caller, including F-10 and any future loop. A collision at the
+**run-record** write (step 7, after the experiment and the gates have
+already run) leaves an orphan `experiment_results/` measurement artifact
+with no chain record — the same disclosed orphan-retention outcome an
+archive-write failure produces, reached by a new route. Phase F adds no
+suffixing, no retry, and no sub-second timestamp — each would trade an
+observed property for an invented one.
+
+**Atomicity wording is fixed, per A-9 C-6.** If the implementation writes
+via temp-file-plus-`os.replace`, its docstring and test names say
+**"atomic replacement"** — never "atomic append", never
+"concurrency-safe". Temp-plus-replace makes the *replacement* atomic and
+the read-check-write **not** atomic, and does nothing about
+last-writer-wins.
+
+**Disclosed reduction in standing enforcement (R-2).** The sole
+`TransitionComposer` implementation is the single most
+governance-sensitive module Phase F adds, and its own coverage is F-9's
+AST test alone — narrower than `tools/check_import_boundaries.py`, which
+does not scan `adapters/`. `ArchiveWriter`'s own permitted
+`core.governance.canonical_jsonl` import (AD-063 enumeration (b)) is the
+only Governance-adjacent surface this module carries, and it is
+**asserted, not merely tolerated**, as not an authority crossing.
+
+**Disclosed residual: automating execution does not create the
+single-writer risk, it makes it easier to reach by accident.** The
+unenforced single-writer assumption (A-9 R-2) is unchanged in strength by
+Phase F; a runner that executes transitions faster than a human could
+does not change whether the assumption is true, only how easily it is
+violated without anyone noticing. Phase F adds no lock, no
+writer-identity field, no repair path, no retry, and no orphan cleanup.
+
+---
+
+### AD-063: Composition-boundary preservation — no Phase F module holds Decision Chain authority (accepted 2026-07-24)
+
+**Review basis.** As stated above this section; Level 2, Level 3
+unavailable, never cited as independent.
+
+**Decision.** This AD governs **Decision Chain authority only** — who may
+bind a `GateRunRecord` to a `DecisionRecord` and who may append to
+`transition_records.jsonl` — never import *direction* at package
+granularity, which `tools/check_import_boundaries.py` already governs
+over the §5 domain table. A rule written in package paths cannot answer
+the authority question; **package boundaries are not authority
+boundaries**. The rule is two literal enumerations over declared
+surfaces:
+
+> **(a)** No Phase F module names any symbol exported by
+> `core.governance.decision_recorder`. The containment is
+> **module-scoped over that module's entire export surface** — every
+> public name it exports, whatever their number, present and future —
+> never a recital of selected names. A symbol added to `decision_recorder`
+> tomorrow is inside the rule the day it is added, with no edit to (a).
+>
+> **(b)** The only `core.governance` module a Phase F module may import is
+> `core.governance.canonical_jsonl`. `archive_writer.py` does, under
+> AD-062, and that import is **not** an authority crossing:
+> `canonical_jsonl` imports nothing from this repository, holds no path,
+> reads no chain, and names no record type.
+
+Pinned by one new AST test, scoped by name to `core/research/execution/`
+and `adapters/research/` (F-9). No classifier, no registry, no runtime
+policy check — the enumerations are the only mechanism, and building
+anything beyond them is the authority framework the Proposal §7.1
+forbids.
+
+**These enumerations are exhaustive only over their declared surfaces,
+never over authority.** Enumeration (a) is exhaustive over
+`decision_recorder`'s export surface; (b) is exhaustive over
+`core.governance`'s module surface as reached by direct module-path
+import. Anything holding Decision Chain authority without appearing on
+one of those two declared surfaces is outside both enumerations and
+outside what F-9's AST test can see; a passing test says nothing about
+it. Authority reachability can change without either enumeration
+changing — through relocation, re-export, or a new access path — and
+AD-067's amendment triggers name the occasions on which this must be
+re-derived.
+
+**Current repository census, re-derived and dated to HEAD `74e1693`,
+superseding every earlier dating (C-4):**
+
+- `core/governance/` holds **thirteen** modules besides `__init__.py`:
+  `calendar_definitions`, `canonical_jsonl`, `dataset_manifest`,
+  `dataset_snapshots`, `decision_recorder`, `freeze_verifier`,
+  `identity_verification`, `independence_linter`, `network_guard`,
+  `pinned_worktree`, `reconstruction_loader`, `reproduction_record`,
+  `reproduction_runner`. Exactly **one**, `decision_recorder.py`, can
+  write `transition_records.jsonl`.
+- `decision_recorder` declares no `__all__`; its public module-level
+  export surface is **fourteen names**: `TRANSITION_RECORDS_FILENAME`,
+  `ARCHIVE_MANIFEST_FILENAME`, `MissingArchiveManifestError`,
+  `ProjectIdentityMismatchError`, `ChainInvalidError`,
+  `ChainPrefixMismatchError`, `AuthorizationRecord`, `GateOutcome`,
+  `DecisionRecord`, `hash_record`, `read_chain`, `verify_chain_intact`,
+  `verify_chain_anchored`, `DecisionRecorder`.
+- `core/governance/__init__.py` re-exports nothing — prose only, no
+  `import`, no `__all__`.
+- `canonical_jsonl.py` imports nothing from this repository — `hashlib`,
+  `json`, `pathlib.Path`, `typing.Any` only
+  (`core/governance/canonical_jsonl.py:16-21`) — and exposes five
+  module-level functions; it is already imported by frozen Validation
+  (`core/validation/gate_runner.py:39`).
+- No `core.research.execution` package and no `adapters/research`
+  package exist yet at HEAD `74e1693`; F-9's AST test scope names them in
+  advance of their creation.
+
+This census is a **count at a commit**, not a structural invariant;
+AD-067 discloses the four occasions on which it must be re-derived.
+
+**`core/research/lifecycle.py`'s frozen composition boundary is
+preserved, not reinterpreted.** It remains the only module in `core/`
+naming both a Validation type and a `core.governance.decision_recorder`
+symbol, and the only place a `GateRunRecord` is bound to a
+`DecisionRecord` (AD-059). Phase F narrows the callers of
+`compose_transition()` from "anyone" to exactly one **non-test** module,
+pinned by a test that excludes `tests/` by a stated rule rather than an
+incidental path filter.
+
+**Phase F modules reach `core.governance` transitively, and this rule
+does not hide that.** `Authorization` is defined at
+`core/research/lifecycle.py:87`, inside the one module that imports
+`decision_recorder` at module scope (`core/research/lifecycle.py:46`).
+This rule prevents a Phase F module from **naming** any symbol
+`decision_recorder` exports; it does not keep the Governance package out
+of the process, and must never be cited as if it did.
+
+---
+
+### AD-064: Measurement and criterion have different producers, structurally (accepted 2026-07-24)
+
+**Review basis.** As stated above this section; Level 2, Level 3
+unavailable, never cited as independent.
+
+**Decision.** `MeasurementBundle`'s field set is closed at five fields —
+`experiment_name`, `measurements`, `evidence_refs`, `dataset_refs`,
+`provenance_ref` — and the absences are the design: no `status`,
+`verdict`, or `passed` (a measurer that could also conclude would
+collapse measurement into judgment); no `threshold`, `criterion`, or
+`direction` (the yardstick comes from the operator's frozen methodology,
+never from the thing being measured); no `summary`, `notes`, or
+`rationale` (AD-045's prohibition on narrative in a mechanical record is
+not reopened at a new altitude). An `Experiment` cannot return a status,
+threshold, criterion, verdict, or narrative — only measured values and
+references to where they came from. An experiment crash produces **no
+bundle and no artifact**; no partial measurement is ever constructed.
+
+**Evidence retention is not a reproducibility contract (F-C1).** Phase F
+genuinely delivers evidence retention: every run's raw measurement bundle
+and raw `GateRunRecord` are archived, content-hashed, dated, before
+anything is composed, and never deleted, overwritten, or repaired —
+including for refused transitions. It does **not** deliver
+reproducibility. The two terms are not interchangeable in any Phase F
+document from this AD forward: *evidence retention* is the archive
+property Phase F delivers; a *reproducibility contract* is a commitment
+that a run can be re-executed to the same result. Phase F holds the first
+and makes no instance of the second.
+
+**`provenance_ref`'s absence semantics.** `MeasurementBundle.provenance_ref`
+may be `None`, and `None` is recorded as `None` — never backfilled with
+the archive path the runner just wrote, which would invent a
+reproduction reference that does not exist. Its absence is an audit
+finding, disclosed, never filled in.
+
+**`reproduction_record_ref`'s absence semantics — the path and its
+endpoint, stated in full.** `provenance_ref` flows, unchanged, through
+`GateContext.measurement_provenance` → `GateRunRecord.measurement_provenance`
+(`core/validation/gate_run_record.py:72`) →
+`DecisionRecord.reproduction_record_ref`
+(`core/research/lifecycle.py:389`, `run_record.measurement_provenance`),
+which is `str | None`, defaulted to `None`
+(`core/governance/decision_recorder.py:139,277`). **Nothing refuses a
+`None`, and nothing checks that a non-`None` value resolves to
+anything.** A fully compliant Phase F transition may therefore be
+recorded — permanently, immutably, hash-chained — with no reproduction
+path at all, and no mechanism in Phase F or below will say so at the time
+it happens. This is a disclosure obligation, not a mechanism obligation:
+a non-`None` guard would duplicate a rule that belongs in
+`compose_transition()`, which is frozen, and Phase F adds none — not in
+`ResearchRunner`, not in `ArchiveWriter`, not in `compose_transition()`
+itself.
+
+**No bridge to `core.governance.reproduction_runner` (R-11, R-18).**
+Phase F builds no bridge between an `Experiment` implementation and
+`core.governance.reproduction_runner.run_reproduction`. Phase F makes no
+reproduction claim: `experiment_name` is a caller-chosen label, not an
+identity, and nothing in Phase F asserts that code reproduced under
+`reproduction_runner` is the same code that ran under `ResearchRunner`.
+The two models remain structurally separate — neither references the
+other, and Phase F is not authorized to connect them. This is
+deliberately silent on *how*, or *whether*, an operator might later
+achieve identity between the two: no adapter, no composition-root
+inhabitant, no `run()`-entrypoint convention, and no placement decision
+is stated here. Any such route is an implementation choice for a later
+increment, made — if at all — when that increment is actually written;
+it is not a claim this AD gets to make about code that does not yet
+exist. A `ReproducibilityChecker` or any bridge object remains on the
+Proposal §7.1 forbidden list; wiring `ResearchRunner` into
+`reproduction_runner` remains deferred; and no `ReproductionRecord`
+producer is authorized by this AD — writing the `(commit_hash,
+dataset_content_hashes, result_report_hash)` triple for any real run is a
+human act against the existing frozen dataclass, not a component.
+
+**`experiment_name` is only a label, never an identity.**
+`reproduction_runner.run_reproduction` reproduces a cycle by loading an
+experiment **script by relative path out of a pinned worktree**, with a
+commit pin and a hash. Phase F's `Experiment` is a **live object injected
+by the caller**, fully constructed with whatever database handle and
+configuration it needs — it has no path, no commit pin, and no hash. The
+only identity that survives into the archive is `experiment_name: str`, a
+caller-chosen string that nothing validates. Phase F archives what was
+measured; absent an explicitly supplied code revision and provenance
+reference (AD-061), it does not record what code measured it, and
+`experiment_name` must never be read as answering that question.
+
+**Dataset-reference non-claim (R-21).** `MeasurementBundle.dataset_refs`
+is `tuple[str, ...]` of opaque references by accepted decision (AD-042).
+Phase F does not validate that a `dataset_ref` identifies a dataset, and
+nothing should: a runner-side resolver would be a duplicated rule at the
+wrong altitude from wherever dataset identity is ever actually
+established. Opaque refs are evidence retention; dataset identity, where
+it exists, is a separate concern this AD does not resolve.
+
+**Current census — the reproduction stack has itself never been run
+against a real cycle (R-23), dated to HEAD `74e1693`.** The reproduction
+model Phase F does not connect to — `reproduction_runner`,
+`reconstruction_loader`, `dataset_snapshots`, `dataset_manifest`,
+`identity_verification`, `pinned_worktree`, `network_guard` — is fully
+built and tested against fixtures only. **No `dataset_manifest.json` and
+no dataset snapshot for any real cycle exists in the repository**
+(`find . -name dataset_manifest.json` returns nothing, re-verified at
+HEAD `74e1693`) **at the commit at which this AD is accepted.** It is a
+mechanism with no production instance. This prevents a later reader from
+treating any future reproduction attempt as a reuse when it would be a
+first.
+
+---
+
+### AD-065: The anchor receipt is a convenience transcription, not a machine-verified anchor (accepted 2026-07-24)
+
+**Review basis.** As stated above this section; Level 2, Level 3
+unavailable, never cited as independent.
+
+**Decision.** `TransitionReceipt.record_hash` exists to be
+**hand-copied** by the operator into `decision_log.md`, as the citation
+the *next* transition's anchor is verified against. Emitting it is a
+convenience transcription; it does **not** make the anchor
+machine-verified, and must never be read as one.
+
+- The machine never writes `decision_log.md` (INV-10). The operator
+  copies the citation by hand, and its evidentiary value comes from being
+  committed to a separate hand-authored artifact at a known time — not
+  from who computed the hash.
+- The receipt is never auto-carried into a subsequent `execute()` call.
+  `expected_anchor` is always operator-supplied, read from
+  `decision_log.md`, exactly as AD-050 A5-C9 requires. `ResearchRunner`
+  holds no state between calls, so it cannot carry it, and this is why.
+- Anchor lag is unchanged (A-5 R-6): the newest record is always
+  unanchored. Phase F narrows that window not at all.
+
+**`record_hash` is operator-recomputable, and that is what makes it a
+transcription rather than a dependency (Q2).** The value is recomputable
+by the operator from the appended row via `hash_record` — the same
+function `decision_recorder.py` already exports. A receipt the operator
+*could not* independently reproduce would be a claim about the chain that
+only the machine could make; one they can reproduce is a transcription.
+This is the whole of this AD's defensibility, stated explicitly rather
+than left implicit.
+
+---
+
+### AD-066: Gate registration is a governance act, and two-registry agreement is unenforced (accepted 2026-07-24)
+
+**Review basis.** As stated above this section; Level 2, Level 3
+unavailable, never cited as independent.
+
+**Decision.** There are **two** registries, and Phase F populates
+neither. `ValidationRegistry` maps phase → ordered gate **names**, and
+ships deliberately empty; `gates_for_phase` raises `KeyError` for any
+unregistered phase (`core/validation/validation_registry.py:38`).
+`GateRunner` holds its own name → `Gate` **instance** registry;
+`run_sequence` resolves every required name against it in an atomic
+preflight before any gate executes. `ResearchRunner` reads both
+registries and populates neither. **Populating `ValidationRegistry` and
+`GateRunner` for a real cycle is the human operator's act, at the
+composition root, per cycle** — a governance act, not configuration,
+because it decides what evidence a phase requires.
+
+**Nothing checks that the two registries agree.** A required gate name
+with no matching `Gate` instance surfaces as `run_sequence`'s atomic
+preflight `KeyError`, before any gate executes — breakage, not a
+governed refusal, and no partial evidence set is produced. Phase F ships
+**no** registry-consistency check: such a check would have to name gates,
+and Phase F is not authorized to determine what any phase requires.
+
+**Registering a phase → gate assignment for a real cycle carries the same
+standing as producing the repository's first real
+`transition_records.jsonl`: it requires a `decision_log.md` entry and a
+named human.** A fixture experiment's registration (F-10) is exempt only
+because it registers gates in test fixture code, against a fixture phase;
+Phase F's own completion must never be recorded as having determined what
+any real phase requires.
+
+**Gate registration carries the propagation attestation (F-C3).**
+Registering a gate to a phase is already the governance act, with its own
+`decision_log.md` entry and named human (above). That act now
+additionally **asserts that the registered gate propagates
+`context.evidence_refs`** into its own `GateResult` — the only route by
+which the measurement-artifact reference AD-061 mints can ever reach a
+`DecisionRecord`. This is where the propagation contract acquires an
+accountable holder: the `Gate` Protocol itself cannot be made to require
+the behavior (AD-063 forbids Phase F holding authority over frozen
+Validation), and `ResearchRunner` cannot verify it mechanically, so the
+attestation is what makes a silent breakage of the contract discoverable
+— by the record of who registered the gate — rather than invisible.
+Making propagation a `Gate` **Protocol** requirement is a
+Validation-owned decision for a later increment; Phase F does not make it
+and this AD does not authorize it.
+
+---
+
+### AD-067: Policy authority composition — package boundaries are not authority boundaries, and the authority enumeration is hand-maintained (accepted 2026-07-24)
+
+**Review basis.** As stated above this section; Level 2, Level 3
+unavailable, never cited as independent.
+
+**Decision.** The repository holds **two different kinds of boundary**.
+*Import-direction* boundaries are enforced by
+`tools/check_import_boundaries.py` over the §5 domain table, at
+**package** granularity, mechanically derived from a path. *Authority*
+boundaries — who may bind a `GateRunRecord` to a `DecisionRecord`, who
+may append to `transition_records.jsonl`, who may decide — are held by
+**named symbols** and by **construction and call**, never by location.
+`adapters/research/lifecycle_composer.py` (once it exists) holds Decision
+Chain authority because it constructs `DecisionRecorder` and calls
+`compose_transition()`, not because of where it sits — and it sits
+outside `core/`, where the package checker does not reach. Conversely
+`archive_writer.py` imports a `core.governance` module (`canonical_jsonl`,
+AD-063 enumeration (b)) and holds **no** authority whatever.
+
+**The disclosure proper.** AD-063's containment is **module-scoped over
+`decision_recorder`'s export surface** — exhaustive **within** that
+surface without maintenance, and **derived from nothing outside it**.
+Enumeration (b) is an allow-list of one, so a *new* `core.governance`
+module is excluded by default — the safe direction. But **neither
+enumeration follows authority**: reachability can change through
+relocation, re-export, or a new access path while both remain textually
+correct. A chain-writing or chain-reading symbol defined outside
+`core.governance.decision_recorder`, a `decision_recorder` symbol
+re-exported under another path, or a `canonical_jsonl` that acquires a
+chain path would each leave F-9's AST test **passing** with the boundary
+unprotected and nothing to say so.
+
+**The four amendment triggers, on each of which AD-063's enumerations and
+this disclosure must be re-derived and amended before F-9's test is cited
+as evidence of containment:**
+
+1. **A new module is added under `core/governance/`.** Enumeration (b)
+   excludes it by default — the safe direction — but the census below is
+   stale from that commit, and if the new module carries chain authority,
+   (a) does not reach it.
+2. **A chain-authority symbol is relocated** out of
+   `core.governance.decision_recorder` — anything that writes, reads,
+   hashes, or verifies `transition_records.jsonl`. Enumeration (a) binds
+   to the module, so relocation moves the symbol out of the rule while
+   the rule's text is unchanged and the AST test still passes.
+3. **Any `__init__.py` re-export appears** that makes a
+   `decision_recorder` symbol reachable under a different path. At the
+   commit this AD is dated to, `core/governance/__init__.py` re-exports
+   nothing, which is the condition (a) is written against.
+4. **`canonical_jsonl`'s access is widened** — it acquires a chain path,
+   a chain-path constant, a default path, chain-awareness, or any
+   repository import. Enumeration (b) permits it *because* it holds no
+   path and imports nothing from this repository; widening it turns the
+   one permitted import into an authority crossing while (b) still reads
+   as correct.
+
+**These are amendment obligations on the text of AD-063 and this AD,
+discharged by a human reader.** Phase F ships nothing that detects them,
+and this AD authorizes nothing that would: no watcher, no CI check, no
+registry, no runtime policy framework. A trigger that fires unnoticed is
+exactly the failure this AD discloses; naming the occasions narrows it
+without closing it.
+
+**Current census, re-derived and dated to HEAD `74e1693`, superseding
+every earlier dating (C-4):** `core/governance/` holds **thirteen**
+modules besides `__init__.py`, and exactly **one**, `decision_recorder.py`,
+can write the chain; `core/governance/__init__.py` re-exports **nothing**
+— prose only, no `import`, no `__all__`; `canonical_jsonl.py` imports
+nothing from this repository, exposes five module-level functions, and is
+already imported by the frozen Validation module
+`core/validation/gate_runner.py:39`. This is a count at a commit, not a
+structural invariant, and holds no claim about any later HEAD.
+
+**No mechanism is authorized by this AD.** No authority registry, no
+`core/governance/authority.py`, no classifier deriving which symbols
+carry authority, no runtime policy check, no decorator or metadata
+scheme. This AD confers authority on nothing, adds no code and no runtime
+component, amends no accepted AD, and must never be cited as a policy
+framework or as evidence that authority is mechanically governed.
