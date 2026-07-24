@@ -25,8 +25,6 @@ from core.governance.dataset_snapshots import (
     write_trading_session_snapshot,
 )
 from core.market_data.domain.models import ETF, Calendar, PriceBar, TradingSession
-from core.market_data.persistence.database import connect
-from core.market_data.persistence.migrations import run_migrations
 from core.market_data.persistence.repository import (
     insert_calendar,
     insert_etf,
@@ -34,6 +32,8 @@ from core.market_data.persistence.repository import (
     insert_trading_session,
 )
 from core.shared.money import Money
+from core.store.connection import connect
+from core.store.migrations import run_migrations
 
 CALENDAR_ID = "XNYS"
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"

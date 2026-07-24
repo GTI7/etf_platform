@@ -40,8 +40,6 @@ from core.analytics.ranked_report import (
 )
 from core.analytics.write_pipeline import WritePipelineResult
 from core.market_data.domain.models import ETF, Calendar, IngestionRun, IngestionStatus, PriceBar, TradingSession
-from core.market_data.persistence.database import connect
-from core.market_data.persistence.migrations import run_migrations
 from core.market_data.persistence.repository import (
     get_etf_by_ticker,
     insert_calendar,
@@ -52,6 +50,8 @@ from core.market_data.persistence.repository import (
 from core.market_data.providers.base import ProviderError, ProviderPriceBar
 from core.shared.clock import FixedClock
 from core.shared.money import Money
+from core.store.connection import connect
+from core.store.migrations import run_migrations
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 CALENDAR_ID = "XNYS"

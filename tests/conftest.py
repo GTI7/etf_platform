@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from core.market_data.persistence.database import connect
-from core.market_data.persistence.migrations import run_migrations
+from core.store.connection import connect
+from core.store.migrations import run_migrations
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 

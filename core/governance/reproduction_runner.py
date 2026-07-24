@@ -65,7 +65,7 @@ from core.governance.reconstruction_loader import (
     reconstruct_database,
 )
 from core.governance.reproduction_record import ReproductionStatus
-from core.market_data.persistence.database import connect
+from core.store.connection import connect
 
 # The pinned commit's own copy of this file, never HEAD's -- the single
 # source of truth for which tickers the ETF snapshot must cover (SS D.2).

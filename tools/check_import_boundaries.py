@@ -57,6 +57,21 @@ platform, never something the platform reaches down into. ``etf`` itself
 may depend on ``data`` and ``statistics`` (and the kernel, like every
 domain).
 
+``store`` (boundary-hardening step 2, AD-069) is the substrate at the
+opposite end of the table. ``core.store`` holds only the storage
+primitives (``connect``, ``run_migrations``), so it may depend on
+nothing. It is a domain rather than part of the kernel precisely so that
+``kernel -> store`` stays checkable -- the kernel is a pure value
+vocabulary and must not acquire I/O.
+
+Unlike ``etf``, ``store`` is *reachable*, but only from the domains with
+a demonstrated importer: ``data`` and ``governance``, and no others. The
+grant list is **demand-driven** (AD-069) -- a domain is added when a real
+importer appears, by recorded decision, in the commit that introduces it.
+A granted-but-unused edge is invisible drift a future module can occupy
+silently; in particular ``statistics -> store`` stays forbidden on
+*purity* grounds, for the same reason the kernel is denied I/O.
+
 **This check does not pass today, by design** (AD-068 decision 4). Step 1
 is inventory, not repair: it makes the pre-existing coupling fail loudly
 and enumerably so that a later step can discharge it deliberately.
@@ -84,6 +99,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CORE_ROOT = REPO_ROOT / "core"
 
 ETF_DOMAIN = "etf"
+STORE_DOMAIN = "store"
 
 # Top-level package name under core/ -> domain name, or "kernel" for the
 # shared kernel (exempt from the dependency table as an import target
@@ -96,6 +112,7 @@ DOMAIN_OF_TOPLEVEL: dict[str, str] = {
     "validation": "validation",
     "research": "research",
     "reporting": "reporting",
+    "store": STORE_DOMAIN,
     "shared": "kernel",
     "domain": "kernel",
 }
@@ -131,14 +148,34 @@ ETF_SYMBOLS_BY_MODULE: dict[str, frozenset[str]] = {
 # Governance, or Reporting, so an edge *into* ETF from any of them is a
 # boundary violation by construction -- including from Data, which
 # "never calls upward".
+#
+# ``store`` (AD-069) is the substrate, and its grant list is
+# **demand-driven**: it appears only in the value sets of the domains
+# that actually import it today -- ``data`` (the two permanent re-export
+# shims at core/market_data/persistence/) and ``governance``
+# (reconstruction_loader, reproduction_runner) -- and has an empty set of
+# its own. A domain is added here when a real importer appears, by
+# recorded decision, in the commit that introduces the importer; a
+# granted-but-unused edge is invisible drift that a future module can
+# occupy silently.
+#
+# Two of the omissions are not "no importer yet" but permanent:
+# ``statistics -> store`` is refused on **purity** (Section 4.3 defines
+# Statistics as a pure computational library; it is denied I/O for the
+# same reason the kernel is), and ``kernel -> store`` must stay a
+# violation so that ``core.shared`` cannot acquire sqlite3 unflagged --
+# which is the whole reason ``store`` is a domain rather than part of the
+# kernel exemption. Repository functions, which know table names, stay in
+# their owning domain and are not part of ``store``.
 ALLOWED_DEPENDENCIES: dict[str, frozenset[str]] = {
-    "data": frozenset(),
+    "data": frozenset({STORE_DOMAIN}),
     "statistics": frozenset(),
     ETF_DOMAIN: frozenset({"data", "statistics"}),
-    "governance": frozenset({"data"}),
+    "governance": frozenset({"data", STORE_DOMAIN}),
     "validation": frozenset({"data", "statistics", "governance"}),
     "research": frozenset({"data", "statistics", "governance", "validation"}),
     "reporting": frozenset({"data", "statistics", "governance", "validation", "research"}),
+    STORE_DOMAIN: frozenset(),
     "kernel": frozenset(),
 }
 

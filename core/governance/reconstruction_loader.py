@@ -6,7 +6,7 @@
 ``calendar_id`` foreign key into it. ``ETF`` before ``PriceBar`` because
 ``PriceBar.etf_id`` is a live FK constraint against ``ETF.etf_id``,
 enforced by ``PRAGMA foreign_keys=ON`` on every connection
-(``core/market_data/persistence/database.py``) -- this is the load-order
+(``core/store/connection.py``) -- this is the load-order
 bug v1.0 had and v1.1 corrects.
 
 All pre-flight validation (SS D.1) runs before the scratch database is
@@ -33,8 +33,8 @@ from core.governance.dataset_snapshots import (
     row_to_price_bar,
     row_to_trading_session,
 )
-from core.market_data.persistence.database import connect
-from core.market_data.persistence.migrations import run_migrations
+from core.store.connection import connect
+from core.store.migrations import run_migrations
 
 
 class ReconstructionValidationError(RuntimeError):

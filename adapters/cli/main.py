@@ -22,8 +22,6 @@ from core.analytics.ranked_report import (
     get_score_history,
 )
 from core.analytics.write_pipeline import run_write_pipeline
-from core.market_data.persistence.database import connect
-from core.market_data.persistence.migrations import run_migrations
 from core.market_data.persistence.repository import get_etf_by_ticker, get_latest_ingestion_run
 from core.market_data.providers.base import DataProvider, ProviderError
 from core.market_data.providers.yahoo_finance import YahooFinanceProvider
@@ -33,6 +31,8 @@ from core.shared.pipeline_names import (
     price_ingestion_pipeline_name,
     scoring_pipeline_name,
 )
+from core.store.connection import connect
+from core.store.migrations import run_migrations
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent.parent / "migrations"
 

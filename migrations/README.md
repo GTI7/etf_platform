@@ -1,6 +1,8 @@
 # Migration policy
 
-`run_migrations` (see `core/market_data/persistence/migrations.py`) applies every
+`run_migrations` (see `core/store/migrations.py`; moved there from
+`core/market_data/persistence/migrations.py` by AD-069, which now re-exports it)
+applies every
 `*.sql` file in this directory exactly once, tracked by filename in
 `schema_migrations`. That mechanism only works if migration files are stable
 once applied. This directory follows one rule:

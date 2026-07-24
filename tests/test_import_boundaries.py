@@ -432,6 +432,131 @@ def test_star_import_is_not_attributed_to_a_symbol(tmp_path: Path) -> None:
     assert violations == []
 
 
+# --- store as the neutral storage substrate (boundary-hardening step 2) --
+
+
+def test_store_grant_set_matches_demonstrated_importers(tmp_path: Path) -> None:
+    """T-5. The ``store`` grant is exactly ``{data, governance}`` -- the
+    two domains with a real importer -- and nothing else.
+
+    This replaces an earlier ``test_every_domain_may_depend_on_store``,
+    which encoded the over-broad grant as a *requirement* and so would
+    have failed the moment the grant was correctly narrowed. Both
+    directions are asserted here: the permitted edges must pass, and the
+    denied ones must be reported as violations. Widening the grant is a
+    recorded decision (AD-069), and this test is what makes an
+    unrecorded widening fail."""
+    core_root = tmp_path / "core"
+    _write(core_root / "__init__.py", "")
+    _write(core_root / "store" / "__init__.py", "")
+    _write(core_root / "store" / "connection.py", "")
+    _write(core_root / "store" / "migrations.py", "")
+    reaches_store = (
+        "from core.store.connection import connect\n"
+        "from core.store.migrations import run_migrations\n"
+    )
+    for package in ("market_data", "governance"):
+        _write(core_root / package / "__init__.py", reaches_store)
+    for package in ("analytics", "statistics", "validation", "research", "reporting"):
+        _write(core_root / package / "__init__.py", reaches_store)
+
+    violations = check_repository(core_root)
+
+    # data and governance: permitted, so absent from the violation set.
+    assert {v.from_domain for v in violations} == {
+        "etf",
+        "statistics",
+        "validation",
+        "research",
+        "reporting",
+    }
+    assert {v.to_domain for v in violations} == {"store"}
+
+
+def test_statistics_may_not_depend_on_store(tmp_path: Path) -> None:
+    """T-5, negative half, called out on its own because the *ground*
+    matters. Statistics is refused the storage edge on **purity**, not on
+    layering -- Section 4.3 defines it as a pure computational library
+    and it is denied I/O for the same reason the kernel is. Section 5's
+    "Statistics -> anything" hard rule is preserved intact by the narrow
+    grant, which is the point of narrowing it."""
+    core_root = tmp_path / "core"
+    _write(core_root / "__init__.py", "")
+    _write(core_root / "store" / "__init__.py", "")
+    _write(core_root / "store" / "connection.py", "")
+    _write(
+        core_root / "statistics" / "__init__.py",
+        "from core.store.connection import connect\n",
+    )
+
+    violations = check_repository(core_root)
+
+    assert len(violations) == 1
+    assert violations[0].from_domain == "statistics"
+    assert violations[0].to_domain == "store"
+
+
+def test_store_may_not_depend_on_any_domain(tmp_path: Path) -> None:
+    """The substrate holds no domain knowledge, so the edge only runs one
+    way. A repository function -- which knows table names -- belongs to
+    its owning domain and may never be pulled down into ``core.store``."""
+    core_root = tmp_path / "core"
+    _write(core_root / "__init__.py", "")
+    _write(core_root / "market_data" / "persistence" / "__init__.py", "")
+    _write(core_root / "market_data" / "persistence" / "repository.py", "")
+    _write(
+        core_root / "store" / "__init__.py",
+        "from core.market_data.persistence import repository\n",
+    )
+
+    violations = check_repository(core_root)
+
+    assert len(violations) == 1
+    assert violations[0].from_domain == "store"
+    assert violations[0].to_domain == "data"
+
+
+def test_shared_kernel_may_not_depend_on_store(tmp_path: Path) -> None:
+    """Why ``store`` is its own domain rather than part of the kernel: the
+    kernel is a pure value vocabulary (Money, Clock, ids) with no I/O. If
+    ``core.store`` were mapped to "kernel", this import would be a
+    same-domain import and could never be flagged, and ``core.shared``
+    could quietly acquire sqlite3."""
+    core_root = tmp_path / "core"
+    _write(core_root / "__init__.py", "")
+    _write(core_root / "store" / "__init__.py", "")
+    _write(core_root / "store" / "connection.py", "")
+    _write(
+        core_root / "shared" / "money.py",
+        "from core.store.connection import connect\n",
+    )
+
+    violations = check_repository(core_root)
+
+    assert len(violations) == 1
+    assert violations[0].from_domain == "kernel"
+    assert violations[0].to_domain == "store"
+
+
+def test_store_is_not_a_route_from_a_domain_into_etf(tmp_path: Path) -> None:
+    """``store`` being reachable must not become a laundering path: an ETF
+    symbol hosted by a ``core.store`` module would still be attributed to
+    ETF, exactly as it is inside ``core.market_data``."""
+    core_root = tmp_path / "core"
+    _write(core_root / "__init__.py", "")
+    _write(core_root / "analytics" / "__init__.py", "")
+    _write(
+        core_root / "store" / "__init__.py",
+        "from core.analytics import scoring_pipeline\n",
+    )
+
+    violations = check_repository(core_root)
+
+    assert len(violations) == 1
+    assert violations[0].from_domain == "store"
+    assert violations[0].to_domain == "etf"
+
+
 def test_format_inventory_groups_by_domain_edge(tmp_path: Path) -> None:
     core_root = tmp_path / "core"
     _write(core_root / "__init__.py", "")

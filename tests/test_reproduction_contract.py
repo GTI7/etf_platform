@@ -44,9 +44,9 @@ from core.governance.reconstruction_loader import (
     reconstruct_database,
 )
 from core.market_data.domain.models import ETF, PriceBar, TradingSession
-from core.market_data.persistence.database import connect
 from core.market_data.persistence.repository import insert_etf
 from core.shared.money import Money
+from core.store.connection import connect
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 CALENDAR_ID = "XNYS"

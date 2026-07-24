@@ -50,7 +50,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from core.market_data.persistence.database import connect  # noqa: E402
+from core.store.connection import connect  # noqa: E402
 
 DB_PATH = REPO_ROOT / "experiments_etf_universe.db"
 
