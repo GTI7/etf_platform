@@ -3412,7 +3412,13 @@ expire while the real one cannot.
 >
 > **SECONDARY — hash-protected evidence**, as above.
 
-**The failure mode is a crash, not a governed status.** If the shims
+**The failure mode, as this decision was accepted: a crash, not a
+governed status.** *This paragraph describes the behaviour of
+`reproduction_runner.py` as it stood when AD-069 was accepted. Commit
+`91634c8` (2026-07-24) changed that classification; the paragraph is
+retained unedited because it is the reasoning the decision was accepted
+on, and is superseded on the facts by the amendment immediately below.*
+If the shims
 were deleted, the resulting `ImportError` would not degrade a
 reproduction to `UNVERIFIABLE` or `DRIFTED`. In
 `reproduction_runner.py`, `_load_expected_tickers_from_worktree` wraps
@@ -3428,6 +3434,25 @@ runner's exception mapping to govern `ImportError` changes that module's
 status semantics and is **out of scope** here; it is recorded as an open
 item.
 
+> **Amendment — 2026-07-24, commit `91634c8`: the classification
+> changed; the decision does not.** That open item is now discharged.
+> `_load_expected_tickers_from_worktree` catches `(OSError, ImportError)`
+> and raises `ReproductionRunnerError`, which its caller maps to
+> `UNVERIFIABLE`; the reconstruction phase catches `ImportError` ahead of
+> the `DRIFTED` backstop and maps it to `UNVERIFIABLE` as well. A missing
+> shim is therefore an **unresolvable pinned artifact** with a governed
+> status and an evidence record, not an uncaught exception. Concretely,
+> for the three archived cycles the preload runs first —
+> `experiment_module_relative_path == UNIVERSE_MODULE_RELATIVE_PATH ==
+> "experiments/daily_etf_universe_update.py"` for all three — so a
+> deleted shim returns `UNVERIFIABLE` before reconstruction is reached.
+> The execution phase is deliberately unchanged: an `ImportError` out of
+> the pinned module's own load-and-run remains `REPRODUCTION_FAILED`.
+> **The retirement prohibition below therefore no longer rests on
+> "uncaught crash / no audit trail"; the surviving rationale is stated
+> there.** No shim is deleted, no permission is changed, and clauses 1–4
+> of the Decision stand.
+
 **Retirement condition — binding.** The shims may be deleted only when
 **both** hold:
 
@@ -3439,10 +3464,12 @@ item.
 > `core.market_data.persistence.migrations`.
 
 Condition (b) is **strictly stronger** than (a) and is the binding one.
-Satisfying (a) alone and deleting the shims is a **prohibited act**: it
-converts every archived cycle's reproduction from a verifiable result
-into an uncaught runner crash, silently, **with a fully green test
-suite**. The earlier draft's shrink message instructed exactly that,
+Satisfying (a) alone and deleting the shims is a **prohibited act**:
+even with governed `UNVERIFIABLE` status, removing the shim permanently
+prevents reconstruction of archived cycles and therefore destroys the
+ability to reproduce validated research states. It does so silently,
+**with a fully green test suite**. The earlier draft's shrink message
+instructed exactly that,
 deriving the deletion premise from the current tree alone; that message
 is corrected, and `test_legacy_shim_importers_are_exactly_the_frozen_files`
 is strengthened to read `research_archive/*/COMMIT.txt` and refuse the
@@ -3465,6 +3492,13 @@ the `core.*` modules it imports**, per the mechanism above. This is a
 the repository *depend* on it, which converts a latent inaccuracy into a
 load-bearing one. Repairing it is out of scope and is recorded as an
 open item.
+
+> **Amendment — 2026-07-24, commit `91634c8`.** That open item is
+> discharged too: the docstring now states that the worktree isolation
+> covers the pinned script's *own source* only, and that its `core.*`
+> imports resolve through HEAD's `core.__path__`. The **mechanism** is
+> unchanged and remains load-bearing — only its disclosure moved from
+> this ADR alone into the module itself.
 
 **Consequences.** `governance -> data` now means only what it says; the
 storage need has its own edge. `core.store` importing anything this
