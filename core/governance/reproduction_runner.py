@@ -8,28 +8,56 @@ in particular, before the pinned commit's own experiment module is
 imported -- so it is active for the entire attempt, not scoped to one
 construction call (SS E).
 
-Migrations, dataset snapshots, and the experiment script all come from
+Migrations, dataset snapshots, and the experiment *script* all come from
 the pinned commit's own worktree, never from `repo_root`'s current HEAD
 copy (SS F.2: "the dataset artifacts for a given cycle are committed
 alongside methodology.md at freeze time... commit_hash pins code and
 data together; nothing needs to reach outside the worktree").
 
-Status mapping follows the base proposal's SS 2.2 semantics exactly:
-a missing/unresolvable artifact (including an unresolvable commit_hash)
-is ``UNVERIFIABLE``; an input that doesn't match its claimed hash/shape
-is ``DRIFTED``; every input matching but the run itself failing
-(including the offline guard tripping) is ``REPRODUCTION_FAILED``;
-everything holding is ``VERIFIED``.
+That isolation covers the script's own source and nothing more. The
+``core.*`` modules the pinned script *imports* resolve through **HEAD's**
+package, not the worktree's: this module is itself
+``core.governance.reproduction_runner``, so ``sys.modules['core']`` is
+already populated by the time the pinned script runs, and Python
+resolves ``core.…`` through HEAD's ``core.__path__`` regardless of the
+``sys.path`` insertion in ``_load_module_from_worktree``. There is no
+``sys.modules`` isolation anywhere in ``core/``. AD-069 records this as
+a pre-existing property that the legacy re-export shims now depend on;
+``test_legacy_shim_importers_are_exactly_the_frozen_files`` (T-3) pins
+the real behaviour.
 
-The reconstruction phase (offline guard already active, dataset/manifest
-loading, pinned ETF_UNIVERSE coverage) is fully governed: no raw
-exception from that phase -- including ``sqlite3.IntegrityError`` or
-``ValueError`` from a malformed snapshot row a preflight check didn't
-name -- ever escapes this function. Every specifically-named
-reconstruction error maps to its own status below; anything else raised
-during reconstruction still means an input didn't hold up against the
-pinned commit's own reconstruction code, so it is governed as
-``DRIFTED`` too, never left as a raw exception.
+Status mapping follows the base proposal's SS 2.2 semantics exactly:
+a missing/unresolvable artifact (including an unresolvable commit_hash,
+and a pinned import that no longer resolves) is ``UNVERIFIABLE``; an
+input that doesn't match its claimed hash/shape is ``DRIFTED``; every
+input matching but the run itself failing (including the offline guard
+tripping) is ``REPRODUCTION_FAILED``; everything holding is ``VERIFIED``.
+
+Both pre-run phases are fully governed -- no raw exception from either
+escapes this function:
+
+* the **pinned-universe preload** (``_load_expected_tickers_from_worktree``)
+  maps a worktree file that cannot be read *or imported* to
+  ``UNVERIFIABLE``. ``ImportError``/``ModuleNotFoundError`` is not an
+  ``OSError`` subclass, so it needs its own clause; without it, deleting
+  a module a pinned script imports would crash the runner with no
+  governed status at all (AD-069's disclosed open item);
+* the **reconstruction phase** (dataset/manifest loading, pinned
+  ETF_UNIVERSE coverage) maps every specifically-named reconstruction
+  error to its own status below. ``ImportError``/``ModuleNotFoundError``
+  there means the pinned commit's own reconstruction code cannot be
+  loaded -- an unresolvable artifact, so ``UNVERIFIABLE``, not the
+  archived data's fault. Anything else -- ``sqlite3.IntegrityError``, a
+  ``ValueError`` from a malformed snapshot row a preflight check didn't
+  name -- still means an input didn't hold up, so it is governed as
+  ``DRIFTED``, never left as a raw exception.
+
+The **execution phase** is deliberately not part of that carve-out: once
+reconstruction has succeeded, any exception out of the pinned module's
+own load-and-run -- ``ImportError`` included -- is
+``REPRODUCTION_FAILED``. Remapping a load-time ``ImportError`` there
+would change what ``REPRODUCTION_FAILED`` means and is a separate
+decision (Phase F gate review SS 3.3).
 """
 
 from __future__ import annotations
@@ -131,12 +159,15 @@ def _load_expected_tickers_from_worktree(worktree_path: Path) -> set[str]:
     the loaded ETF snapshot was checked against")."""
     try:
         module = _load_module_from_worktree(worktree_path, UNIVERSE_MODULE_RELATIVE_PATH)
-    except OSError as exc:
+    except (OSError, ImportError) as exc:
         # spec_from_file_location() does not itself fail for a path that
         # doesn't exist -- the failure only surfaces once exec_module()
         # tries to read it. A pinned commit that predates this file (or
         # never had it) is a missing/unresolvable artifact, not a runner
-        # crash.
+        # crash. ImportError/ModuleNotFoundError -- raised when the pinned
+        # script imports a module HEAD no longer provides -- is the same
+        # kind of unresolvable artifact, and is *not* an OSError subclass,
+        # so it needs naming here rather than riding along.
         raise ReproductionRunnerError(
             f"cannot load {UNIVERSE_MODULE_RELATIVE_PATH} from the pinned commit's worktree: {exc}"
         ) from exc
@@ -200,6 +231,12 @@ def run_reproduction(
                         expected_tickers=expected_tickers,
                     )
                 except MissingSnapshotArtifactError as exc:
+                    return ReproductionOutcome(ReproductionStatus.UNVERIFIABLE, str(exc))
+                except ImportError as exc:
+                    # A module the reconstruction path needs no longer resolves
+                    # (ModuleNotFoundError included). The archived inputs are not
+                    # at fault, so this is an unresolvable artifact, not DRIFTED
+                    # -- it must not fall through to the backstop below.
                     return ReproductionOutcome(ReproductionStatus.UNVERIFIABLE, str(exc))
                 except _DRIFT_ERRORS as exc:
                     return ReproductionOutcome(ReproductionStatus.DRIFTED, str(exc))

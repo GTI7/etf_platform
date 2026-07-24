@@ -20,8 +20,9 @@ import pytest
 from core.governance.canonical_jsonl import sha256_of_file, write_canonical_jsonl
 from core.governance.dataset_manifest import MANIFEST_SCHEMA_VERSION
 from core.governance.dataset_snapshots import etf_to_row
+from core.governance import reproduction_runner as runner_module
 from core.governance.reproduction_record import ReproductionStatus
-from core.governance.reproduction_runner import run_reproduction
+from core.governance.reproduction_runner import UNIVERSE_MODULE_RELATIVE_PATH, run_reproduction
 from core.market_data.domain.models import ETF
 
 REAL_MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
@@ -53,6 +54,19 @@ def run(db_path):
     socket.create_connection(("example.invalid", 80))
 '''
 
+_FAILING_EXPERIMENT_SOURCE = '''\
+def run(db_path):
+    raise RuntimeError("the experiment itself blew up")
+'''
+
+# A pinned universe script importing a module HEAD no longer provides --
+# the AD-069 shim-deletion scenario, reduced to a name that can never exist.
+_UNIVERSE_SOURCE_WITH_MISSING_DEPENDENCY = '''\
+import core.market_data.persistence.module_that_head_does_not_provide  # noqa: F401
+
+ETF_UNIVERSE = [("SPY", "SPDR S&P 500")]
+'''
+
 
 def _git(args: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)
@@ -73,6 +87,20 @@ def _init_repo_with_migrations_and_experiment(repo: Path, experiment_source: str
     _git(["add", "-A"], cwd=repo)
     _git(["commit", "-q", "-m", "pin this commit"], cwd=repo)
     return subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+
+
+def _init_repo_with_universe_module(repo: Path, universe_source: str) -> str:
+    """Same throwaway repo, but the pinned experiment is the one path that
+    triggers the mandatory ETF_UNIVERSE preload (runner :181-186)."""
+    _init_repo_with_migrations_and_experiment(repo, _EXPERIMENT_SOURCE)
+    universe_path = repo / UNIVERSE_MODULE_RELATIVE_PATH
+    universe_path.parent.mkdir(parents=True, exist_ok=True)
+    universe_path.write_text(universe_source, encoding="utf-8")
+    _git(["add", "-A"], cwd=repo)
+    _git(["commit", "-q", "-m", "pin the universe module"], cwd=repo)
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True
+    ).stdout.strip()
 
 
 def _etf(ticker: str, etf_id: str) -> ETF:
@@ -192,6 +220,121 @@ def test_network_attempt_during_run_produces_reproduction_failed(tmp_path: Path)
 
     assert outcome.status is ReproductionStatus.REPRODUCTION_FAILED
     assert "blocked outbound socket connection" in outcome.detail
+
+
+def test_missing_dependency_on_the_universe_preload_is_unverifiable(tmp_path: Path) -> None:
+    """Taxonomy, arm 1 of 3 -- a pinned artifact that cannot be *loaded*.
+
+    ImportError/ModuleNotFoundError is not an OSError subclass, so before
+    the failure taxonomy was normalized this escaped run_reproduction
+    entirely: no governed status, no evidence record (AD-069's disclosed
+    open item). It is a missing/unresolvable artifact, so: UNVERIFIABLE.
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    commit_hash = _init_repo_with_universe_module(repo, _UNIVERSE_SOURCE_WITH_MISSING_DEPENDENCY)
+    cycle_dir, manifest_path = _build_cycle(tmp_path)
+
+    outcome = run_reproduction(
+        repo_root=repo,
+        cycle_dir=cycle_dir,
+        dataset_manifest_path=manifest_path,
+        migrations_relative_path="migrations",
+        experiment_module_relative_path=UNIVERSE_MODULE_RELATIVE_PATH,
+        commit_hash=commit_hash,
+        scratch_db_path=tmp_path / "scratch.db",
+        run_experiment=_run_module,
+    )
+
+    assert outcome.status is ReproductionStatus.UNVERIFIABLE
+    assert "module_that_head_does_not_provide" in outcome.detail
+
+
+def test_missing_dependency_during_reconstruction_is_unverifiable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Taxonomy, arm 1 of 3, second path -- the same fault raised from
+    inside the reconstruction phase must not be absorbed by that phase's
+    DRIFTED backstop. The archived inputs are not what broke."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    commit_hash = _init_repo_with_migrations_and_experiment(repo, _EXPERIMENT_SOURCE)
+    cycle_dir, manifest_path = _build_cycle(tmp_path)
+
+    def _raise_module_not_found(**_kwargs: object) -> None:
+        raise ModuleNotFoundError("No module named 'core.market_data.persistence.database'")
+
+    monkeypatch.setattr(runner_module, "reconstruct_database", _raise_module_not_found)
+
+    outcome = run_reproduction(
+        repo_root=repo,
+        cycle_dir=cycle_dir,
+        dataset_manifest_path=manifest_path,
+        migrations_relative_path="migrations",
+        experiment_module_relative_path="experiment.py",
+        commit_hash=commit_hash,
+        scratch_db_path=tmp_path / "scratch.db",
+        run_experiment=_run_module,
+    )
+
+    assert outcome.status is ReproductionStatus.UNVERIFIABLE
+    assert "core.market_data.persistence.database" in outcome.detail
+
+
+def test_operational_failure_during_the_run_is_reproduction_failed(tmp_path: Path) -> None:
+    """Taxonomy, arm 2 of 3 -- every input reconstructed cleanly and the
+    run itself failed. Unchanged by the taxonomy normalization; asserted
+    here so a future widening of the ImportError carve-out cannot quietly
+    pull the execution phase in with it."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    commit_hash = _init_repo_with_migrations_and_experiment(repo, _FAILING_EXPERIMENT_SOURCE)
+    cycle_dir, manifest_path = _build_cycle(tmp_path)
+
+    outcome = run_reproduction(
+        repo_root=repo,
+        cycle_dir=cycle_dir,
+        dataset_manifest_path=manifest_path,
+        migrations_relative_path="migrations",
+        experiment_module_relative_path="experiment.py",
+        commit_hash=commit_hash,
+        scratch_db_path=tmp_path / "scratch.db",
+        run_experiment=_run_module,
+    )
+
+    assert outcome.status is ReproductionStatus.REPRODUCTION_FAILED
+    assert "the experiment itself blew up" in outcome.detail
+
+
+def test_artifact_hash_mismatch_is_drifted(tmp_path: Path) -> None:
+    """Taxonomy, arm 3 of 3 -- a frozen input that no longer matches the
+    hash the manifest claims for it. Still DRIFTED: carving ImportError
+    out of the reconstruction backstop must not narrow real drift."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    commit_hash = _init_repo_with_migrations_and_experiment(repo, _EXPERIMENT_SOURCE)
+    cycle_dir, manifest_path = _build_cycle(tmp_path)
+
+    # The ETF snapshot is edited after freeze; its declared content_hash
+    # no longer describes the bytes on disk.
+    snapshot_path = cycle_dir / "dataset_hashes" / "etf.jsonl"
+    snapshot_path.write_text(
+        snapshot_path.read_text(encoding="utf-8").replace("SPY", "QQQ"), encoding="utf-8"
+    )
+
+    outcome = run_reproduction(
+        repo_root=repo,
+        cycle_dir=cycle_dir,
+        dataset_manifest_path=manifest_path,
+        migrations_relative_path="migrations",
+        experiment_module_relative_path="experiment.py",
+        commit_hash=commit_hash,
+        scratch_db_path=tmp_path / "scratch.db",
+        run_experiment=_run_module,
+    )
+
+    assert outcome.status is ReproductionStatus.DRIFTED
+    assert "content_hash mismatch" in outcome.detail
 
 
 def test_guard_is_uninstalled_after_the_attempt_completes(tmp_path: Path) -> None:
