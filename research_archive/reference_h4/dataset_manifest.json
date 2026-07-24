@@ -1,0 +1,34 @@
+{
+  "schema_version": 3,
+  "project_id": "reference_h4",
+  "generated_at": "2026-07-24T22:01:49.144713+00:00",
+  "datasets": [
+    {
+      "dataset_id": "etf",
+      "type": "snapshot",
+      "source_table": "ETF",
+      "row_count": 25,
+      "snapshot_path": "dataset_hashes/ETF.jsonl",
+      "content_hash": "sha256:8a4ec0c201a6377a528ee76b7192f990451615fc5f40f4c8f16e96d185059ced",
+      "schema_version": 1
+    },
+    {
+      "dataset_id": "tradingsession",
+      "type": "snapshot",
+      "source_table": "TradingSession",
+      "row_count": 2725,
+      "snapshot_path": "dataset_hashes/TradingSession.jsonl",
+      "content_hash": "sha256:e6dbc91aaf9636b6ce93b3a8b89e05ac1d5c0cab7a086baea7ac429101cb7a89",
+      "schema_version": 1
+    },
+    {
+      "dataset_id": "pricebar",
+      "type": "snapshot",
+      "source_table": "PriceBar",
+      "row_count": 61850,
+      "snapshot_path": "dataset_hashes/PriceBar.jsonl",
+      "content_hash": "sha256:132befd87b4f6095157701dd4e9d45eb5d9808bba21b9dbda65c24ad95b238c0",
+      "schema_version": 1
+    }
+  ]
+}
