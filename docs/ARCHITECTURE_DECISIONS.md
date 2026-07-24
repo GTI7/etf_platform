@@ -3483,6 +3483,45 @@ governance act requiring a new ADR recording which archived cycles were
 re-verified after deletion and by whom; a green suite is necessary and
 **not sufficient** evidence.
 
+> **Amendment — 2026-07-24: the evidence reference above names the wrong
+> test; the T-3 predicate, condition (b), and the decision are
+> unchanged.** The paragraph above cites
+> `test_legacy_shim_importers_are_exactly_the_frozen_files` as the test
+> "strengthened to read `research_archive/*/COMMIT.txt` and refuse the
+> deletion premise while any pin imports a legacy path (T-3)." The
+> T-number is right and the predicate is described correctly; the **test
+> identity** is wrong.
+>
+> T-3 is **`test_pinned_commits_still_require_the_shims`**
+> (`tests/test_store_extraction.py:307`). It landed in `6f81bf2`, the
+> same commit as this ADR, as a **separate, new** test — not as a
+> strengthening of an existing one. Its own docstring reads *"T-3.
+> Retirement condition (b) of AD-069, made mechanical,"* and the T-3 row
+> of `docs/PHASE_4_STORE_EXTRACTION_GOVERNANCE_RESOLUTION_2026-07-24.md`
+> states the same predicate against the same commit.
+>
+> The test actually named was **not** strengthened to read `COMMIT.txt`
+> and does not implement condition (b). Its predicate runs over
+> `tests/fixtures/protected_file_hashes.json` — which files at HEAD may
+> still import a legacy path — which is condition **(a)**'s territory.
+> The two predicates are disjoint in code: `_archived_commit_pins()`
+> reads `COMMIT.txt` and is called only by the T-3 test, while
+> `_frozen_python_files()` reads the hash fixture and is called only by
+> the named one. What GR-07 changed in the named test was its assertion
+> **message**, which now directs a reader to the T-3 test for the binding
+> condition.
+>
+> **The evidence chain is therefore: condition (b) → T-3 →
+> `test_pinned_commits_still_require_the_shims`.**
+>
+> Nothing above is rewritten. Condition (b) stands as written, it remains
+> unsatisfiable while the three archived pins are immutable, the shims
+> remain permanent, and clauses 1–4 of the Decision stand. Only the
+> pointer to the mechanism is corrected. The same drift reached
+> `reproduction_runner.py`'s docstring, where it had additionally been
+> attached to the `sys.modules` claim that T-2 pins; that copy was
+> corrected at `e5b3e96`.
+
 **Carried-forward inaccuracy, disclosed not repaired.**
 `reproduction_runner`'s own docstring claims pinned code comes "never
 from `repo_root`'s current HEAD copy." That is accurate for the
