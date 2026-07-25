@@ -4218,3 +4218,260 @@ carry authority, no runtime policy check, no decorator or metadata
 scheme. This AD confers authority on nothing, adds no code and no runtime
 component, amends no accepted AD, and must never be cited as a policy
 framework or as evidence that authority is mechanically governed.
+
+---
+
+### AD-072: Lifecycle Authorization Floors and Transition Authority Semantics (accepted 2026-07-25)
+
+**Review basis.** Level 2 (AI-assisted adversarial review, conducted
+across sequential drafting, refinement, and acceptance passes, each
+re-verified against `docs/RESEARCH_GOVERNANCE_STANDARD.md` §2,
+`research_archive/reference_h4/transition_records.jsonl`, and this AD's
+own citation set); Level 3 unavailable; never cited as independent
+(Standard §4).
+
+**Acceptance basis.** Drafted and accepted per
+[`REFERENCE_H4_PHASE_G_REMEDIATION_DECISION.md`](REFERENCE_H4_PHASE_G_REMEDIATION_DECISION.md)
+§10, remediation item **R-1** (closes G-1, D-1…D-4): *"an ADR: where the
+Standard §2 phase → minimum-review-level table lives and what refuses a
+transition that does not meet it."* This AD is that instrument.
+Implementation — the mechanical refusal itself, in
+`core/research/lifecycle.py` — is separate, future work, gated on this
+acceptance but not performed by it.
+
+**Numbering.** AD-070 and AD-071 are not consumed here. Per
+`docs/PHASE_F_PRE_IMPLEMENTATION_AMENDMENT_PLAN.md` §8, those two numbers
+remain the named (not formally reserved) candidates Track C's own commit
+C0 may claim, "if still required," for Golden Run 001. This AD numbers
+itself AD-072 to avoid any collision with that track's own numbering act,
+intentionally leaving AD-070/071 unconsumed rather than claiming the
+literal next-free number.
+
+**Context.** `core/research/lifecycle.py`'s `Authorization` and
+`core/governance/decision_recorder.py`'s `AuthorizationRecord` both hold,
+as deliberate prior design, that `reviewer_level` is "recorded, never
+adjudicated" — stored, never parsed, compared, or checked against a
+hierarchy. `advance_phase()` therefore accepts `"Level 1 (self-review)"`
+at any transition without objection, because nothing on the platform
+holds the Standard §2 phase → minimum-review-level table. The Phase G
+remediation decision (G-1, **High**) names this the direct structural
+cause of `reference_h4`'s D-1 through D-4, and R-1 requires this
+instrument, gating the next cycle's Phase 2 → Pre-validation transition.
+
+A companion ambiguity (referred to in review as **E-6**) sits one layer
+below G-1: even once a floor table exists, `authorization.reviewer_level`
+on a `DecisionRecord` is not self-evidently *which* thing it asserts —
+the level that authorized this transition record, or the highest level
+any review reached anywhere during the phase's lifetime. `reference_h4`'s
+D-1 shows why the difference is load-bearing: a genuine Level 2 review of
+the freeze exists, but it was authored after Phase 6 Validation had
+already run against that freeze. A floor check satisfied by a review
+that arrived later than the transition it purports to authorize would
+validate the exact ordering failure D-1 discloses, not catch it.
+
+**Decision.** The platform adopts a mechanical lifecycle authorization
+floor, held beside `advance_phase()` in `core/research/lifecycle.py` —
+the module R-1 names as the natural site, since it already holds
+transition-legality authority (`IllegalPhaseTransition`,
+`UnauthorizedTransition`) and is the one non-test module permitted to
+name `core.governance.decision_recorder` symbols (AD-063 enumeration
+(a)). The floor's scope is deliberately narrow:
+
+> **The lifecycle engine enforces unconditional approval floors only.
+> Conditional governance requirements dependent on external facts remain
+> human governance obligations.**
+
+An "unconditional floor" is a minimum `reviewer_level` for a given
+transition-authorization event, fixed by the Standard, requiring no
+external fact to evaluate. The engine performs mechanical evaluation of
+the recorded reviewer level against that floor — implementation may
+normalize the recorded string into a comparable representation, but the
+evaluation reaches no further than the value already on the record. The
+engine does not evaluate reviewer identity, reviewer availability, any
+authority hierarchy among reviewers, or the substance of what was
+reviewed.
+
+**Mechanical enforcement boundary.**
+
+| Phase / event | Floor | Kind | Mechanically enforced? |
+|---|---|---|---|
+| 2 — Research Proposal, artifact creation | Level 1 minimum | Artifact-creation floor, not a transition | No — out of scope for this AD. No `advance_phase()` call corresponds to authoring the proposal. |
+| 2 — Research Proposal → Pre-validation | Level 2 required | Transition-authorization floor | Yes — Level 2 |
+| 3 — Pre-validation → Methodology Freeze | Level 2 minimum, per individual gate | Transition-authorization floor | Yes — Level 2 |
+| | Level 3 where available, before platform implementation effort | Conditional clause | No — human governance obligation |
+| 4 — Methodology Freeze → Implementation | Level 2 minimum | Transition-authorization floor | Yes — Level 2 |
+| 5 — Implementation → Validation | Level 1 minimum (Standard code review) | Transition-authorization floor | Yes — Level 1 |
+| | Level 2 conformance check | Recommendation only | No — not mechanically enforced |
+| 6 — Validation → Decision | Level 2 minimum | Transition-authorization floor | Yes — Level 2 |
+| | Level 3 before capital allocation | Conditional clause | No — human governance obligation |
+| 7 — Decision → Archive | Level 2 minimum | Transition-authorization floor | Yes — Level 2 |
+| | Level 3 target maturity; Level 2 exception where genuinely unavailable | Conditional clause | No — availability assessment and disclosure remain human governance obligations |
+| 8 — Archive, completeness check | Level 1 sufficient | In-phase completeness check, not a transition (Archive is terminal — no outbound transition record exists) | No — out of scope for this AD, same structural reason as Phase 2's artifact-creation floor |
+
+Every enforced row above is a transition-authorization floor, attached to
+the specific `DecisionRecord` whose `from_phase`/`to_phase` pair names
+that transition. Several phases additionally carry a second component of
+a different kind — an artifact-creation floor (Phase 2), a recommendation
+(Phase 5), a conditional escalation (Phases 3, 6, 7), or an in-phase
+completeness check with no corresponding transition (Phase 8) — and each
+is marked accordingly rather than folded into the enforced floor.
+
+**Policy boundary.** The lifecycle floor table is transition policy only.
+It is not a reviewer authority registry, not a permissions system, not a
+policy engine, and not a replacement for human governance judgement — it
+is a deterministic, per-transition floor: one fixed minimum value per
+transition-authorization event, evaluated mechanically against the
+recorded reviewer level, consulted at exactly one point
+(`advance_phase()`), and authorizing nothing beyond refusing a transition
+whose floor is unmet.
+
+**Authorization semantics.** `authorization.reviewer_level` means: the
+reviewer authority level that authorized *this specific transition
+record* — the value the human recorded, at the time they recorded it, as
+the basis for making *this* transition. It is evaluated against the floor
+table at the moment `advance_phase()` composes the record, using only
+what that record itself carries.
+
+It does not mean: the highest reviewer level any review reached anywhere
+during the phase's lifetime. A later, higher-level review — however
+genuine and thorough — does not retroactively change what a prior
+transition record asserted about itself. The Standard's ordering
+requirement exists to guarantee that the confirming reviewer had not yet
+seen the outcome; that property is a fact about *when* the review
+happened relative to the transition, not merely *whether* a sufficiently
+high review exists somewhere in the archive. Collapsing the two concepts
+would convert the floor check into a mechanism that actively launders the
+exact ordering failure it exists to catch.
+
+A future evidence field, named but not implemented here:
+`phase_evidence.highest_review_level_attained`. This would record,
+separately from any authorization, the highest review level a phase's
+evidence ever received — including reviews that arrived late. It would be
+disclosure data, read by no mechanical floor check, never substitutable
+for `authorization.reviewer_level` at any transition. This AD does not
+define its schema, producer, or storage location.
+
+**Reference H4 compliance implications.** No rewriting of history.
+`research_archive/reference_h4/` remains immutable per the Phase G
+decision's §8 determination, and nothing here revisits
+`decision_record.md`'s **PASS**.
+
+`reference_h4` contains substantive Level 2 review evidence —
+`reviewer_reports/2026-07-25_level2_adversarial_review.md`, a genuine
+bit-for-bit re-derivation, and the Level 2 arithmetic check at Validation.
+That evidence remains visible and is not disputed by what follows.
+
+The lifecycle transition **authorization records** that would be
+evaluated under AD-072 are `seq 2` (Research Proposal → Pre-validation),
+`seq 3` (Pre-validation → Methodology Freeze), `seq 4` (Methodology
+Freeze → Implementation), `seq 6` (Validation → Decision), and `seq 7`
+(Decision → Archive) — all five carry `authorization.reviewer_level =
+"Level 1 (self-review)"`. Under AD-072's floors — Phase 2's transition
+floor Level 2, Phase 3 Level 2, Phase 4 Level 2, Phase 6 Level 2, and
+Phase 7 Level 2 — none of these five would satisfy the required floor.
+`advance_phase()` would have refused all five at composition, including
+the very first Pre-validation entry (`seq 2`), which matches D-2's own
+finding that this transition was taken without the Level 2 the Standard
+requires. `seq 5` (Implementation → Validation) is not among them: its
+recorded Level 1 satisfies Phase 5's Level 1 minimum.
+
+This is not a defect to paper over. It is exactly the discrepancy R-1
+exists to surface: a real governance cycle produced real evidence that a
+real mechanical floor would have caught what disclosure alone did not,
+until this decision was written after the fact. That discrepancy stays
+visible in this register and in the Phase G decision's own D-1…D-4, not
+resolved by this AD, only made mechanically preventable for the next
+cycle.
+
+**Compatibility with existing decisions.**
+
+*AD-063.* Governs Decision Chain *authority* — who may name
+`decision_recorder` symbols, who may bind a `GateRunRecord` to a
+`DecisionRecord` — at module/symbol granularity, and states that "package
+boundaries are not authority boundaries." AD-072 adds no new caller and no
+new authority crossing: the floor check runs inside
+`core/research/lifecycle.py`, the one non-test module AD-063 already
+permits to hold this reach. Enumerations (a) and (b) are untouched.
+
+*AD-065.* Concerns `TransitionReceipt.record_hash` and the
+chain-anchoring citation — a distinct precondition from authorization
+level. AD-072 does not touch anchoring and introduces no dependency
+between the two checks.
+
+*AD-067.* Forbids "no authority registry, no
+`core/governance/authority.py`, no classifier deriving which symbols
+carry authority, no runtime policy check" for *who may call or construct*
+chain-writing code. AD-072's floor is not that: it is a data-validation
+check over the value already present in an existing recorded field, of
+the same kind the platform already accepts in `ValidationRegistry`
+(AD-066's "phase → ordered gate names" registry) — a sibling of that
+accepted pattern, not a new authority-registry concept, restated
+explicitly as this AD's own policy-boundary statement above.
+
+*AD-050 A5-C9.* Decomposes "verified intact and anchored" into a
+mechanical half (hash chain, contiguity, anchoring citation) and a human
+half (the substance of what was reviewed). AD-072 preserves that
+discipline by construction: its floor check is a mechanical evaluation of
+the recorded reviewer-level value against a fixed table — it verifies
+that a sufficient level was recorded, never that a review was
+substantively adequate, and never anything about reviewer identity,
+availability, or hierarchy beyond the recorded value itself. It adds a
+new, independent precondition to `advance_phase()` alongside A5-C9's
+chain-integrity precondition; it does not modify A5-C9's own split.
+
+No existing invariant is weakened by this AD.
+
+**Consequences.** `advance_phase()` gains a new refusal ground;
+`UnauthorizedTransition` is raised for a floor violation in addition to
+its existing grounds — implementation, not performed by this AD. The
+`Authorization` / `AuthorizationRecord` docstrings ("recorded, never
+adjudicated") become stale on acceptance and must be updated at
+implementation time. The next research cycle's Phase 2 → Pre-validation
+transition is gated on this ADR's acceptance and implementation, per
+R-1's stated blocking condition. `phase_evidence.highest_review_level_attained`
+remains named-but-unimplemented; a future ADR must define its schema, or
+explicitly decline to, before it is cited as available.
+
+**Rejected alternatives.**
+
+- *Enforce every Standard §2 clause mechanically, including "where
+  available" language.* Rejected: the engine cannot observe reviewer
+  availability; mechanizing that judgment would fabricate an answer
+  rather than enforce a requirement.
+- *Define `authorization.reviewer_level` as the highest level attained
+  anywhere in the phase.* Rejected: demonstrated to retroactively
+  validate `reference_h4`'s own ordering failure (D-1).
+- *Implement `phase_evidence.highest_review_level_attained` now,
+  alongside the floor.* Rejected: out of scope by explicit constraint,
+  and premature — naming it without designing it risks the "named in
+  three places, implemented in none" failure mode G-3 already documents
+  for `ArchiveVerifier`.
+- *Locate the floor table in `core/governance/decision_recorder.py`
+  instead of `core/research/lifecycle.py`.* Rejected:
+  `decision_recorder` explicitly disclaims adjudicating `reviewer_level`
+  as a matter of scope discipline (AD-063's authority split); `lifecycle.py`
+  already owns transition legality.
+
+**Adversarial self-review.**
+
+*What assumption could still be wrong?* That the Standard's per-phase
+clauses decompose cleanly into an enforced transition floor plus a
+separate non-enforced component (artifact floor, recommendation, or
+conditional escalation) has now been checked against the Standard's
+actual text for every phase in this table, not assumed by analogy from
+Phase 2 alone. The residual risk is narrower: a future Standard revision
+could restructure a phase's approval state in a way this table does not
+anticipate, and nothing here detects that drift automatically.
+
+*What future implementation mistake could this ADR accidentally allow?*
+Reading "unconditional floor" too liberally — e.g., an implementer
+deciding that Phase 6's or Phase 7's "Level 3 before/at" language is
+"basically unconditional most of the time" and quietly mechanizing it
+anyway. That would smuggle a conditional, fact-dependent judgment into
+the engine through the back door this AD explicitly closes.
+
+*Does this ADR create any hidden authority registry?* No, by construction
+and by comparison to AD-066's already-accepted `ValidationRegistry`
+pattern — it is a value-floor table over an already-recorded field, never
+a registry of who may call or construct chain-writing code, which is the
+one thing AD-067 reserves and this AD does not touch.
