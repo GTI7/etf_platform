@@ -219,6 +219,156 @@ def test_corrupt_transition_records_is_unverifiable_not_raised(tmp_path: Path) -
     assert report.overall_status is OverallStatus.UNVERIFIABLE
 
 
+def test_transition_record_missing_required_field_is_unverifiable(tmp_path: Path) -> None:
+    # Valid JSON, but the row is missing a required DecisionRecord field
+    # (_row_to_record's row["to_phase"] would raise KeyError). This must
+    # not propagate: closure cannot be established, so the branch reports
+    # UNVERIFIABLE exactly like an unclosed cycle, not a crash.
+    archive_dir = tmp_path / "missing_field_project"
+    _write_manifest(archive_dir)
+    _write_all_required_items(archive_dir)
+    incomplete_record = {
+        "project_id": archive_dir.name,
+        "sequence_number": 1,
+        "from_phase": "Decision",
+        # "to_phase" deliberately omitted.
+        "recorded_at": "2026-07-25T00:00:00Z",
+        "commit_hash": "0" * 40,
+        "freeze_commit_ref": "0" * 40,
+        "freeze_verification_status": "verified",
+        "freeze_covered_paths": [],
+        "gate_outcomes": [],
+        "authorization": {
+            "authorizer": "Test",
+            "reviewer_level": "Level 1 (self-review)",
+            "ambiguity_acknowledged": False,
+            "override_acknowledged": False,
+        },
+        "evidence_refs": [],
+        "reproduction_record_ref": None,
+        "predecessor_hash": None,
+    }
+    (archive_dir / TRANSITION_RECORDS_FILENAME).write_bytes(
+        (json.dumps(incomplete_record) + "\n").encode("utf-8")
+    )
+
+    report = verify_archive(archive_dir)
+
+    assert report.completeness.status is CompletenessStatus.UNVERIFIABLE
+    assert report.completeness.findings == ()
+    assert report.overall_status is OverallStatus.UNVERIFIABLE
+
+
+def test_manifest_json_array_instead_of_object_is_unverifiable(tmp_path: Path) -> None:
+    # Valid JSON, but a top-level array rather than an object -- manifest
+    # would be a list, and list.get() doesn't exist.
+    archive_dir = tmp_path / "array_manifest_project"
+    archive_dir.mkdir()
+    (archive_dir / ARCHIVE_MANIFEST_FILENAME).write_text(
+        json.dumps(["not", "an", "object"]), encoding="utf-8"
+    )
+    _write_all_required_items(archive_dir)
+
+    report = verify_archive(archive_dir)
+
+    assert report.completeness.status is CompletenessStatus.UNVERIFIABLE
+    assert report.completeness.findings == ()
+    assert report.completeness.reason is not None
+    assert report.overall_status is OverallStatus.UNVERIFIABLE
+
+
+def test_manifest_missing_lifecycle_version_is_handled_not_raised(tmp_path: Path) -> None:
+    # Manifest is a valid JSON object but has no lifecycle_version key at
+    # all (an older/incompatible manifest shape). manifest.get(...)
+    # tolerates the missing key (returns None, not "legacy"), so this
+    # falls through to the v1 closure gate rather than crashing; with no
+    # transition_records.jsonl the cycle cannot be closed.
+    archive_dir = tmp_path / "no_lifecycle_version_project"
+    archive_dir.mkdir()
+    manifest = {
+        "schema_version": 1,
+        "project_id": archive_dir.name,
+        "created_at": "2026-07-25T00:00:00+00:00",
+    }
+    (archive_dir / ARCHIVE_MANIFEST_FILENAME).write_text(json.dumps(manifest), encoding="utf-8")
+    _write_all_required_items(archive_dir)
+
+    report = verify_archive(archive_dir)
+
+    assert report.completeness.status is CompletenessStatus.UNVERIFIABLE
+    assert report.completeness.findings == ()
+    assert report.completeness.reason is not None
+    assert report.overall_status is OverallStatus.UNVERIFIABLE
+
+
+def test_manifest_invalid_utf8_is_unverifiable_not_raised(tmp_path: Path) -> None:
+    # Bytes that are not valid UTF-8 at all (not even malformed JSON --
+    # manifest_path.read_text(encoding="utf-8") itself raises
+    # UnicodeDecodeError before json.loads ever runs).
+    archive_dir = tmp_path / "invalid_utf8_manifest_project"
+    archive_dir.mkdir()
+    (archive_dir / ARCHIVE_MANIFEST_FILENAME).write_bytes(b"\xff\xfe\x00invalid")
+    _write_all_required_items(archive_dir)
+
+    report = verify_archive(archive_dir)
+
+    assert report.completeness.status is CompletenessStatus.UNVERIFIABLE
+    assert report.completeness.findings == ()
+    assert report.completeness.reason is not None
+    assert report.overall_status is OverallStatus.UNVERIFIABLE
+
+
+def test_manifest_replaced_by_directory_is_unverifiable_not_raised(tmp_path: Path) -> None:
+    # archive_manifest.json exists (as a path) but is a directory, not a
+    # file -- _read_manifest's path.exists() guard does not rule this
+    # out, so read_text() itself must fail without escaping verify_archive().
+    archive_dir = tmp_path / "manifest_is_directory_project"
+    archive_dir.mkdir()
+    (archive_dir / ARCHIVE_MANIFEST_FILENAME).mkdir()
+    _write_all_required_items(archive_dir)
+
+    report = verify_archive(archive_dir)
+
+    assert report.completeness.status is CompletenessStatus.UNVERIFIABLE
+    assert report.completeness.findings == ()
+    assert report.completeness.reason is not None
+    assert report.overall_status is OverallStatus.UNVERIFIABLE
+
+
+def test_transition_records_invalid_utf8_is_unverifiable_not_raised(tmp_path: Path) -> None:
+    # Bytes that are not valid UTF-8 -- read_canonical_jsonl's
+    # raw.decode("utf-8") raises UnicodeDecodeError before any JSONL
+    # parsing runs. Closure cannot be established, so this is treated
+    # the same as an unclosed cycle, not a crash.
+    archive_dir = tmp_path / "invalid_utf8_transitions_project"
+    _write_manifest(archive_dir)
+    _write_all_required_items(archive_dir)
+    (archive_dir / TRANSITION_RECORDS_FILENAME).write_bytes(b"\xff\xfe\x00invalid\n")
+
+    report = verify_archive(archive_dir)
+
+    assert report.completeness.status is CompletenessStatus.UNVERIFIABLE
+    assert report.completeness.findings == ()
+    assert report.overall_status is OverallStatus.UNVERIFIABLE
+
+
+def test_transition_records_replaced_by_directory_is_unverifiable_not_raised(tmp_path: Path) -> None:
+    # transition_records.jsonl exists (as a path) but is a directory --
+    # read_chain()'s own path.exists() guard does not rule this out, so
+    # the underlying read_bytes() must fail without escaping
+    # verify_archive(). Cycle closure cannot be proven either way.
+    archive_dir = tmp_path / "transitions_is_directory_project"
+    _write_manifest(archive_dir)
+    _write_all_required_items(archive_dir)
+    (archive_dir / TRANSITION_RECORDS_FILENAME).mkdir()
+
+    report = verify_archive(archive_dir)
+
+    assert report.completeness.status is CompletenessStatus.UNVERIFIABLE
+    assert report.completeness.findings == ()
+    assert report.overall_status is OverallStatus.UNVERIFIABLE
+
+
 def test_overall_status_precedence() -> None:
     # UNSOUND: a confirmed problem in either branch wins outright,
     # including when both branches report a problem simultaneously.

@@ -216,12 +216,26 @@ def _cycle_closed(archive_dir: Path) -> bool:
     """True iff transition_records.jsonl's terminal record (highest
     sequence_number) has to_phase == "Archive". Uses read_chain() only
     -- a structural reader -- never verify_chain_intact() or
-    verify_chain_anchored(). A malformed JSON line makes read_chain()
-    raise; that is indistinguishable from "no valid terminal record
-    exists" here, so it is treated the same as an unclosed cycle."""
+    verify_chain_anchored(). read_chain() raises on anything it cannot
+    turn into a well-formed DecisionRecord: invalid JSON
+    (json.JSONDecodeError), non-canonical bytes (ValueError, from
+    read_canonical_jsonl's CRLF/trailing-newline checks, which also
+    covers invalid UTF-8: UnicodeDecodeError is a ValueError subclass),
+    a row missing a required DecisionRecord field (KeyError), a row
+    whose shape is incompatible -- a non-dict row, a non-dict
+    "authorization", a non-list "gate_outcomes" -- each surfacing as
+    TypeError from the dict/tuple access in _row_to_record, or the file
+    being unreadable at the filesystem level -- a directory in place of
+    transition_records.jsonl, or a permissions failure (OSError, e.g.
+    IsADirectoryError / PermissionError; read_chain()'s own
+    path.exists() guard only rules out a missing path, not a path that
+    exists but cannot be read as a file). None of these establishes a
+    terminal record, so all are indistinguishable from "no valid
+    terminal record exists" here and are treated the same as an
+    unclosed cycle, never re-raised."""
     try:
         records = read_chain(archive_dir / TRANSITION_RECORDS_FILENAME)
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, ValueError, KeyError, TypeError, OSError):
         return False
     if not records:
         return False
@@ -239,6 +253,40 @@ def _verify_completeness(archive_dir: Path) -> CompletenessReport:
             reason=(
                 f"{ARCHIVE_MANIFEST_FILENAME} is not valid JSON -- cannot determine legacy "
                 "exemption or cycle closure"
+            ),
+        )
+    except (UnicodeDecodeError, OSError) as exc:
+        # UnicodeDecodeError: the file exists but is not valid UTF-8.
+        # OSError (IsADirectoryError, PermissionError, or any other
+        # filesystem read failure): _read_manifest's own path.exists()
+        # guard only rules out a missing path, not a path that exists
+        # but cannot be read as a file -- e.g. archive_manifest.json
+        # replaced by a directory. Either way this is exactly as unable
+        # to determine legacy exemption or cycle closure as invalid JSON
+        # is, so it gets the same UNVERIFIABLE treatment rather than
+        # propagating a crash.
+        return CompletenessReport(
+            status=CompletenessStatus.UNVERIFIABLE,
+            findings=(),
+            reason=(
+                f"{ARCHIVE_MANIFEST_FILENAME} could not be read ({exc.__class__.__name__}) -- "
+                "cannot determine legacy exemption or cycle closure"
+            ),
+        )
+
+    if manifest is not None and not isinstance(manifest, dict):
+        # Valid JSON but not a JSON object (e.g. a top-level array or a
+        # bare scalar) -- .get() below would raise AttributeError. This
+        # is exactly as unable to establish legacy exemption or cycle
+        # closure as invalid JSON is, so it gets the same UNVERIFIABLE
+        # treatment rather than propagating a crash.
+        return CompletenessReport(
+            status=CompletenessStatus.UNVERIFIABLE,
+            findings=(),
+            reason=(
+                f"{ARCHIVE_MANIFEST_FILENAME} does not contain a JSON object (found "
+                f"{type(manifest).__name__} instead) -- cannot determine legacy exemption or "
+                "cycle closure"
             ),
         )
 

@@ -10,8 +10,10 @@ As of Migration Plan Step 4 / Phase 1C, Tier 1 is implemented:
 automate the two checks docs/RESEARCH_PLATFORM_RETROSPECTIVE.md Section
 3 items 1-2 identified as manual, one-off audit passes (see
 docs/H3_GOVERNANCE_COMPLIANCE_AUDIT.md for what those passes looked like
-before automation). ``ArchiveVerifier``, ``DatasetIntegrityChecker``,
-and ``ReproducibilityChecker`` remain unimplemented.
+before automation). ``archive_verifier.verify_archive`` (AD-073 Phase 1:
+the completeness branch and a Seal stub) is also implemented.
+``DatasetIntegrityChecker`` and ``ReproducibilityChecker`` remain
+unimplemented.
 
 Decision logging is deliberately not part of this package's planned
 surface. ``docs/PLATFORM_ARCHITECTURE_V1.md``'s own ``DecisionLogger``
