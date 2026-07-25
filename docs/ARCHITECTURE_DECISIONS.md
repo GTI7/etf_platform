@@ -4997,13 +4997,16 @@ otherwise conflate them:
   `freeze_covered_paths` from the chain's terminal record (highest
   `sequence_number`) as plain archived data — the same record, the same
   selection rule, for both inputs; `covered_paths` is never separately
-  sourced, computed, or supplied by the caller. It does not call
-  `decision_recorder`'s API and does not invoke `verify_chain_intact()`
-  or `verify_chain_anchored()`; chain integrity remains exclusively
-  `decision_recorder`'s question, exactly as the Archive Seal is barred
-  from it above, and this bullet extends that same exclusivity to
-  `ArchiveVerifier` itself — reading two fields from the terminal record
-  is not chain verification. If `transition_records.jsonl` is absent,
+  sourced, computed, or supplied by the caller. It may use
+  `decision_recorder`'s `read_chain()` — a structural reader, not a
+  verification authority — to reach the terminal record, but does not
+  invoke `verify_chain_intact()` or `verify_chain_anchored()`; chain
+  *verification* remains exclusively `decision_recorder`'s question,
+  exactly as the Archive Seal is barred from it above, and this bullet
+  extends that same exclusivity to `ArchiveVerifier` itself — reading
+  two fields from the terminal record, whether via `read_chain()` or
+  direct file access, is not chain verification. If
+  `transition_records.jsonl` is absent,
   empty, or its terminal record carries no `freeze_commit_ref`, the
   freeze claim is absent and the branch is `UNVERIFIABLE` under the rule
   already stated; a terminal record with `freeze_commit_ref` but an
@@ -5414,8 +5417,8 @@ deliberately implementation-neutral:
   freeze verification, and then always. Where it exists, both
   `verify_freeze()` inputs come from the same record: `transition_records.jsonl`'s terminal
   record's `freeze_commit_ref` (the commit) and `freeze_covered_paths`
-  (the paths), both read as plain data, never via `decision_recorder`'s
-  API and never by calling `verify_chain_intact()` or
+  (the paths), both read as plain data, optionally via `decision_recorder`'s
+  `read_chain()` structural reader, but never by calling `verify_chain_intact()` or
   `verify_chain_anchored()`, and never sourced from anywhere else. An
   absent file, an empty file, or a terminal record with no
   `freeze_commit_ref` yields `UNVERIFIABLE` under AC-6; a terminal
@@ -5518,15 +5521,18 @@ The remainder, each verified as untouched:
 - **AD-062** — no new writer of any artifact. The single-writer rule is
   neither extended nor reopened; seal issuance is deferred precisely so
   that it is not silently amended here.
-- **AD-063** — no new Decision Chain authority. Neither component
-  imports or calls `decision_recorder`'s API, binds a `GateRunRecord` to
-  a `DecisionRecord`, verifies chain linkage, or writes chain state;
-  enumerations (a) and (b) are untouched. `ArchiveVerifier` reading
-  `transition_records.jsonl`'s terminal record (selected by highest
-  `sequence_number`) for `to_phase`, `freeze_commit_ref`, and
-  `freeze_covered_paths` is a plain read of already-archived data, on par with reading
-  `archive_manifest.json` — it is not chain verification and it does not
-  name a `decision_recorder` symbol.
+- **AD-063** — no new Decision Chain authority. Neither component binds
+  a `GateRunRecord` to a `DecisionRecord`, verifies chain linkage, or
+  writes chain state; enumerations (a) and (b) are untouched and remain
+  scoped to Phase F modules, which neither component is. `ArchiveVerifier`
+  reading `transition_records.jsonl`'s terminal record (selected by
+  highest `sequence_number`) for `to_phase`, `freeze_commit_ref`, and
+  `freeze_covered_paths` — optionally by calling `decision_recorder`'s
+  `read_chain()`, a structural reader, never `verify_chain_intact()` or
+  `verify_chain_anchored()` — is a plain read of already-archived data,
+  on par with reading `archive_manifest.json`: it is not chain
+  verification, and naming `read_chain()` is not naming a chain
+  *verification* authority.
 - **AD-066 / AD-067** — no registry of who may call anything, and no
   runtime policy check. The applicability rule this AD does state
   (`lifecycle_version` → which checks apply) is data already recorded in
