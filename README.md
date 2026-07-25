@@ -1,21 +1,33 @@
 # ETF Intelligence Platform
 
-A transparent ETF research and analytics tool. It analyzes and screens ETFs
+A transparent ETF research and analytics tool, plus, as of v0.18.0, a
+governed research platform built around it. It analyzes and screens ETFs
 against explicit, caller-supplied criteria. It never recommends what to buy
 or sell, never optimizes a portfolio, and never applies a hidden default
 investment preference -- every scoring profile, criterion, and identifier
 used by any command must be supplied explicitly.
+
+**Current baseline: v0.18.0.** See `docs/RELEASE_NOTES_v0.18.0.md` for what
+that release covers and `docs/BASELINE_STATUS.md` for the full project
+history, including the earlier analytics-only baseline this one supersedes.
 
 ## What this repository contains
 
 This repository holds two kinds of material, governed differently.
 
 **Software.** `core/` and `adapters/` contain the platform's executable
-code, running the commands documented below. `migrations/` contains
-database schema changes. `config/` and `portfolio/` are reserved layout
-packages, currently empty. `tools/` and `maintenance/` are repository
-tooling (import-boundary checks, one-off data remediation), not part of
-the CLI.
+code, running the commands documented below. This includes the analytics
+engine (`core/analytics/`, `core/market_data/`) behind the CLI commands
+below, and, since Phase 4/Step 9, a governance layer
+(`core/governance/`, `core/research/`) that enforces the research
+lifecycle documented in `docs/RESEARCH_GOVERNANCE_STANDARD.md` --
+phase-transition legality and, as of AD-072, a reviewer-level
+authorization floor. The governance layer has no CLI command of its own
+and is exercised by research cycles, not by `analyze`/`update`/`rank`/
+`compare`/`history`. `migrations/` contains database schema changes.
+`config/` and `portfolio/` are reserved layout packages, currently empty.
+`tools/` and `maintenance/` are repository tooling (import-boundary
+checks, one-off data remediation), not part of the CLI.
 
 **Research material.** `experiments/`, `research_archive/`, and `docs/`
 are not the platform. `experiments/` holds research runners, setup

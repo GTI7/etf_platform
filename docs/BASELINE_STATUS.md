@@ -1,14 +1,118 @@
-# Analytics Engine Baseline Status
+# Baseline Status
 
-This document is a snapshot, not a proposal. It records the state of the
-project through v0.17.0 (the CLI research interface expansion release)
-plus four further commits not yet folded into a tagged release, why
-each pause point was considered complete for its scope, and what would
-have to become true before further implementation is justified. See
+This document is a snapshot, not a proposal. **`docs/RELEASE_NOTES_v0.18.0.md`
+is the authoritative summary of the current release; this document is the
+longer-running project history it folds into.** See
 `docs/ARCHITECTURE_DECISIONS.md` for the detailed rationale behind
 individual decisions referenced here, and
 `docs/V0_6_0_DESIGN_WRITE_PIPELINE_COMPOSITION.md` for the v0.6.0 design
 review that release implemented.
+
+## Current baseline: v0.18.0 (governance era)
+
+**v0.18.0 is the current tagged baseline**, superseding the v0.17.x
+analytics-only baseline this document originally described (preserved
+below, unchanged, as history). Everything in "Version / state" through
+"Recommended next action" below is the analytics-engine baseline as it
+stood at v0.17.0/v0.17.1 — accurate as a historical record of that era,
+but no longer a description of where the repository is today. Read this
+section first for the current state; the sections below it are retained
+for continuity, not as the current picture.
+
+**What changed between v0.17.1 and v0.18.0.** The repository's scope grew
+from an analytics engine only into an analytics engine plus a governed
+research platform: `docs/RESEARCH_GOVERNANCE_STANDARD.md`, a research
+lifecycle (`core/research/lifecycle.py`), a governance package
+(`core/governance/`: decision recording, freeze verification, reproduction
+running, independence linting), a research archive
+(`research_archive/`), and — as of v0.18.0 specifically — an initial,
+partial mechanization of reviewer-level authorization on lifecycle
+transitions (**AD-072**). This did not happen in one release: the
+governance machinery was built and tested across Phase 4/Step 9 (Phases
+A-E, tagged `phase4-phase-e-complete`), exercised for the first time
+end-to-end by the `reference_h4` research cycle, and then hardened by
+AD-072 in direct response to gaps that first real run exposed. v0.18.0 is
+the tag for that AD-072 hardening step landing on `master`
+(commit `9a765c1`), not a description of the whole governance effort as
+a single release — see `docs/RELEASE_NOTES_v0.18.0.md` for the full-scope
+account.
+
+**Lifecycle authorization floor enforcement (AD-072).** As of `9a765c1`,
+`advance_phase()` in `core/research/lifecycle.py` checks each phase
+transition's `Authorization.reviewer_level` against a
+`_TRANSITION_AUTHORIZATION_FLOORS` table and raises `UnauthorizedTransition`
+if the recorded level is below the floor. Before this AD, `reviewer_level`
+was recorded but never adjudicated — any string was accepted. Regression
+evidence: replaying `reference_h4`'s own 7 recorded transitions under this
+floor table, 5 of 7 would now be refused (`tests/test_lifecycle_transition.py`,
+58 tests). This enforces only the Standard §2 **unconditional** floor;
+conditional clauses ("Level 3 where available") remain unmechanized by
+explicit, documented design — not yet closed.
+
+**Freeze verification.** `FreezeVerifier.verify_freeze()` (AD-033)
+mechanically confirms a cycle's freeze commit is unchanged before allowing
+dependent transitions. Exercised for real on `reference_h4`: `verified` at
+every bracket from Phase 4 onward against frozen commit `7b0e816`.
+Scope-bounded to the Remedy-A `covered_paths` binding (AD-060) — paths
+outside that scope aren't covered by construction.
+
+**Dataset provenance.** Raw market data is insert-only at the database
+level, enforced by SQLite triggers (AD-009), and each research cycle
+produces a Standard-mandated `dataset_manifest.json` (source, version,
+date range, content hash). This is structural enforcement at ingestion
+and per-cycle disclosure, not a platform-wide registry: there is no
+central index cross-referencing manifests across concurrently open
+cycles.
+
+**Reproduction contracts.** `core/governance/reproduction_runner.py`
+implements `run_reproduction()` against a pinned commit and dataset,
+distinct from simply re-running an analysis script. Exercised once:
+`research_archive/reference_h4/reproduction_record.json` recorded
+`VERIFIED` at pinned commit `3d586de`. One successful run is evidence the
+mechanism works, not evidence it reliably works across differently
+shaped cycles — no second cycle has exercised it yet.
+
+**Known remaining gaps** (full detail and severity ranking in
+`docs/POST_RELEASE_V0_18_0_GOVERNANCE_BASELINE_REVIEW.md` §3/§6, tracked
+as R-1…R-7 in `docs/REFERENCE_H4_PHASE_G_REMEDIATION_DECISION.md` §10):
+
+- `reference_h4`'s own archive is **currently unprotected** by any
+  automated integrity control — `tests/test_repository_integrity_snapshot.py`
+  still excludes `research_archive/reference_h4/`, and its protected-file
+  exclusion has expired by its own terms (D-9/R-4, **High**, live gap).
+- AD-072 enforces unconditional floors only; Standard §2's conditional
+  "Level 3 where available" clauses are not mechanically checked (R-1
+  residual, **High**).
+- `ArchiveVerifier` is named in three places in the codebase/docs and
+  implemented in none (R-3, **Medium**).
+- The audit chain's terminal record has no structural anchoring solution
+  for future cycles (R-5, **Medium**).
+- Only one cycle (`reference_h4`) has ever exercised the governed
+  lifecycle end-to-end; AD-072's regression test proves the floor logic
+  is correct against that one cycle's recorded values, not that it's
+  sufficient for a differently shaped cycle (**Medium**).
+- No Level 3 (organizationally independent) review exists or is
+  available on this platform — every governance document to date,
+  including the v0.18.0 self-review, is Level 2 at best (Standard §4).
+
+**Explicitly not yet started.** Per the v0.18.0 post-release review, no
+"Phase H" (candidate scope: closing R-2 through R-6) is scheduled,
+authorized, or implemented as of this baseline. This document does not
+describe Phase H work because none exists yet.
+
+**No architecture, lifecycle code, or scoring/ranking behavior changed
+as part of this baseline-status update** — this section is a documentation
+alignment pass only, over work already committed at or before `9a765c1`.
+
+---
+
+## Historical baseline (through v0.17.1, analytics engine only)
+
+**Everything below this line was written when v0.17.0/v0.17.1 was the
+current baseline and the repository was an analytics engine with no
+governance layer.** It is preserved verbatim as project history — do not
+read it as a description of the current repository state; see "Current
+baseline: v0.18.0" above for that.
 
 ## Version / state
 
