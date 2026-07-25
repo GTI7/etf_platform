@@ -39,6 +39,7 @@ require.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from enum import Enum
@@ -70,8 +71,14 @@ class IllegalPhaseTransition(ValueError):
 
 
 class UnauthorizedTransition(ValueError):
-    """Raised when `authorization` does not satisfy what `sequence_status`
-    requires (AD-050 part 4's authorization table)."""
+    """Raised when `authorization` does not satisfy what is required for
+    the transition. Two independent grounds, both checked before a
+    `TransitionDecision` is constructed: (1) `sequence_status` (AD-050 part
+    4's authorization table -- AMBIGUOUS/FAIL acknowledgement flags), and
+    (2) AD-072's per-transition `reviewer_level` floor
+    (`_TRANSITION_AUTHORIZATION_FLOORS`), where one is defined for
+    `(from_phase, to_phase)`. The raised message states which ground
+    fired."""
 
 
 class TransitionRecordKind(str, Enum):
@@ -85,9 +92,15 @@ class TransitionRecordKind(str, Enum):
 
 @dataclass(frozen=True, slots=True)
 class Authorization:
-    """A recorded human authorization. Recorded, never adjudicated: this
-    module does not parse `reviewer_level`, compare it against any other
-    level, or enforce a numeric hierarchy (Standard Section 4)."""
+    """A recorded human authorization. `reviewer_level` is adjudicated,
+    narrowly: `advance_phase()` checks it against AD-072's unconditional
+    per-transition floor (`_TRANSITION_AUTHORIZATION_FLOORS`), a minimum
+    ordinal level for `(from_phase, to_phase)`, where one is defined.
+    Nothing here adjudicates reviewer identity, the substance of what was
+    reviewed, or whether a higher level was available (Standard Section
+    4) -- those remain human governance obligations AD-072 does not
+    mechanize, and no hierarchy beyond the one floor comparison is
+    enforced."""
 
     reviewer_level: str
     authorizer: str
@@ -120,6 +133,89 @@ def _check_single_step_advance(from_phase: LifecyclePhase, to_phase: LifecyclePh
         )
 
 
+# ---------------------------------------------------------------------------
+# AD-072: transition-authorization floors. Mechanical enforcement of the
+# Standard Section 2 phase -> minimum-reviewer-level table is limited to
+# *unconditional* floors -- a fixed minimum for a given (from_phase,
+# to_phase) pair, requiring no external fact to evaluate. Conditional
+# clauses ("Level 3 where available") are never checked here; they remain
+# human governance obligations (AD-072's own text, verbatim: "The lifecycle
+# engine enforces unconditional approval floors only.").
+#
+# Keyed by (from_phase, to_phase), not by from_phase alone -- AD-072's
+# review explicitly required this so the invariant does not weaken if the
+# lifecycle ever admits a non-linear transition (a from_phase reachable by
+# more than one to_phase, each with its own floor). Today, with lifecycle
+# transitions still strictly linear (_check_single_step_advance), each
+# from_phase maps to exactly one to_phase, so the extra key costs nothing
+# and buys the tuple-keyed invariant for later.
+#
+# This is a lifecycle *value* policy, never an authority registry (AD-067):
+# it maps a transition to a required number, never to who may authorize it,
+# and is consulted at exactly one point, inside advance_phase().
+# ---------------------------------------------------------------------------
+
+_TRANSITION_AUTHORIZATION_FLOORS: dict[tuple[LifecyclePhase, LifecyclePhase], int] = {
+    (LifecyclePhase.RESEARCH_PROPOSAL, LifecyclePhase.PRE_VALIDATION): 2,
+    (LifecyclePhase.PRE_VALIDATION, LifecyclePhase.METHODOLOGY_FREEZE): 2,
+    (LifecyclePhase.METHODOLOGY_FREEZE, LifecyclePhase.IMPLEMENTATION): 2,
+    (LifecyclePhase.IMPLEMENTATION, LifecyclePhase.VALIDATION): 1,
+    (LifecyclePhase.VALIDATION, LifecyclePhase.DECISION): 2,
+    (LifecyclePhase.DECISION, LifecyclePhase.ARCHIVE): 2,
+}
+"""No entry for (HYPOTHESIS, RESEARCH_PROPOSAL): the Standard's own Section
+2 table states no approval floor for that transition (Phase 2's "Level 1
+minimum" governs authoring the Research Proposal artifact, not this
+transition). No entry keyed on ARCHIVE as a from_phase: already provably
+unreachable -- `_check_single_step_advance` refuses every transition out of
+ARCHIVE regardless of authorization (see `test_archive_cannot_advance`),
+so a floor there would be dead policy."""
+
+_REVIEWER_LEVEL_PATTERN = re.compile(r"^Level ([1-3])(?: \(.*\))?\Z")
+
+
+def _normalize_reviewer_level(reviewer_level: str) -> int:
+    """Extract the canonical Level 1/2/3 token from `reviewer_level`,
+    accepting exactly `"Level N"` or `"Level N (...)"` (N in 1-3) and
+    nothing else -- no case-insensitivity, no bare numerals, no inference
+    from surrounding free text. The parenthetical, if present, is never
+    read for meaning; it is matched only so its presence doesn't reject an
+    otherwise-canonical value. Malformed input fails safe: it raises,
+    it never guesses a level or treats an unparseable value as satisfying
+    (or failing to satisfy) any floor by default (AD-072)."""
+    match = _REVIEWER_LEVEL_PATTERN.match(reviewer_level)
+    if match is None:
+        raise UnauthorizedTransition(
+            f"authorization.reviewer_level {reviewer_level!r} is not a "
+            "recognized 'Level 1'/'Level 2'/'Level 3' value (with an "
+            "optional parenthetical) -- refusing rather than inferring a "
+            "level (AD-072)"
+        )
+    return int(match.group(1))
+
+
+def _check_transition_authorization_floor(
+    from_phase: LifecyclePhase,
+    to_phase: LifecyclePhase,
+    authorization: Authorization,
+) -> None:
+    """Enforce AD-072's unconditional floor for `(from_phase, to_phase)`,
+    if one is defined. Silently passes for any transition with no entry in
+    `_TRANSITION_AUTHORIZATION_FLOORS` -- absence means out of this AD's
+    mechanical scope, never an implicit Level-0 floor."""
+    required_level = _TRANSITION_AUTHORIZATION_FLOORS.get((from_phase, to_phase))
+    if required_level is None:
+        return
+    recorded_level = _normalize_reviewer_level(authorization.reviewer_level)
+    if recorded_level < required_level:
+        raise UnauthorizedTransition(
+            f"{from_phase.value!r} -> {to_phase.value!r} requires "
+            f"authorization.reviewer_level of at least Level {required_level} "
+            f"(AD-072); recorded value was {authorization.reviewer_level!r} "
+            f"(Level {recorded_level})"
+        )
+
+
 def advance_phase(
     from_phase: LifecyclePhase,
     to_phase: LifecyclePhase,
@@ -133,9 +229,14 @@ def advance_phase(
     Never advances on its own initiative -- `authorization` is required
     at every `sequence_status` (AD-050 part 4). `sequence_status` decides
     only what kind of authorization is required and how the decision is
-    recorded, never whether a machine may proceed unattended.
+    recorded, never whether a machine may proceed unattended. AD-072's
+    per-transition reviewer-level floor, where one is defined for
+    `(from_phase, to_phase)`, is checked independently of `sequence_status`
+    -- a floor violation refuses the transition regardless of PASS,
+    AMBIGUOUS, or FAIL.
     """
     _check_single_step_advance(from_phase, to_phase)
+    _check_transition_authorization_floor(from_phase, to_phase, authorization)
 
     if sequence_status is GateStatus.PASS:
         kind = TransitionRecordKind.NORMAL
