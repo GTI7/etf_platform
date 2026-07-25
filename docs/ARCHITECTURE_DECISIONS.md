@@ -4475,3 +4475,1116 @@ and by comparison to AD-066's already-accepted `ValidationRegistry`
 pattern — it is a value-floor table over an already-recorded field, never
 a registry of who may call or construct chain-writing code, which is the
 one thing AD-067 reserves and this AD does not touch.
+
+---
+
+### AD-073: Archive Integrity Verification Architecture (accepted 2026-07-25)
+
+**Review basis.** Level 2 (AI-assisted adversarial review, conducted
+across sequential drafting, refinement, and acceptance passes, each
+re-verified against `docs/RESEARCH_GOVERNANCE_STANDARD.md` §2 Phase 8 and
+§5, `docs/PLATFORM_ARCHITECTURE_V1.md` §4.4,
+`docs/RESEARCH_ARCHIVE_MANIFEST.md`,
+`docs/REFERENCE_H4_PHASE_G_REMEDIATION_DECISION.md` §§4/9/10,
+`docs/POST_RELEASE_V0_18_0_GOVERNANCE_BASELINE_REVIEW.md` §§3/6/7, and
+this AD's own citation set); Level 3 unavailable; never cited as
+independent (Standard §4).
+
+**Acceptance basis.** Drafted and accepted against Phase G remediation
+item **R-3** (closes G-3, D-8): *"Implement `ArchiveVerifier` per
+`PLATFORM_ARCHITECTURE_V1.md` §4.4, **or** record its deferral as a
+time-boxed §8 exception. Named-but-absent is not an allowed third
+option."* R-3 names an implementation, not a design, and the design it
+presupposes does not exist anywhere in this repository: §4.4 gives
+`ArchiveVerifier` a one-line protocol sketch, and the proposed Archive
+Seal — reviewed in architecture but never recorded as a decision —
+raises the prior question of whether it *is* `ArchiveVerifier` or sits
+underneath it. This AD answers that prior question and nothing beyond
+it. Implementation is separate, future work, gated on this acceptance
+but not performed by it.
+
+**This AD does not close R-3, and does not close R-4.** R-3 closes on
+implementation (or on a recorded §8 deferral); R-4 closes on a
+re-protection mechanism this AD deliberately does not design. What this
+AD removes is the architectural ambiguity that blocked both.
+
+**Numbering.** AD-070 and AD-071 remain unconsumed, for the reason
+AD-072 records: per `docs/PHASE_F_PRE_IMPLEMENTATION_AMENDMENT_PLAN.md`
+§8 they are the named (not formally reserved) candidates Track C's own
+commit C0 may claim for Golden Run 001. This AD takes AD-073, the next
+number after AD-072, and claims neither.
+
+**Correction basis.** A second adversarial pass, conducted the same day
+against this AD's own text (no new source document), found five
+contradictions internal to the acceptance below and none in the
+architecture it describes:
+
+- **F-1** — the Archive Seal's coverage and Decision part 8's
+  one-authoritative-record rule named only one pre-existing hash
+  mechanism (`protected_file_hashes.json`) when a second already exists
+  and already covers archived bytes: `dataset_manifest.json`'s per-entry
+  `content_hash`, which already names every file under `dataset_hashes/`
+  by `snapshot_path` (confirmed at
+  `research_archive/reference_h4/dataset_manifest.json`) and is
+  `DatasetIntegrityChecker`'s input contract under this AD's own
+  Non-goals item 5.
+- **F-2** — the freeze-claim bullet asserted "no archive artifact defines
+  that structured claim today." False: `core/governance/
+  decision_recorder.py` already writes `freeze_commit_ref` into every
+  record of `transition_records.jsonl`, already present in every v1
+  archive (confirmed at `research_archive/reference_h4/
+  transition_records.jsonl`). No selection rule was given for which
+  record's claim governs.
+- **F-3** — the applicability bullet's prose said "for exactly those
+  three [named legacy archives]," but **AC-14**, the criterion an
+  implementer actually builds to, said "no `archive_manifest.json`
+  present" unqualified — a rule under which any future archive that
+  simply failed to receive a manifest would be silently exempted as
+  legacy rather than reported incomplete.
+- **F-4** — applicability was keyed only to `lifecycle_version` (`"v1"`
+  vs. `"legacy"` vs. absent), with no signal for whether a `"v1"`
+  archive's cycle has actually *closed*. `RESEARCH_ARCHIVE_MANIFEST.md`
+  writes the manifest once, at archive-directory scaffolding, which
+  precedes Phase 8 by construction — so an open v1 archive and a closed
+  one were indistinguishable to the rule as written, and Problem
+  statement P1/P2's own premise ("a closed cycle's evidence package") was
+  silently unenforced.
+- **F-5** — the Architecture overview correctly states that the Archive
+  Seal and `FreezeVerifier` verify different subjects (archived bytes vs.
+  live repository state), but never states what a reader should do when
+  both branches report on paths that name the same underlying file. No
+  composition rule existed for that case.
+
+None of these findings changes what `ArchiveVerifier`, the Archive Seal,
+or `FreezeVerifier` *are*, what they may write, or how they compose
+(Decision parts 1–7 are unaffected). Each is a boundary, source, or scope
+that this AD's original text left implicit, contradictory, or
+unqualified. The fixes below tighten existing language; none introduces
+a component, and none adds a manifest schema field — both prior gaps
+(F-1, F-2) turned out to already have a governing mechanism on disk that
+the original text overlooked.
+
+---
+
+**Status.** **Accepted, 2026-07-25.** Documentation only: no code, test,
+fixture, archive, or architecture document is changed by this
+acceptance, and no implementation exists at the moment it is recorded.
+`ArchiveVerifier` remains unimplemented; the Archive Seal remains
+unimplemented.
+
+Acceptance carries one forward condition, taken directly from R-3's own
+terms: this AD is the *design* half of R-3, and R-3's gating condition
+(*before the next cycle's Phase 8*) is unchanged by it. If implementation
+has not landed by that point, R-3's second branch — a time-boxed §8
+exception recording the deferral — becomes mandatory. Accepting a design
+is not a third option any more than naming a component was; this AD's own
+existence must not be cited as partial closure of R-3.
+
+**Corrected, 2026-07-25** (same day), against the Correction basis above
+(F-1…F-5). The correction is documentation-only, like the acceptance it
+amends: no code, test, fixture, or archive changes, and R-3's gating
+condition and forward-condition wording are untouched by it.
+
+---
+
+**Context.**
+
+Four facts, each independently verified at commit `a1a0aa8`:
+
+1. **`ArchiveVerifier` is named in three places and implemented in
+   none** (G-3, R-3, **Medium**): `core/governance/__init__.py`'s module
+   docstring, `tools/archive_manifest.py`'s header, and
+   `docs/PLATFORM_ARCHITECTURE_V1.md` §4.4. `grep -rn "class
+   ArchiveVerifier" core/ tools/` returns nothing. Standard §2 Phase 8
+   requires an archive-completeness check; on this platform that check
+   has only ever been performed by hand — most recently by the Phase G
+   remediation decision itself, which is also the document that recorded
+   the gap.
+2. **No artifact asserts that a closed cycle's evidence package is
+   complete** (D-8). `research_archive/reference_h4/` was inspected
+   manually for that decision; nothing in the repository re-asserts the
+   result, and nothing would detect a later divergence.
+3. **A closed cycle's archived bytes are protected by nothing
+   automated** (D-9/G-5/R-4, **High**, live at this commit).
+   `tests/test_repository_integrity_snapshot.py`:100–106 still excludes
+   `research_archive/reference_h4/`, and `tests/fixtures/protected_file_hashes.json`
+   — a one-time snapshot taken *before* Phase 0 touched the repository,
+   immutable by its own docstring's terms — holds zero `reference_h4`
+   entries. The exclusion clause has expired by its own wording.
+4. **The existing integrity components each answer a different
+   question, and none answers these two.**
+   `core/governance/freeze_verifier.py` answers a question about the
+   *repository* ("is this document's freeze claim true of the repository
+   right now?", AD-033). `core/governance/decision_recorder.py`'s
+   `verify_chain_intact()` / `verify_chain_anchored()` answer a question
+   about *record linkage* in one file. `run_reproduction()` answers a
+   question about *re-execution*. `tools/archive_manifest.py` is a
+   write-side guard only — by AD-030's explicit scope statement it "does
+   not read or interpret an existing manifest" and "does not implement
+   `ArchiveVerifier`."
+
+An architecture review of a proposed **Archive Seal** design was
+conducted ahead of this AD and reached six conclusions, taken here as
+review input rather than as decisions in their own right: the Archive
+Seal is a valuable integrity primitive; it should *not* replace
+`ArchiveVerifier`; `ArchiveVerifier` should become a thin orchestration
+layer; integrity and completeness are separate responsibilities;
+`FreezeVerifier` remains responsible for commit binding; and every
+existing documentation reference to `ArchiveVerifier` should remain
+valid. This AD records those conclusions as an architectural decision,
+with their consequences and their boundaries stated explicitly.
+
+---
+
+**Problem statement.**
+
+Archive verification is not one question. It is at least four, and the
+platform currently conflates them under one unimplemented name:
+
+| # | Question | Subject of the claim | Answered today by |
+|---|---|---|---|
+| Q1 | Does this evidence package contain everything Standard §5 requires? | The package's *shape* | Nothing (manual inspection only) |
+| Q2 | Are the archived files still the bytes that were archived? | The package's *content* | Nothing (D-9, live gap) |
+| Q3 | Is the freeze commit this archive claims real, resolvable, and undrifted? | The *repository's current state* | `FreezeVerifier` (invoked by hand) |
+| Q4 | Was the conclusion correct? | The *research* | Human review; never mechanical (Standard §4) |
+
+**P1 — completeness is unverified.** Q1 has no mechanical answer, so
+Phase 8 completeness is asserted by whoever performs it and re-derivable
+by nobody.
+
+**P2 — content integrity is unverified.** Q2 has no mechanical answer for
+a *closed* cycle. The one repository-wide mechanism that exists
+(`protected_file_hashes.json`) is a pre-Phase-0 snapshot with no path for
+a cycle that closes after it was taken — G-5, stated exactly: a closed
+cycle has no path back into protected status.
+
+**P3 — the naming risk.** Introducing an Archive Seal as a *peer* of
+`ArchiveVerifier` would create a second public answer to "is this archive
+sound," invalidate three existing references, and leave callers to decide
+which component is authoritative. That is the duplicate-source-of-truth
+failure this platform has refused elsewhere (AD-049 part 3; AD-062's
+single-writer-per-artifact rule; AD-066's two-registry disclosure). P3 is
+a real problem created by the proposed solution to P1/P2, and it is the
+reason this AD exists at all rather than an implementation ticket.
+
+---
+
+**Decision.**
+
+Eight parts. Each is architectural; none prescribes an algorithm, a
+signature, a file format, a module split below the two named components,
+or a hash function.
+
+**1. `ArchiveVerifier` is retained as the single archive-verification
+abstraction.** It is the one name a governance caller uses to ask "is
+this archive sound." Every existing reference to it — in
+`core/governance/__init__.py`, `tools/archive_manifest.py`, and
+`PLATFORM_ARCHITECTURE_V1.md` §4.4 — remains valid and correct in
+meaning after this AD, and remains valid after implementation. Nothing
+here renames it, deprecates it, or narrows what §4.4 says it does.
+
+**2. `ArchiveVerifier` becomes a thin orchestration layer.** It owns
+composition and reporting; it owns no integrity algorithm of its own. It
+determines *which* checks apply to an archive, invokes them, and
+assembles their findings. It computes no hash, parses no evidence
+content, and re-implements no check another component already owns.
+
+**3. The Archive Seal is an implementation primitive beneath
+`ArchiveVerifier`, not a peer abstraction.** It is the mechanism by
+which Q2 is answered. It is invoked by `ArchiveVerifier`; it is not a
+second public entry point for archive verification, and no governance
+caller is expected to reach it directly to ask the archive-soundness
+question. Whether it is one module, one function, or several is an
+implementation matter this AD does not decide.
+
+**4. Completeness and integrity are separate responsibilities, with
+separately attributed results.** Standard §5 completeness (Q1) and seal
+content integrity (Q2) are evaluated independently and reported
+independently. Neither may mask, satisfy, or substitute for the other,
+in either direction.
+
+**5. `FreezeVerifier` is invoked, never reimplemented, and never
+modified by this AD.** Commit binding (Q3) remains entirely
+`core/governance/freeze_verifier.py`'s responsibility, with its existing
+semantics (AD-033), its existing three-valued outcome (AD-047, AD-051),
+and its existing `covered_paths` field (AD-060) unchanged. The Archive
+Seal never verifies a commit; `ArchiveVerifier` never verifies a commit
+itself.
+
+**6. `ArchiveVerifier` produces exactly one report, composed of
+separately attributed component findings.** One call, one report — but
+the report preserves per-component results. Any overall status it
+carries is a **derived** projection over the component statuses under a
+documented rule, recomputable by a reader from the components, never a
+stored aggregate that erases them. This follows AD-049 part 3's stated
+discipline verbatim: *"was the verdict derived, not asserted?" is
+answered by the auditor recomputing from stored primitives under a
+documented rule.*
+
+**7. Every component named here is read-only, and this AD grants no
+write authority.** `ArchiveVerifier` and the Archive Seal read
+artifacts; neither writes, creates, repairs, normalizes, or mutates
+anything under `research_archive/`, exactly as `FreezeVerifier` is
+read-only over git. Seal **issuance** — who produces a sealed manifest,
+when, where it is stored, and under what write authority — is out of
+scope (see *Non-goals*) and is constrained by AD-062: nothing in this AD
+authorizes a new writer of any artifact under
+`research_archive/<project>/`.
+
+**8. One authoritative content-hash record per archived file, and the
+sealed manifest's coverage is bounded by what other mechanisms already
+own.** Two mechanisms already assign an expected hash to specific
+archived bytes, and the sealed manifest never extends to either's files:
+the Phase-0 `tests/fixtures/protected_file_hashes.json` snapshot, and
+`dataset_manifest.json`'s per-entry `content_hash` field — already
+`DatasetIntegrityChecker`'s input contract (Non-goals item 5), and
+already naming every file under `dataset_hashes/` by `snapshot_path`.
+Where either mechanism already covers a file, the sealed manifest does
+not cover it, and the reverse holds equally. Two mechanisms recording an
+expected hash for the same bytes is the duplicate source of truth this
+architecture exists to avoid, and it is forbidden regardless of which
+mechanism is written first or which pre-exists the other.
+
+---
+
+**Architecture overview.**
+
+```
+ArchiveVerifier                     (orchestration; owns composition + the report)
+    |
+    ├── Completeness verification   (Standard §5 evidence-package shape)
+    ├── Archive Seal verification   (archived content integrity)
+    └── FreezeVerifier integration  (commit binding — invoked, not owned)
+```
+
+The split is not a convenience decomposition. Each branch verifies a
+different *subject*, and the subjects have different stability
+properties:
+
+| Branch | Subject of verification | Stable once the archive closes? | Owner |
+|---|---|---|---|
+| Completeness | The evidence package's structure, against Standard §5's seven required items | Yes — the required shape is fixed by the Standard, and the package is immutable | `ArchiveVerifier`'s own layer |
+| Archive Seal | The archived files' bytes, against a sealed manifest | Yes — both sides of the comparison are archive-local | Archive Seal primitive |
+| Freeze binding | The **repository's current state**, against a commit reference the archive claims | **No** — the answer can legitimately change after the archive closes | `FreezeVerifier` |
+
+The third row is the load-bearing one. A freeze-verification result is a
+statement about the repository at the moment of the call, not about the
+archive: a covered path edited in `docs/` a year later legitimately turns
+a `VERIFIED` freeze into `DRIFTED` without any archived byte changing.
+Folding commit binding into a content seal would produce a seal whose
+result varies with facts outside the sealed set — a seal that fails for
+reasons that are not integrity failures. That is why `FreezeVerifier` is
+*integrated* rather than absorbed, and why its invocation is
+caller-elected rather than unconditional. **"Where appropriate," wherever
+this AD uses it of the freeze branch, means exactly one thing: the caller
+requested freeze verification.** That request is the only condition on
+whether the branch exists. It is never a condition about what the archive
+contains — an archive that states no freeze claim still produces a freeze
+branch whenever the caller asked for one, reporting `UNVERIFIABLE`
+(*Responsibilities*, `ArchiveVerifier` — does).
+
+**Composition rule for overlapping paths.** `FreezeVerifier`'s
+`covered_paths` (AD-060) and the Archive Seal's sealed file set can name
+what looks like the same file — a source file the freeze claim covers in
+the live repository, mirrored into the archive under the seal. The two
+branches are never merged, never deduplicated, and never given
+precedence over each other: each is reported exactly as Decision part 6
+already requires, attributed to its own branch, and the composed
+report's derived overall status (Decision part 6, AC-5) treats them as
+independent inputs, not as two votes on one question. A Seal `MATCHED`
+alongside a `FreezeStatus.DRIFTED` for what appears to be the same
+filename is not a contradiction to resolve — the Seal answers "does the
+*archived* copy match what was sealed," a question about bytes fixed at
+archive time; `FreezeVerifier` answers "does the *live repository* path
+still match the frozen commit right now," a question that can legitimately
+change afterward (this section's own point, above). `ArchiveVerifier`
+does not attempt to reconcile the two into a single "is this file
+trustworthy" verdict; a reader who needs that judgment reads both
+attributed findings, exactly as AC-4 already requires for any pair of
+branch results.
+
+**Status vocabulary.** Three branches, three independent vocabularies,
+deliberately not merged into one enum — so that a confirmed problem in
+one branch is never mistaken for the same fact in another:
+
+- **Freeze branch** — `FreezeStatus`, exactly as
+  `core/governance/freeze_verifier.py` already defines it (AD-047,
+  AD-051): `VERIFIED`, `DRIFTED`, `UNVERIFIABLE`. Unmodified, unextended,
+  never assigned to either other branch.
+- **Completeness branch** — a distinct, `ArchiveVerifier`-owned
+  vocabulary: `COMPLETE` (every required item — Standard §5's seven,
+  plus `archive_manifest.json` — present and of the correct kind, with
+  content unexamined and emptiness no bar), `INCOMPLETE`
+  (at least one required item missing or the wrong kind), `EXEMPT` (a
+  legacy archive, AC-14, the v1 layout check waived), `UNVERIFIABLE`
+  (the cycle has not closed, AC-15). These four belong to this branch
+  alone.
+- **Archive Seal branch** — a distinct, seal-owned vocabulary:
+  `MATCHED` (a sealed manifest exists and every covered file's bytes
+  match it), `MISMATCH` (a sealed manifest exists and at least one
+  covered file is modified, missing, or unexpected — AC-7's three
+  finding kinds are preserved in the attributed findings and never
+  collapsed; `MISMATCH` is the branch-level summary of "one or more
+  occurred," not a replacement for them), `UNVERIFIABLE` (no sealed
+  manifest exists to compare against — including, under *Migration*
+  item 2, every archive for as long as Non-goals item 1's manifest
+  format remains undecided).
+
+`UNVERIFIABLE` is the one value name shared across all three
+vocabularies, and it means the same fact in each: this branch could not
+reach a verdict. That is the sole intentional overlap; no other value
+is shared, and none is folded into `GateStatus`, `GateOutcome`, or the
+Decision-outcome vocabulary (`PASS`/`FAIL`/`INCONCLUSIVE`, Standard §4)
+— an archive report answers none of those questions (this AD's own
+"does not" lists).
+
+**Overall status aggregation rule.** The derived value Decision part 6
+and AC-5 require — never stored, always recomputable from the three
+branch values above — is drawn from its own three-valued vocabulary:
+`SOUND`, `UNSOUND`, `UNVERIFIABLE`. The rule considers only branches
+that were actually invoked. **Exactly one branch can be absent, and for
+exactly one reason:** a freeze branch the caller did not request (the
+"where appropriate" clause, defined above as the caller's request and
+nothing else) is absent from the report and takes no part in this
+computation. Completeness and the Seal always run; a requested freeze
+branch always runs, and a requested freeze branch that finds no freeze
+claim reports `UNVERIFIABLE` and is counted like any other invoked
+branch. An absent branch is not the same fact as an invoked branch
+reporting `UNVERIFIABLE`, and a reader must never conflate the two.
+Fixed precedence, evaluated top to bottom, first match wins:
+
+1. **`UNSOUND`** — at least one invoked branch reports its confirmed-
+   problem value: Completeness `INCOMPLETE`, Seal `MISMATCH`, or Freeze
+   `DRIFTED`.
+2. **`UNVERIFIABLE`** — no invoked branch reports a confirmed problem,
+   and at least one invoked branch reports `UNVERIFIABLE`.
+3. **`SOUND`** — every invoked branch reports its confirmed-good value:
+   Completeness `COMPLETE` or `EXEMPT`, Seal `MATCHED`, Freeze
+   `VERIFIED`.
+
+This is the entire rule. No implementation may add a fourth outcome, a
+weighting, or a partial-credit case. It applies AD-051's own precedence
+— confirmed problem outranks unverifiable outranks confirmed good —
+across branches instead of within one.
+
+**Worked example: a non-legacy, closed archive with no
+`archive_manifest.json`.** Completeness and the Seal each depend on a
+different artifact, and this case is where an implementer could
+otherwise conflate them:
+
+- **Completeness: `INCOMPLETE`.** `archive_manifest.json` is a required
+  item for this branch (the completeness bullet above); its absence is
+  reported exactly like a missing Standard §5 item, alongside any of the
+  seven that are also missing — each is its own finding, never collapsed
+  into one.
+- **Seal: unaffected, independently `UNVERIFIABLE`.** The Archive Seal
+  compares against its own sealed manifest, a distinct artifact from
+  `archive_manifest.json` (Non-goals item 1: the sealed manifest's
+  format is undecided and unbuilt; `archive_manifest.json`'s format is
+  AD-030's, already built). The seal branch's result depends solely on
+  whether *its* sealed manifest exists for this archive — never on
+  `archive_manifest.json`'s presence. Under *Migration* item 2's current
+  stub, no sealed manifest format exists yet for any archive, so this
+  branch reports `UNVERIFIABLE` here exactly as it does everywhere else
+  today — because no sealed manifest exists, not because
+  `archive_manifest.json` is missing.
+- **Reasoning.** Decision part 4 forbids either branch masking,
+  satisfying, or substituting for the other. One artifact's absence is
+  never grounds to infer, skip, or default the other branch's result;
+  `INCOMPLETE` and Seal `UNVERIFIABLE` are two independently attributed
+  facts, not one failure reported twice.
+- **Overall status: `UNSOUND`.** The aggregation rule's step 1 fires on
+  Completeness `INCOMPLETE` before step 2 is ever reached by the Seal's
+  `UNVERIFIABLE`.
+
+---
+
+**Responsibilities.**
+
+**Archive Seal — does:**
+
+- verify archive content integrity — that the archived files covered by
+  the sealed manifest have the bytes the manifest records for them,
+  where "covered" excludes any file already carrying its own
+  domain-owned content-hash record (Decision part 8);
+- detect **modified** files — present, but not the recorded content;
+- detect **missing** files — recorded in the sealed manifest, absent
+  from the archive;
+- detect **unexpected** files — present in the archive, absent from the
+  sealed manifest;
+- validate sealed manifest consistency — that the manifest is itself
+  well-formed and internally coherent before any comparison result
+  derived from it is reported.
+
+**Archive Seal — does not:**
+
+- decide whether an archive is *complete* under Standard §5. A sealed
+  manifest records what was sealed, not what the Standard requires; an
+  archive can be perfectly sealed and materially incomplete, and the seal
+  must report the former without implying the latter;
+- verify any commit, resolve any git reference, or observe repository
+  state;
+- verify decision-chain linkage — `verify_chain_intact()` /
+  `verify_chain_anchored()` remain `decision_recorder`'s, and a seal that
+  re-derived chain semantics from file bytes would be a second, weaker
+  implementation of an existing check;
+- duplicate a content-hash record a domain component already owns —
+  concretely, `dataset_hashes/*.jsonl` and any other file
+  `dataset_manifest.json` describes by `content_hash`, which is
+  `DatasetIntegrityChecker`'s input contract (Non-goals item 5) and
+  stays outside the sealed manifest's coverage regardless of whether the
+  seal or the dataset manifest was written first;
+- write, repair, re-seal, or normalize anything;
+- interpret evidence content, judge research substance, or read meaning
+  from any archived document.
+
+**`ArchiveVerifier` — does:**
+
+- orchestrate archive validation for one archive;
+- verify Standard §5 completeness — the presence and kind (file vs.
+  directory) of the seven items Standard §5 itself lists
+  (`hypothesis.md`, `methodology.md`, `dataset_manifest.json`,
+  `dataset_hashes/`, `experiment_results/`, `reviewer_reports/`,
+  `decision_log.md`) — **and, separately, `archive_manifest.json`'s own
+  presence**, which is never counted as one of those seven (the Standard
+  does not name it) but is a required item under AD-030's own
+  applicability contract (below), checked and reported by this same
+  branch alongside them. **The check is mechanical and uniform across
+  all eight items.** For each item the branch asks exactly two
+  questions — does an object exist at that path, and is it the required
+  kind (`dataset_hashes/`, `experiment_results/`, and
+  `reviewer_reports/` are directories; the remaining five items are
+  files) — and nothing else. An object of the wrong kind is reported
+  exactly as a missing one is: `INCOMPLETE`, as its own finding. Beyond
+  existence and kind this branch reads no archived bytes: it does not
+  open, parse, or hash any file, does not check JSON well-formedness
+  (`archive_manifest.json`'s or `dataset_manifest.json`'s included),
+  does not enumerate or count the entries of any required directory, and
+  does not judge whether the evidence present is materially sufficient.
+  **An existing but empty object passes the presence/kind check** — a
+  zero-byte file and an empty directory are each present and of the
+  correct kind, and both count toward `COMPLETE`, uniformly for all
+  eight items with no per-item exception. Emptiness is a content fact;
+  where it matters it is Standard §4's human question (Non-goals item
+  6), never this branch's. The applicability and closure determinations
+  below do read `archive_manifest.json`'s `lifecycle_version` and
+  `transition_records.jsonl`'s terminal record; those are separate
+  determinations made before this branch runs, not part of the
+  presence/kind check;
+- invoke the Archive Seal;
+- invoke `FreezeVerifier` where appropriate — **"where appropriate"
+  means, exactly and only, where the caller requested freeze
+  verification. That one condition, and nothing about the archive's
+  content, decides whether the freeze branch exists.** A caller that did
+  not request freeze verification gets no freeze branch: absent from the
+  report and excluded from aggregation (the *Overall status aggregation
+  rule* above). A caller that did request it always gets a freeze branch,
+  `FreezeVerifier` executes, and the branch always carries one of
+  `FreezeStatus`'s three values — so the archive's own state decides only
+  *which* value, never whether the branch is present. In particular, a
+  freeze claim the archive does not state is `UNVERIFIABLE`, never
+  absent-and-therefore-fine. The structured claim already exists, one
+  layer below
+  `archive_manifest.json`: `core/governance/decision_recorder.py` writes
+  `freeze_commit_ref`, `freeze_covered_paths`, and
+  `freeze_verification_status` into every record of
+  `transition_records.jsonl`, already present in every v1 archive
+  (confirmed at `research_archive/reference_h4/
+  transition_records.jsonl`). No schema field is added anywhere for
+  this — both inputs `verify_freeze(commit_ref, covered_paths)` requires
+  pre-exist this AD, on the same record. **Selection rule:**
+  `ArchiveVerifier` reads `freeze_commit_ref` **and**
+  `freeze_covered_paths` from the chain's terminal record (highest
+  `sequence_number`) as plain archived data — the same record, the same
+  selection rule, for both inputs; `covered_paths` is never separately
+  sourced, computed, or supplied by the caller. It does not call
+  `decision_recorder`'s API and does not invoke `verify_chain_intact()`
+  or `verify_chain_anchored()`; chain integrity remains exclusively
+  `decision_recorder`'s question, exactly as the Archive Seal is barred
+  from it above, and this bullet extends that same exclusivity to
+  `ArchiveVerifier` itself — reading two fields from the terminal record
+  is not chain verification. If `transition_records.jsonl` is absent,
+  empty, or its terminal record carries no `freeze_commit_ref`, the
+  freeze claim is absent and the branch is `UNVERIFIABLE` under the rule
+  already stated; a terminal record with `freeze_commit_ref` but an
+  empty `freeze_covered_paths` is passed to `verify_freeze()` exactly as
+  read, unmodified, and yields `UNVERIFIABLE` under AD-051 — the same
+  outcome AD-051 already assigns any caller's empty `covered_paths`, not
+  a new rule for this one;
+- determine applicability — `RESEARCH_ARCHIVE_MANIFEST.md`'s own
+  "Applicability" rule never generates an `archive_manifest.json`
+  retroactively, so manifest absence is the `lifecycle_version: "legacy"`
+  signal **only for `reference_v1`, `reference_v2_h1`, and
+  `reference_h3` — the three archives that rule names, and no other.**
+  For every other archive, manifest absence is not a legacy signal; it is
+  the absence of `archive_manifest.json` itself — a required item under
+  AD-030/`RESEARCH_ARCHIVE_MANIFEST.md`'s applicability contract, **not**
+  one of Standard §5's seven (per the completeness bullet above) —
+  reported by the completeness branch as a failure with the same
+  severity as any missing §5 item, never as exempt. Where a manifest
+  exists, its `lifecycle_version` field governs as written. A legacy
+  archive — one of the three named archives with no manifest, or any
+  archive whose present manifest states `lifecycle_version: "legacy"` —
+  is exempt from the v1 layout check and reported as exempt, never as
+  failing;
+- determine closure, before running the completeness or seal branch — a
+  present `archive_manifest.json` with `lifecycle_version: "v1"` records
+  that a project's archive directory was *scaffolded*
+  (`RESEARCH_ARCHIVE_MANIFEST.md` "Archive scaffold generator"), which
+  happens once, at directory creation, well before Phase 8; it does not
+  record that the cycle has *closed*. Completeness (Q1) and the Archive
+  Seal (Q2) both presuppose a closed cycle's evidence package (Problem
+  statement P1, P2), so `ArchiveVerifier` reads
+  `transition_records.jsonl`'s terminal record first: a terminal record
+  whose `to_phase` is `Archive` — the Standard's terminal, no-outbound-
+  transition phase — means the cycle is closed, and completeness and the
+  seal run as designed. Any other terminal `to_phase`, or an absent or
+  empty `transition_records.jsonl`, means the cycle is still open, and
+  both branches report `UNVERIFIABLE` — never failing, never exempt. An
+  open v1 archive is missing required items *because the research is
+  still in progress*; that is a different fact from a closed archive
+  missing them, and the two must not collapse into the same finding;
+- produce a single validation report, with per-component attribution.
+
+**`ArchiveVerifier` — does not:**
+
+- compute content hashes, or hold any integrity algorithm;
+- re-implement freeze verification, chain verification, reproduction, or
+  dataset-manifest verification;
+- write anything, anywhere;
+- authorize, gate, or refuse a lifecycle transition. Its report is not a
+  `GateResult`, is not a `GateOutcome`, never enters a `GateRunRecord` or
+  a `DecisionRecord`, and never participates in `compose_transition()`
+  (AD-059). Standard §2 Phase 8 is an in-phase completeness check on a
+  terminal phase with no outbound transition — the exact row AD-072
+  places outside mechanical enforcement — so an archive report has no
+  transition to authorize even in principle;
+- adjudicate research substance, review adequacy, or reviewer level.
+
+**`FreezeVerifier` — unchanged.** Its module, its semantics, its
+signature, its three-valued `FreezeStatus`, and its `covered_paths`
+field are exactly as AD-033, AD-047, AD-051, and AD-060 leave them. This
+AD adds a caller and nothing else. A `VerificationResult` obtained during
+archive verification is reported by `ArchiveVerifier` as a
+freshly-computed observation and is **never** written back into any
+`GateRunRecord`'s stored `pre_freeze_verification` /
+`post_freeze_verification`, which AD-059 step 4 fixes as the only freeze
+evidence the Decision Chain may project from.
+
+---
+
+**Architectural rationale.**
+
+**Why `ArchiveVerifier` remains an architectural abstraction.** It names
+a *governance question* — "does this archive satisfy the Standard?" —
+that outlives any mechanism used to answer it. Three existing references
+already point at that question by that name, one of them in a document
+(`RESEARCH_ARCHIVE_MANIFEST.md`, AD-030) that designates it as the
+manifest's eventual consumer, and one in the platform architecture's own
+interface table. The set of checks behind the question will grow —
+dataset integrity, chain anchoring, and reproduction are all plausible
+future branches — and each growth is an addition behind a stable name
+rather than a new name for callers to learn. Deleting the abstraction in
+favor of its first mechanism would trade a durable question for a
+transient answer.
+
+**Why the Archive Seal is an implementation primitive.** It names a
+*mechanism* — content comparison against a recorded manifest — with no
+governance meaning of its own. A seal result is not a Phase 8 answer:
+the Standard does not require a seal, requires seven specific evidence
+items the seal knows nothing about, and would be satisfied by an archive
+that has never been sealed. Promoting a mechanism to an abstraction is
+what AD-005 refuses ("no generic abstractions ahead of need") and what
+AD-030/AD-039 already refused once for this exact area, keeping manifest
+tooling in `tools/` precisely because no consumer existed to shape it.
+The seal has exactly one consumer — `ArchiveVerifier` — and that is the
+definition of a primitive on this platform.
+
+**Why integrity and completeness are separate concerns.** They differ in
+every dimension that matters architecturally:
+
+| | Completeness | Integrity |
+|---|---|---|
+| Source of truth | Standard §5's fixed list | The sealed manifest for this archive |
+| Failure means | Evidence was never produced | Evidence was produced and then changed |
+| Remediation | Author the missing artifact (a new, dated file — Standard §5's supersession rule) | Investigate a mutation of an immutable archive; nothing legitimate produces it |
+| Severity | Governance incompleteness | Suspected tampering or corruption |
+| Can be true while the other is false | Yes — a sealed, incomplete archive | Yes — a complete, modified archive |
+
+Collapsing them yields a single result that cannot distinguish "you never
+wrote `methodology.md`" from "`methodology.md` changed after archival."
+Those are not the same finding, do not carry the same severity, and do
+not have the same response. The platform has refused this collapse
+before, in the same shape: `FreezeStatus` and `GateStatus` are each
+three-valued *because* "failed" and "could not be determined" are
+different facts (AD-047, AD-051), and `GateRunRecord` stores per-gate
+statuses rather than an aggregate (AD-049) for the same reason.
+
+**Why this architecture avoids duplicate sources of truth.** Four
+disjointness rules, each pinned to an existing decision:
+
+1. **One question, one component.** Completeness is answered only by
+   `ArchiveVerifier`'s own layer; content integrity only by the seal;
+   commit binding only by `FreezeVerifier`; chain linkage only by
+   `decision_recorder`. No component answers a question another one owns,
+   so no two components can disagree about the same fact.
+2. **One public entry point.** Callers ask `ArchiveVerifier`. The seal
+   is not a second front door, so there is no "which report is
+   authoritative" question to get wrong (P3).
+3. **One authoritative hash record per file** (Decision part 8). The
+   sealed manifest and the Phase-0 `protected_file_hashes.json` fixture
+   never cover the same file. This also preserves the fixture's own
+   convention — it is immutable Phase-0 data, and new coverage is never
+   obtained by editing it.
+4. **No derived state stored twice.** The report's overall status is
+   derived from its components on demand, never stored as an independent
+   value that could drift from them (AD-049 part 3).
+
+---
+
+**Alternatives considered.**
+
+- ***Archive Seal replaces `ArchiveVerifier`.*** Rejected. It renames a
+  governance abstraction after its first mechanism, invalidates three
+  existing references — including AD-030's and
+  `RESEARCH_ARCHIVE_MANIFEST.md`'s explicit designation of
+  `ArchiveVerifier` as the manifest's future consumer, and §4.4's
+  interface table — and leaves Standard §5 completeness with no owner at
+  all, since a seal cannot answer it. It would also require edits across
+  accepted documents to remove a name that is not wrong, which this
+  register's discipline treats as the least acceptable kind of change.
+- ***Two peer public components.*** Rejected. Two entry points produce
+  two reports and force every caller to decide which one settles "is
+  this archive sound" — the duplicate-source-of-truth failure P3 names.
+- ***One combined check with one result.*** Rejected. It cannot
+  distinguish never-produced from produced-then-modified evidence, and
+  it forces a two-valued outcome where the platform has consistently
+  chosen three (AD-047, AD-051, AD-056).
+- ***Extend `FreezeVerifier` to cover archive content.*** Rejected. It
+  verifies a different subject (repository vs. archive) with a different
+  stability property (time-varying vs. fixed), and AD-059 freezes that
+  module's role, with AD-060 recorded as the single scoped amendment
+  ever made to it. A second, broader amendment for an unrelated subject
+  is exactly what that discipline exists to prevent.
+- ***Reuse `tests/fixtures/protected_file_hashes.json` for closed
+  cycles.*** Rejected as the architecture, though it remains available
+  as R-4's *interim* action on its own terms. It is a one-time pre-Phase-0
+  snapshot, immutable by its own docstring; it is a test fixture, making
+  a governance control CI-owned rather than Governance-owned; and
+  extending it to files a seal also covers would violate Decision part 8.
+- ***`verify_archive(project_id: ProjectId)` exactly as §4.4 sketches
+  it.*** Deferred rather than rejected — see *Compatibility*, conflict
+  **C-1**.
+- ***Defer the whole area under a §8 time-boxed exception.*** Rejected
+  as the primary path, since R-3's gating condition arrives before the
+  next cycle's Phase 8 and Phase 8 is where the missing check is
+  needed. It remains R-3's own permitted fallback if implementation does
+  not follow this acceptance in time, and this AD's *Status* section
+  makes that fallback explicit rather than implicit.
+
+---
+
+**Consequences.**
+
+*Gained.* Standard §2 Phase 8's completeness requirement acquires a
+mechanical instrument for the first time (P1). A closed cycle's content
+integrity becomes answerable by a Governance-owned control rather than
+only by a repository-wide test fixture (P2). `ArchiveVerifier`'s three
+existing references become forward-accurate rather than aspirational,
+without any of them being edited (P3). The archive manifest gains its
+first *read-side* consumer, which is the condition AD-030 anticipated
+when it called the manifest "`ArchiveVerifier`'s input contract."
+
+*Costs and disclosed residuals.*
+
+- **This AD adds a second named-but-unimplemented component.** The
+  Archive Seal now exists in writing and not in code, which is the exact
+  shape of G-3 — the failure mode AD-072 cited by name when it refused
+  to name `phase_evidence.highest_review_level_attained` without
+  designing it. Two things distinguish this case, and neither is a
+  guarantee: the seal is designed here rather than merely mentioned, and
+  it is bound to R-3's existing gating condition and to this AD's
+  *Status* forward condition. If implementation does not follow, this AD
+  becomes the fourth naming site for an unimplemented archive check, and
+  the §8 deferral record becomes mandatory rather than optional.
+- **`ArchiveVerifier`'s eventual signature will diverge from §4.4's
+  sketch** (conflict **C-1**), and that divergence must be recorded at
+  implementation time in the same way AD-033 recorded `FreezeVerifier`'s.
+- **`core/governance/__init__.py`'s docstring becomes stale on
+  implementation** — its "`ArchiveVerifier` … remain[s] unimplemented"
+  sentence — and must be updated then, not now. It is accurate at this
+  acceptance.
+- **Verification is not enforcement.** Nothing in this AD causes
+  `ArchiveVerifier` to be *run*. Wiring it into a test suite, a CI step,
+  or a Phase 8 checklist is out of scope, so an unrun verifier detects
+  nothing — the same distinction the independence linter already
+  illustrates (G-6/R-6: implemented, unwired, and therefore never
+  executed against `research_archive/`).
+- **The live D-9 gap stays live.** This AD does not protect
+  `research_archive/reference_h4/`. R-4's interim action remains the only
+  thing that closes it today.
+- **`reference_h4` cannot be retroactively sealed by any part of this
+  AD.** Its archive is immutable per the Phase G decision §8, and a seal
+  written into it would itself be the silent edit that decision forbids.
+
+---
+
+**Scope.**
+
+In scope, and only this:
+
+- the decomposition of archive verification into completeness, content
+  integrity, and freeze binding;
+- the relationship between `ArchiveVerifier` and the Archive Seal
+  (abstraction / primitive), and the direction of invocation;
+- the responsibility boundaries of all three participants, including
+  what each may not do;
+- the single-report, per-component-attribution rule and the
+  derived-not-stored rule for any overall status;
+- the read-only constraint and the absence of any new write authority;
+- the one-authoritative-hash-record-per-file rule, and its boundary
+  against every pre-existing domain-owned hash mechanism, not only the
+  Phase-0 fixture;
+- applicability to `lifecycle_version: "v1"` archives — signaled by a
+  present manifest carrying that value, gated on the cycle having
+  actually closed (`transition_records.jsonl`'s terminal record reaching
+  `Archive`) before completeness or the seal run, with an open cycle
+  reported `UNVERIFIABLE` on both branches;
+- the legacy exemption, restricted to `reference_v1`, `reference_v2_h1`,
+  and `reference_h3` by manifest absence, or to any archive whose present
+  manifest states `lifecycle_version: "legacy"` — never to manifest
+  absence generally;
+- the composition rule for a path the Archive Seal and `FreezeVerifier`
+  both cover: reported independently, never merged, never given
+  precedence.
+
+---
+
+**Non-goals.** Stated as problems this AD deliberately does **not**
+solve, so that no reader mistakes acceptance for coverage:
+
+1. **Seal issuance.** Who creates a sealed manifest, when in the
+   lifecycle, where it is stored, in what format, and under what write
+   authority. Constrained but not decided here: AD-062 governs archive
+   write authority, and this AD grants none. Until issuance and its
+   manifest format are decided, the seal branch's *comparison* is
+   deferred (Migration item 2): the branch exists and runs, but with
+   nothing yet to compare against, so it reports `UNVERIFIABLE` for
+   every archive, never a stand-in pass and never a failure.
+2. **Re-protection of an already-closed cycle** (R-4/G-5/D-9), including
+   the `reference_h4` gap that is live today, and including any change to
+   `tests/test_repository_integrity_snapshot.py` or its fixture.
+3. **CI/test wiring** of `ArchiveVerifier` or of the seal.
+4. **Decision-chain verification and anchoring** (AD-065, R-5). Chain
+   integrity remains `decision_recorder`'s; whether `ArchiveVerifier`
+   should ever invoke it is future work, deliberately not decided here.
+5. **Reproduction** (`ReproducibilityChecker`, `run_reproduction()`) and
+   **dataset integrity** (`DatasetIntegrityChecker`,
+   `dataset_manifest.json` content verification). Both remain separate
+   §4.4 components; neither is folded into this architecture.
+6. **Evidence quality.** Whether `methodology.md` is adequate, whether a
+   review was substantive, whether a conclusion is sound. Standard §4
+   keeps these human; presence and integrity are not adequacy.
+7. **Authorization.** No transition floor, no gate, no refusal power.
+   AD-072's floors are untouched.
+8. **Legacy archives.** `reference_v1`, `reference_v2_h1`, and
+   `reference_h3` are not brought under the v1 layout check, are never
+   given a retroactive `archive_manifest.json` (AD-030,
+   `RESEARCH_ARCHIVE_MANIFEST.md` "Applicability"), and are never sealed
+   retroactively.
+9. **The Standard §8 exception artifact** (R-2) and the §5-vs-§2 Phase 8
+   post-Archive-append question. A separate ADR owns both.
+10. **Any change to `FreezeVerifier`, `decision_recorder`,
+    `archive_manifest.py`, the import-boundary rules, or the Standard.**
+
+---
+
+**Migration strategy.**
+
+Additive throughout; no existing artifact is rewritten at any step.
+
+1. **On acceptance — nothing changes.** No code, no test, no fixture, no
+   archive. All three existing `ArchiveVerifier` references remain
+   accurate, because none of them claims it is implemented.
+2. **Implementation increment (future), sequenced.** The completeness
+   check is buildable today, in full: Standard §5's fixed list and
+   `archive_manifest.json`'s applicability contract are both already
+   specified (Decision parts 1–8; the completeness bullet and item 5
+   below), and nothing in this AD blocks it. The seal primitive's
+   *comparison logic* cannot be built before a sealed manifest format
+   exists, and that format is Non-goals item 1 — seal issuance,
+   deliberately out of scope here. This is not a contradiction between
+   this AD's scope and its own migration path: `ArchiveVerifier`
+   composes both branches unconditionally from the start, but until a
+   manifest format is decided (R-4, *Future work*), the seal branch is
+   implemented as a stub that reports `UNVERIFIABLE` for every archive
+   it is asked to check — the same outcome item 5 below already assigns
+   an already-closed cycle with no seal, generalized here to *every*
+   archive for as long as no seal format exists anywhere. `FreezeVerifier`
+   is invoked unmodified. Governance's existing dependency rule is
+   preserved: no import of Research, Validation, or Reporting, so
+   `tools/check_import_boundaries.py` needs no change — if any proposed
+   implementation would need one, that is a signal the decomposition is
+   wrong, not that the linter is.
+3. **Documentation at implementation time.** One docstring sentence in
+   `core/governance/__init__.py` is updated; `RESEARCH_ARCHIVE_MANIFEST.md`
+   and AD-030's forward references become descriptions of something that
+   exists, requiring no edit; the signature divergence from §4.4 is
+   recorded in the implementing module's docstring, following AD-033's
+   pattern exactly.
+4. **Manifest tooling stays where it is.** AD-039 defers moving
+   `tools/archive_manifest.py` into `core/governance/` until
+   "`ArchiveVerifier` exists and needs it as an input contract."
+   `ArchiveVerifier` reading a manifest does not require the module to
+   move: reading is not writing, and `write_manifest()`'s legacy-archive
+   guards belong where they are. The smallest compatible outcome is to
+   leave the module in `tools/` and revisit only if a *write*-side need
+   ever appears (conflict **C-2**).
+5. **Legacy and closed cycles.** Legacy archives are reported exempt,
+   never failing. Already-closed v1 cycles with no seal report the seal
+   branch as `UNVERIFIABLE` — accurately, because no seal exists to check
+   against — and never as verified or as failed. Until item 2's stub
+   period ends, this is every v1 cycle, not only ones that individually
+   lack a seal; once a manifest format exists and sealing begins, the
+   same rule continues to apply per-archive, to whichever archives
+   individually still have no seal. Sealing them, if it ever happens, is
+   R-4's decision, not this one.
+
+---
+
+**Acceptance criteria.**
+
+These are the criteria a reviewer applies to any implementation claiming
+to satisfy AD-073. They are properties, not tests, and they are
+deliberately implementation-neutral:
+
+- **AC-1.** Exactly one public entry point exists for the
+  archive-soundness question, and it is `ArchiveVerifier`.
+- **AC-2.** `ArchiveVerifier`'s own layer computes no content hash and
+  contains no integrity algorithm; every integrity finding originates in
+  the seal primitive.
+- **AC-3.** The seal primitive performs no commit resolution, no git
+  invocation, no chain-linkage verification, and no Standard §5
+  completeness judgment.
+- **AC-4.** Every finding in the report is attributed to exactly one of
+  the three branches, and each branch's own status is individually
+  readable from the report.
+- **AC-5.** Any overall status is a pure, documented derivation over the
+  branch statuses, recomputable by a reader from what the report already
+  carries — exactly the *Overall status aggregation rule* in
+  *Architecture overview*, with no other derivation permitted.
+- **AC-6.** Outcomes are three-valued, never boolean. Absence of evidence
+  — no manifest, no seal, no stated freeze claim, an empty covered-path
+  set — yields `UNVERIFIABLE`, never a pass. This is AD-051's rule,
+  applied unchanged.
+- **AC-7.** A missing file, a modified file, and an unexpected file are
+  three distinguishable finding kinds, never one.
+- **AC-8.** A complete-but-modified archive and a sealed-but-incomplete
+  archive each produce a report that names precisely which branch
+  failed.
+- **AC-9.** No component writes, creates, or mutates anything under
+  `research_archive/`. Verified structurally, not by convention.
+- **AC-10.** No Governance → Research/Validation/Reporting import is
+  introduced; `tools/check_import_boundaries.py` passes unmodified.
+- **AC-11.** No file under `research_archive/` is covered by both a
+  sealed manifest and `tests/fixtures/protected_file_hashes.json`, and no
+  file under `research_archive/` is covered by both a sealed manifest and
+  `dataset_manifest.json`'s `content_hash` field.
+- **AC-12.** `core/governance/freeze_verifier.py` is unmodified, and no
+  freeze result produced during archive verification is written into any
+  `GateRunRecord` or `DecisionRecord`.
+- **AC-13.** All three pre-existing `ArchiveVerifier` references are
+  still accurate after implementation, with no edit beyond
+  `core/governance/__init__.py`'s "unimplemented" sentence.
+- **AC-14.** A legacy archive — **one of `reference_v1`,
+  `reference_v2_h1`, or `reference_h3` with no `archive_manifest.json`,
+  or any archive whose present manifest states `lifecycle_version:
+  "legacy"`** — is reported exempt, never failing. Manifest absence in
+  any archive outside that named three is **not** legacy; it is reported
+  by the completeness branch as a missing required item —
+  `archive_manifest.json` under its own AD-030/`RESEARCH_ARCHIVE_MANIFEST.md`
+  applicability contract, **not** one of Standard §5's seven — with the
+  same failure severity as any missing §5 item, never as exempt.
+- **AC-15.** Completeness and the Archive Seal both read
+  `transition_records.jsonl`'s terminal record before running. A
+  `lifecycle_version: "v1"` archive whose terminal `to_phase` is not
+  `Archive` — including an absent or empty `transition_records.jsonl` —
+  reports both branches `UNVERIFIABLE`, never failing and never exempt.
+- **AC-16.** A freeze branch exists exactly when the caller requested
+  freeze verification, and then always. Where it exists, both
+  `verify_freeze()` inputs come from the same record: `transition_records.jsonl`'s terminal
+  record's `freeze_commit_ref` (the commit) and `freeze_covered_paths`
+  (the paths), both read as plain data, never via `decision_recorder`'s
+  API and never by calling `verify_chain_intact()` or
+  `verify_chain_anchored()`, and never sourced from anywhere else. An
+  absent file, an empty file, or a terminal record with no
+  `freeze_commit_ref` yields `UNVERIFIABLE` under AC-6; a terminal
+  record with `freeze_commit_ref` but an empty `freeze_covered_paths`
+  also yields `UNVERIFIABLE`, under AD-051's existing empty-`covered_paths`
+  rule, not a new one.
+- **AC-17.** A path covered by both the Archive Seal and a
+  `FreezeVerifier` `covered_paths` entry produces two independently
+  attributed findings, never a merged verdict and never one taking
+  precedence over the other.
+
+---
+
+**Future work.** Named without being designed, and none of it authorized
+by this AD:
+
+- **R-4** — seal issuance and the re-protection path for a closed cycle;
+  the natural place to decide whether a sealed manifest is the substrate
+  R-4's "append-only closed-cycle hash fixture" candidate describes.
+- **R-5/AD-065** — chain anchoring, and with it the question of whether
+  `ArchiveVerifier` should ever invoke `verify_chain_intact()` /
+  `verify_chain_anchored()` as a fourth branch.
+- **`DatasetIntegrityChecker` and `ReproducibilityChecker`** as possible
+  further branches, each requiring its own decision about whether
+  orchestration or independence serves the auditor better.
+- **A `ProjectId`-keyed wrapper** once `core/research/`'s registry can
+  resolve an identifier to an archive location, following AD-033's stated
+  path: a thin resolver in front of an unchanged function, not a rewrite.
+- **Standard revision (R-7 window, v1.2)** — citing `ArchiveVerifier` by
+  name as Phase 8's instrument, once it exists.
+- **Wiring** — the decision to *run* archive verification as a standing
+  check, alongside R-6's identical open question for the independence
+  linter.
+
+---
+
+**Compatibility with existing decisions.**
+
+Two genuine conflicts, each with the smallest compatible adjustment
+rather than a breaking change:
+
+***C-1 — `PLATFORM_ARCHITECTURE_V1.md` §4.4's sketched signature.*** The
+sketch is `verify_archive(self, project_id: ProjectId) ->
+ArchiveCompletenessReport`. Resolving a `ProjectId` to an archive
+location requires Research's `ProjectRegistry`, and Governance may never
+import Research (§4.4's own rule, enforced by
+`tools/check_import_boundaries.py`). *Smallest adjustment:* the
+interface takes what the caller already holds — the archive location —
+exactly as AD-033 resolved the identical tension for
+`FreezeVerifier.verify_freeze(freeze_id)`, and for the identical reason.
+This is a documented scope reduction of a sketch, not a change to any
+accepted rule; §4.4's text stays as the forward interface, and the
+divergence is disclosed at implementation time. The sketch's return type
+name (`ArchiveCompletenessReport`) is likewise not binding: this AD's
+report spans three branches, of which completeness is one, and naming is
+left to implementation.
+
+***C-2 — AD-039's move trigger.*** AD-039 defers moving
+`tools/archive_manifest.py` into `core/governance/` until
+"`ArchiveVerifier` exists and needs it as an input contract." That
+condition is now foreseeable. *Smallest adjustment:* it is not
+triggered by *reading*. `ArchiveVerifier` consuming
+`archive_manifest.json` requires no relocation of the module that
+*writes* it, and `write_manifest()`'s legacy-archive guards are exactly
+where AD-030 wanted them. AD-039 is neither reopened nor amended; its
+trigger is simply not met by this AD.
+
+One near-conflict, resolved rather than merely noted:
+
+***AD-049 part 3 — "Validation never aggregates."*** A "single validation
+report" reads, at a glance, like the aggregate AD-049 forbids. It is not.
+AD-049 assigns *gate-outcome* aggregation to Research by name, and an
+archive report contains no gate outcomes, produces no `sequence_status`,
+and never reaches a `DecisionRecord`. What this AD does adopt from AD-049
+is its discipline: per-component statuses stored, any overall status
+derived under a documented rule (Decision part 6). The name "validation
+report" is used in this AD's prose in its plain sense — the output of a
+verification run — and must not be implemented as, or converted into, a
+`core/validation/` type.
+
+The remainder, each verified as untouched:
+
+- **AD-005** — no new generic abstraction: one public component with a
+  named consumer (Standard §2 Phase 8, R-3), one primitive with exactly
+  one consumer. The refusal to promote the seal to a peer abstraction is
+  this rule applied, not waived.
+- **AD-030 / `RESEARCH_ARCHIVE_MANIFEST.md`** — the manifest remains an
+  early preservation guard, and this AD makes it the input contract
+  AD-030 predicted, without changing its schema or its applicability
+  carve-out for the three legacy archives.
+- **AD-033 / AD-047 / AD-051 / AD-060** — `FreezeVerifier`'s semantics,
+  scope-boundedness, `UNVERIFIABLE` rule, and `covered_paths` field are
+  unchanged; this AD adds a caller and inherits AC-6 from AD-051.
+- **AD-059** — the lifecycle remains the sole Validation + Governance
+  composition boundary. `ArchiveVerifier` composes Governance components
+  only, never a `GateRunRecord`, and never runs inside
+  `compose_transition()`. Step 4's "`verify_freeze` is never called
+  again during composition" is untouched, because archive verification
+  is not composition.
+- **AD-062** — no new writer of any artifact. The single-writer rule is
+  neither extended nor reopened; seal issuance is deferred precisely so
+  that it is not silently amended here.
+- **AD-063** — no new Decision Chain authority. Neither component
+  imports or calls `decision_recorder`'s API, binds a `GateRunRecord` to
+  a `DecisionRecord`, verifies chain linkage, or writes chain state;
+  enumerations (a) and (b) are untouched. `ArchiveVerifier` reading
+  `transition_records.jsonl`'s terminal record (selected by highest
+  `sequence_number`) for `to_phase`, `freeze_commit_ref`, and
+  `freeze_covered_paths` is a plain read of already-archived data, on par with reading
+  `archive_manifest.json` — it is not chain verification and it does not
+  name a `decision_recorder` symbol.
+- **AD-066 / AD-067** — no registry of who may call anything, and no
+  runtime policy check. The applicability rule this AD does state
+  (`lifecycle_version` → which checks apply) is data already recorded in
+  the manifest, of the same kind AD-072 defended as a value check over a
+  recorded field.
+- **AD-072** — lifecycle floors unchanged. Its Phase 8 row — an in-phase
+  completeness check on a terminal phase, out of mechanical
+  transition-enforcement scope — is precisely the row this AD gives a
+  mechanism to, without turning it into a transition check.
+- **Standard §5 and the Phase G §8 immutability determination** — no
+  archived file is edited, added to, or reinterpreted. Verification is
+  read-only by Decision part 7.
+
+No existing invariant is weakened by this AD.
+
+---
+
+**Adversarial self-review.**
+
+*What assumption could still be wrong?* That Standard §5's seven items
+are mechanically checkable as *presence and kind* without drifting into
+content judgment. The rule stated in *Responsibilities* removes the drift
+path by construction — existence plus object kind, uniform across all
+eight items, empty objects passing — but §5 also states content
+requirements ("one file per review event,"
+"every file is dated in its own content or filename") that a future
+implementer could read as in-scope. They are not: presence is
+mechanical, adequacy is Standard §4's human question, and an
+implementation that starts parsing dates out of filenames has crossed a
+line this AD draws but cannot enforce.
+
+*What future implementation mistake could this ADR accidentally allow?*
+Treating "thin orchestration layer" as license to let a branch's failure
+short-circuit the others — running completeness, failing, and never
+invoking the seal. The report would then be silently partial, and a
+reader could not distinguish "integrity was checked and held" from
+"integrity was never checked." AC-4 and AC-6 are written to catch this:
+an invoked branch that reached no verdict is `UNVERIFIABLE`, reported as
+such, never omitted and never inferred. The one branch that may
+legitimately be absent rather than `UNVERIFIABLE` is a freeze branch the
+caller never requested — the *Overall status aggregation rule*'s single
+stated exclusion, and no other branch may be dropped from a report for
+any reason.
+
+*Does this AD create a second source of truth about archive soundness?*
+No, by construction: one public entry point (AC-1), one owner per
+question, one authoritative hash record per file (AC-11), and no stored
+aggregate (AC-5). The residual risk is not architectural but
+operational — if R-4 closes by extending the Phase-0 fixture over files a
+seal later covers, AC-11 is violated by sequence rather than by design.
+That is a real coupling between this AD and R-4, and it is disclosed here
+rather than resolved: whichever lands second inherits the obligation to
+check.
+
+*Is accepting this AD a way of appearing to close G-3 without closing
+it?* That is the sharpest objection available, and it is the reason the
+*Status* section states the forward condition in R-3's own words. A
+design is not an implementation; R-3's gating condition is unchanged;
+and if the next cycle reaches Phase 8 with neither an implementation nor
+a §8 deferral record, this document will have made the register longer
+without making the archive safer.
