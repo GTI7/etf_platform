@@ -98,8 +98,11 @@ class ChainPrefixMismatchError(RuntimeError):
 class AuthorizationRecord:
     """The recorded human authorization for one transition (mirrors
     docs/RESEARCH_GOVERNANCE_STANDARD.md Section 4's required fields).
-    Recorded, never adjudicated: this module does not parse
-    `reviewer_level` or enforce any hierarchy over it."""
+    `reviewer_level` here is a pure transcription: this module never
+    parses it, never compares reviewer levels, and never adjudicates
+    authorization. Lifecycle authorization enforcement is a Research-layer
+    concern under AD-072, per AD-063's authority split; callers are
+    responsible for any upstream validation of what they pass here."""
 
     authorizer: str
     reviewer_level: str
