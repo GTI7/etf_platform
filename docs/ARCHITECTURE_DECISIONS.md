@@ -4842,6 +4842,112 @@ block's claim was too strong.
     reported `SOUND` before, and the AD-073 acceptance criteria are
     otherwise untouched.
 
+**Further amended, 2026-07-26** (post-AD-075 governance hardening pass —
+`core/governance/dataset_integrity.py` implemented, and
+`core/governance/archive_seal.py` hardened a second time; remediation of a
+merge-blocking acceptance review, not a new source document). Five further
+amendments to this AD's own text:
+
+13. **AC-3 / Decision part 5 — "observes no time-varying repository state"
+    is narrowed to admit two bounded admissibility gates.** The Seal's
+    second hardening pass (`archive_seal.py`'s `_committed_register_text`
+    and `_unreachable_commit_error`) now reads `HEAD` for exactly two
+    purposes, neither the comparison AC-3 and Decision part 5 describe:
+    whether the Archive Seal Register record naming the sealing commit is
+    itself *committed*, never a working-tree read; and whether the sealing
+    commit is *reachable* from `HEAD`, not merely resolvable. AD-074 §7A
+    B-1's reversal (recorded in AD-074's own text, not restated here) is
+    the detailed reasoning for the second gate; both gates share the same
+    bound, stated once here rather than twice: each can only ever move a
+    result toward `UNVERIFIABLE`, never toward a `MATCHED` or `MISMATCH`
+    the comparison would not otherwise have reached, so the comparison
+    itself remains a pure function of the sealing commit and the archive
+    bytes. AC-3 and Decision part 5's "observes no time-varying repository
+    state" is narrowed to mean exactly that: no time-varying fact may
+    change a `MATCHED`/`MISMATCH` verdict or move a result between them —
+    the guarantee already carried, restated to admit an admissibility gate
+    that only ever narrows toward `UNVERIFIABLE`. This is not a new
+    exception to AC-3 in the sense Decision part 5's amendment item 1
+    (git-object reads at a fixed commit) already is not one: neither turns
+    the Seal into a second `FreezeVerifier`, and neither makes the
+    comparison's *result* a function of anything but the sealing commit
+    and the bytes.
+14. **The dataset-integrity branch is built, and the *Future work* choice
+    it required is made: orchestration.** *Future work* named
+    "`DatasetIntegrityChecker` and `ReproducibilityChecker` as possible
+    further branches, each requiring its own decision about whether
+    orchestration or independence serves the auditor better." For
+    `DatasetIntegrityChecker`, that decision is now made: **orchestration**,
+    exactly as `ArchiveVerifier` already orchestrates the Seal.
+    `core/governance/dataset_integrity.py`'s `verify_dataset_integrity()`
+    recomputes each `dataset_hashes/*.jsonl` snapshot's SHA-256 and row
+    count against `dataset_manifest.json` read at the sealing commit —
+    resolved once, by `archive_seal.resolve_sealing_commit()`, and reused
+    rather than re-derived, so the Seal and the dataset branch can never
+    name two different sealing commits for the same archive (the
+    duplicate-source-of-truth failure Decision part 8 exists to prevent,
+    one level up). It is invoked unconditionally, alongside Completeness
+    and the Seal, never caller-elected the way the freeze branch is
+    (*Architecture overview*'s "third row"): its subject is archive-local
+    bytes against a value fixed at archive close, the Seal's own stability
+    property, not the freeze branch's. **`ReproducibilityChecker` is
+    untouched by this item** and remains exactly what *Future work* and
+    Non-goals item 5 already said it was — a separate §4.4 component,
+    undesigned, unimplemented, and not folded into this architecture by
+    this or any amendment to date.
+15. **Four branches, not three.** *Status vocabulary*'s "Three branches,
+    three independent vocabularies" becomes four: the dataset-integrity
+    branch owns its own three-valued vocabulary (`VERIFIED` / `DRIFTED` /
+    `FAILED`, `DatasetIntegrityStatus`), deliberately not merged with
+    `CompletenessStatus`, `SealStatus`, or `FreezeStatus` — the same
+    discipline this AD's original text already applied to the first
+    three. `FAILED` names the same fact `UNVERIFIABLE` names elsewhere
+    ("could not reach a verdict"); it is not folded into that shared name
+    because the branch was specified with its own vocabulary, not because
+    the fact it denotes differs. The *Architecture overview* diagram and
+    table gain a fourth line/row, **Dataset Integrity**, positioned
+    between the Archive Seal and Freeze binding: subject
+    `dataset_hashes/*.jsonl` snapshot bytes against `dataset_manifest.json`
+    read at the sealing commit; stable once the archive closes (yes — both
+    sides are archive-local, the Seal's own property); owner
+    `core.governance.dataset_integrity`. The **Overall status aggregation
+    rule**'s "exactly one branch can be absent, and for exactly one
+    reason" is unchanged in what it protects — the freeze branch remains
+    the only caller-elected one — but the rule's fixed precedence gains the
+    dataset branch's two non-good values *within* the existing three
+    steps, not as a new step: step 1 (`UNSOUND`) gains
+    `DatasetIntegrityStatus.DRIFTED` alongside Completeness `INCOMPLETE`,
+    Seal `MISMATCH`, and Freeze `DRIFTED`; step 2 (`UNVERIFIABLE`) gains
+    `DatasetIntegrityStatus.FAILED` alongside the other three branches'
+    `UNVERIFIABLE`; step 3 (`SOUND`) additionally requires
+    `DatasetIntegrityStatus.VERIFIED`. No fourth outcome, weighting, or
+    partial-credit case is introduced — the rule itself is unchanged; only
+    the set of always-invoked branches feeding it grows from two
+    (Completeness, Seal) to three (Completeness, Seal, Dataset Integrity),
+    with Freeze remaining the one caller-elected branch. AC-4 and AC-5's
+    "three branches" read as four accordingly and are not separately
+    rewritten here.
+16. **Non-goals item 5 — discharged for dataset integrity only.** Item 5
+    read: *"Reproduction (`ReproducibilityChecker`, `run_reproduction()`)
+    and dataset integrity (`DatasetIntegrityChecker`,
+    `dataset_manifest.json` content verification). Both remain separate
+    §4.4 components; neither is folded into this architecture."* The
+    dataset-integrity half is discharged by item 14 above:
+    `DatasetIntegrityChecker` now exists, is orchestrated by
+    `ArchiveVerifier` as its fourth branch, and *is* folded into this
+    architecture. The reproduction half is untouched and remains a
+    non-goal exactly as written: `ReproducibilityChecker` and
+    `run_reproduction()` are not implemented, not designed, and not
+    folded into this architecture by this or any amendment to date.
+17. **Nothing else changes.** Items 13–16 are exhaustive of this
+    amendment. Item 13 is a tightening in the same sense items 9–11
+    already are: it converts no `UNVERIFIABLE`/`MISMATCH` archive into
+    `MATCHED`, and no archive reports `SOUND` under it that would not have
+    reported `SOUND` before. Items 14–16 add one always-invoked branch and
+    its vocabulary; they do not relax Completeness, the Seal, or Freeze,
+    and they do not change AC-1, AC-2, AC-6 through AC-10, AC-12 through
+    AC-17, the Non-goals other than item 5, or any Migration item.
+
 ---
 
 **Context.**
@@ -5016,6 +5122,7 @@ ArchiveVerifier                     (orchestration; owns composition + the repor
     |
     ├── Completeness verification   (Standard §5 evidence-package shape)
     ├── Archive Seal verification   (archived content integrity)
+    ├── Dataset Integrity check     (dataset_hashes/*.jsonl vs. sealed manifest) *(added — Status, item 14)*
     └── FreezeVerifier integration  (commit binding — invoked, not owned)
 ```
 
@@ -5027,6 +5134,7 @@ properties:
 |---|---|---|---|
 | Completeness | The evidence package's structure, against Standard §5's seven required items | Yes — the required shape is fixed by the Standard, and the package is immutable | `ArchiveVerifier`'s own layer |
 | Archive Seal | The archived files' bytes, against the sealing commit tree identified by an Archive Seal Register record *(amended 2026-07-26)* | Yes — both sides of the comparison are archive-local | Archive Seal primitive |
+| Dataset Integrity *(added — Status, item 14)* | `dataset_hashes/*.jsonl` snapshot bytes and row counts, against `dataset_manifest.json` read at the sealing commit resolved by the Seal | Yes — both sides are archive-local, the Seal's own stability property | `core.governance.dataset_integrity` |
 | Freeze binding | The **repository's current state**, against a commit reference the archive claims | **No** — the answer can legitimately change after the archive closes | `FreezeVerifier` |
 
 The third row is the load-bearing one. A freeze-verification result is a
@@ -5065,9 +5173,11 @@ trustworthy" verdict; a reader who needs that judgment reads both
 attributed findings, exactly as AC-4 already requires for any pair of
 branch results.
 
-**Status vocabulary.** Three branches, three independent vocabularies,
-deliberately not merged into one enum — so that a confirmed problem in
-one branch is never mistaken for the same fact in another:
+**Status vocabulary.** Four branches *(amended 2026-07-26 — see Status,
+item 15; three at this AD's original acceptance)*, four independent
+vocabularies, deliberately not merged into one enum — so that a
+confirmed problem in one branch is never mistaken for the same fact in
+another:
 
 - **Freeze branch** — `FreezeStatus`, exactly as
   `core/governance/freeze_verifier.py` already defines it (AD-047,
@@ -5094,43 +5204,62 @@ one branch is never mistaken for the same fact in another:
   acceptance, every archive, since seal issuance's format was then
   undecided; AD-074 resolves the format and leaves the per-archive rule
   unchanged).
+- **Dataset Integrity branch** *(added 2026-07-26 — see Status, item
+  15)* — a distinct, `core.governance.dataset_integrity`-owned
+  vocabulary, `DatasetIntegrityStatus`: `VERIFIED` (a manifest was read
+  at the sealing commit and every entry's snapshot is present, hashes
+  to its declared `content_hash`, and holds its declared `row_count`),
+  `DRIFTED` (at least one entry is confirmed wrong — a hash mismatch, a
+  row-count mismatch, or a missing snapshot), `FAILED` (the question
+  could not be answered — no sealing commit, no manifest at the sealing
+  commit, an unparsable manifest, a snapshot that cannot be read). Named
+  `FAILED` rather than `UNVERIFIABLE` because that is the vocabulary
+  this branch was specified with; the fact it denotes is the same one
+  `UNVERIFIABLE` denotes elsewhere.
 
-`UNVERIFIABLE` is the one value name shared across all three
-vocabularies, and it means the same fact in each: this branch could not
-reach a verdict. That is the sole intentional overlap; no other value
+`UNVERIFIABLE` is the one value name shared across the other three
+vocabularies (Completeness, Archive Seal, Freeze), and it means the same
+fact in each: this branch could not reach a verdict; the Dataset
+Integrity branch's `FAILED` denotes the identical fact under its own
+branch's name. That is the sole intentional overlap; no other value
 is shared, and none is folded into `GateStatus`, `GateOutcome`, or the
 Decision-outcome vocabulary (`PASS`/`FAIL`/`INCONCLUSIVE`, Standard §4)
 — an archive report answers none of those questions (this AD's own
 "does not" lists).
 
 **Overall status aggregation rule.** The derived value Decision part 6
-and AC-5 require — never stored, always recomputable from the three
-branch values above — is drawn from its own three-valued vocabulary:
-`SOUND`, `UNSOUND`, `UNVERIFIABLE`. The rule considers only branches
-that were actually invoked. **Exactly one branch can be absent, and for
-exactly one reason:** a freeze branch the caller did not request (the
-"where appropriate" clause, defined above as the caller's request and
-nothing else) is absent from the report and takes no part in this
-computation. Completeness and the Seal always run; a requested freeze
-branch always runs, and a requested freeze branch that finds no freeze
-claim reports `UNVERIFIABLE` and is counted like any other invoked
-branch. An absent branch is not the same fact as an invoked branch
-reporting `UNVERIFIABLE`, and a reader must never conflate the two.
-Fixed precedence, evaluated top to bottom, first match wins:
+and AC-5 require — never stored, always recomputable from the branch
+values above — is drawn from its own three-valued vocabulary: `SOUND`,
+`UNSOUND`, `UNVERIFIABLE`. The rule considers only branches that were
+actually invoked. **Exactly one branch can be absent, and for exactly
+one reason:** a freeze branch the caller did not request (the "where
+appropriate" clause, defined above as the caller's request and nothing
+else) is absent from the report and takes no part in this computation.
+Completeness, the Seal, and Dataset Integrity always run *(the third
+added 2026-07-26 — see Status, items 14–15)*; a requested freeze branch
+always runs, and a requested freeze branch that finds no freeze claim
+reports `UNVERIFIABLE` and is counted like any other invoked branch. An
+absent branch is not the same fact as an invoked branch reporting
+`UNVERIFIABLE`, and a reader must never conflate the two. Fixed
+precedence, evaluated top to bottom, first match wins:
 
 1. **`UNSOUND`** — at least one invoked branch reports its confirmed-
-   problem value: Completeness `INCOMPLETE`, Seal `MISMATCH`, or Freeze
-   `DRIFTED`.
+   problem value: Completeness `INCOMPLETE`, Seal `MISMATCH`, Dataset
+   Integrity `DRIFTED` *(added 2026-07-26)*, or Freeze `DRIFTED`.
 2. **`UNVERIFIABLE`** — no invoked branch reports a confirmed problem,
-   and at least one invoked branch reports `UNVERIFIABLE`.
+   and at least one invoked branch reports `UNVERIFIABLE` (Dataset
+   Integrity's `FAILED` counts as this branch's spelling of the same
+   fact, *added 2026-07-26*).
 3. **`SOUND`** — every invoked branch reports its confirmed-good value:
-   Completeness `COMPLETE` or `EXEMPT`, Seal `MATCHED`, Freeze
-   `VERIFIED`.
+   Completeness `COMPLETE` or `EXEMPT`, Seal `MATCHED`, Dataset
+   Integrity `VERIFIED` *(added 2026-07-26)*, Freeze `VERIFIED`.
 
 This is the entire rule. No implementation may add a fourth outcome, a
 weighting, or a partial-credit case. It applies AD-051's own precedence
 — confirmed problem outranks unverifiable outranks confirmed good —
-across branches instead of within one.
+across branches instead of within one. Dataset Integrity's two non-good
+values slot into the existing three steps; they do not add a step, a
+weighting, or a partial-credit case, per Status item 15.
 
 **Worked example: a non-legacy, closed archive with no
 `archive_manifest.json`.** Completeness and the Seal each depend on a
@@ -5550,10 +5679,15 @@ solve, so that no reader mistakes acceptance for coverage:
 4. **Decision-chain verification and anchoring** (AD-065, R-5). Chain
    integrity remains `decision_recorder`'s; whether `ArchiveVerifier`
    should ever invoke it is future work, deliberately not decided here.
-5. **Reproduction** (`ReproducibilityChecker`, `run_reproduction()`) and
-   **dataset integrity** (`DatasetIntegrityChecker`,
-   `dataset_manifest.json` content verification). Both remain separate
-   §4.4 components; neither is folded into this architecture.
+5. **Reproduction** (`ReproducibilityChecker`, `run_reproduction()`) and,
+   *until 2026-07-26 (see Status, item 16, discharged for dataset
+   integrity only)*, **dataset integrity** (`DatasetIntegrityChecker`,
+   `dataset_manifest.json` content verification). `ReproducibilityChecker`
+   remains a separate §4.4 component, undesigned and unimplemented, and
+   is not folded into this architecture. `DatasetIntegrityChecker` is no
+   longer a non-goal: it is implemented
+   (`core/governance/dataset_integrity.py`) and is folded into this
+   architecture as a fourth, always-invoked branch (Status, items 14–15).
 6. **Evidence quality.** Whether `methodology.md` is adequate, whether a
    review was substantive, whether a conclusion is sound. Standard §4
    keeps these human; presence and integrity are not adequacy.
@@ -5635,16 +5769,23 @@ deliberately implementation-neutral:
 - **AC-2.** `ArchiveVerifier`'s own layer computes no content hash and
   contains no integrity algorithm; every integrity finding originates in
   the seal primitive.
-- **AC-3.** *(Amended 2026-07-26 — see Status, item 1.)* The seal
-  primitive performs no freeze-claim verification, resolves no freeze
-  commit reference, observes no time-varying repository state, no
+- **AC-3.** *(Amended 2026-07-26 — see Status, item 1; further amended
+  2026-07-26 — see Status, item 13.)* The seal primitive performs no
+  freeze-claim verification, resolves no freeze commit reference, no
   chain-linkage verification, and makes no Standard §5 completeness
   judgment. It may read git objects at a commit fixed at archive close,
   where both sides of the comparison are archive-local and stable, and it
   never invokes `verify_freeze()`, `verify_chain_intact()`, or
-  `verify_chain_anchored()`.
+  `verify_chain_anchored()`. It observes no time-varying repository state
+  **in the sense that matters**: it may consult `HEAD` for two bounded
+  admissibility questions (is the Register record committed; is the
+  sealing commit reachable) that can only ever move a result toward
+  `UNVERIFIABLE`, never toward a `MATCHED` or `MISMATCH` the comparison
+  would not otherwise have reached — the comparison's *result* remains a
+  pure function of the sealing commit and the archive bytes alone.
 - **AC-4.** Every finding in the report is attributed to exactly one of
-  the three branches, and each branch's own status is individually
+  the four branches *(three at this AD's original acceptance — see
+  Status, item 15)*, and each branch's own status is individually
   readable from the report.
 - **AC-5.** Any overall status is a pure, documented derivation over the
   branch statuses, recomputable by a reader from what the report already
@@ -5721,10 +5862,15 @@ by this AD:
   R-4's "append-only closed-cycle hash fixture" candidate describes.
 - **R-5/AD-065** — chain anchoring, and with it the question of whether
   `ArchiveVerifier` should ever invoke `verify_chain_intact()` /
-  `verify_chain_anchored()` as a fourth branch.
-- **`DatasetIntegrityChecker` and `ReproducibilityChecker`** as possible
-  further branches, each requiring its own decision about whether
-  orchestration or independence serves the auditor better.
+  `verify_chain_anchored()` as a further branch *("fourth branch" at this
+  AD's original acceptance; the Dataset Integrity branch now occupies
+  that position — Status, items 14–15 — so chain anchoring, if ever
+  added, would be a fifth)*.
+- **`ReproducibilityChecker`** as a possible further branch, requiring its
+  own decision about whether orchestration or independence serves the
+  auditor better. *(`DatasetIntegrityChecker`'s identical question is
+  resolved — orchestration — at Status, item 14; it is no longer future
+  work.)*
 - **A `ProjectId`-keyed wrapper** once `core/research/`'s registry can
   resolve an identifier to an archive location, following AD-033's stated
   path: a thin resolver in front of an unchanged function, not a rewrite.
@@ -5981,9 +6127,21 @@ without the design review:
    hexadecimal object id, validated syntactically before resolution and
    round-tripped against the resolved id; a symbolic ref, a tag, or an
    abbreviated hash is `UNVERIFIABLE` (§7B D11, AC-74-5b). **Ancestry
-   relative to `HEAD` is not checked** — `HEAD`'s position is a
-   time-varying topology fact and must not affect a seal result (§7A
-   B-1).
+   relative to `HEAD` is required** *(reversed 2026-07-26, post-AD-075
+   governance hardening pass — design review §7A, "B-1 reversed"; this
+   bullet previously read "is not checked," on the premise that an
+   unreachable commit was already `UNVERIFIABLE` under D3's resolution
+   step. That premise is withdrawn: `git commit-tree` mints a commit
+   object that resolves identically to a real, referenced one while
+   being reachable from no ref, so resolution alone does not prove
+   history membership.)* — checked via
+   `git merge-base --is-ancestor <sealed_commit> HEAD`: not-an-ancestor
+   is `UNVERIFIABLE`, an undetermined answer is `UNVERIFIABLE`, and
+   either way `HEAD`'s position still cannot turn an
+   `UNVERIFIABLE`/`MISMATCH` result into `MATCHED` or the reverse — the
+   seal's result remains a function of the sealing commit and the
+   archive bytes alone, which is the property `HEAD`'s time-varying
+   position must not affect, restated rather than abandoned (§7A B-1).
 4. **Third input, pinned.** The git attribute stack governs *how* the
    bytes are hashed and is therefore an input to the result alongside the
    commit and the bytes. All five influences are neutralised: system
@@ -6078,10 +6236,20 @@ untouched). `tools/check_import_boundaries.py` passes unmodified
   9). A committed tamper is visible to `git log`-based review only if a
   human performs that review; an uncommitted working-tree rewrite leaves
   no commit to review at all. Disclosed, unassigned, not closed.
-- `DatasetIntegrityChecker` is still unimplemented, so
-  `dataset_hashes/*.jsonl` remains excluded from the seal and covered by
-  a recorded hash that nothing verifies (§9 item 6). Inherited from
-  AD-073, not widened here.
+- `DatasetIntegrityChecker` **is no longer unimplemented**
+  *(discharged 2026-07-26, post-AD-075 governance hardening pass —
+  design review §9 item 6, AD-073 Status items 14–15)*. It is
+  implemented at `core/governance/dataset_integrity.py` and orchestrated
+  by `ArchiveVerifier` as a fourth, always-invoked branch;
+  `dataset_hashes/*.jsonl` is excluded from the Seal's own comparison
+  exactly as before (AD-073 Decision part 8), but is no longer covered
+  only by a recorded hash that nothing verifies. `OverallStatus.SOUND`
+  is narrowed accordingly (AC-74-13, design review §8, as amended).
+
+  *Original bullet, at AD-074's acceptance:* `DatasetIntegrityChecker` is
+  still unimplemented, so `dataset_hashes/*.jsonl` remains excluded from
+  the seal and covered by a recorded hash that nothing verifies (§9 item
+  6). Inherited from AD-073, not widened here.
 - The design review's §7C registry is now the authoritative definition of
   the `BLOCKER 1`–`3` and `M-1`/`M-3`–`M-6` labels that appear as inline
   comments in `core/governance/archive_seal.py` and
@@ -6320,12 +6488,38 @@ reproducibility, or experiment validity.
    this gap live in practice rather than only in principle — before this
    entry the Register was empty, so there was nothing to tamper with.
    Disclosed, unassigned, **not closed**.
+
+   **Forward note, 2026-07-26 (post-AD-075 governance hardening pass;
+   this item's own text above is retained unchanged, per this register's
+   no-silent-supersession rule).** Of the two cases this item names, the
+   *second* — an uncommitted working-tree rewrite, which "leaves no
+   commit for such a review to reach" — is now closed:
+   `archive_seal._committed_register_text()` reads the Register at
+   `HEAD` as committed content only, so an uncommitted rewrite has no
+   effect on any seal result, neither to grant one nor to revoke one.
+   The *first* case is unchanged and remains open: a **committed**
+   Register tamper is still visible to `git log -p` / `git blame` only
+   if a human actually performs that review, which nothing here
+   automates. This item is therefore half-closed, not closed, and must
+   not be cited as fully closed.
 3. **`DatasetIntegrityChecker`** (AD-073 Decision part 8, AD-074 §9 item
    6). Still unimplemented. `reference_h4`'s three
    `dataset_hashes/*.jsonl` files are excluded from the seal's content
    comparison and are covered by a recorded `content_hash` that nothing
    verifies. Their *existence* is checked (AC-74-4). Inherited, not
    widened, and not closed.
+
+   **Forward note, 2026-07-26 (post-AD-075 governance hardening pass;
+   this item's own text above is retained unchanged).** `DatasetIntegrityChecker`
+   is now implemented at `core/governance/dataset_integrity.py` and
+   orchestrated by `ArchiveVerifier` as a fourth, always-invoked branch
+   (AD-073 Status items 14–15; AD-074 §9 item 6, discharged). For
+   `reference_h4` specifically, its three `dataset_hashes/*.jsonl` files
+   are now verified — hash and row count recomputed against
+   `dataset_manifest.json` read at sealing commit `29553b7` — every time
+   `verify_archive(research_archive/reference_h4)` runs. This item is
+   discharged by that later work, not by this entry; AD-075 itself
+   implements nothing here (AC-75-14, unaltered, below).
 4. **G-5 as a platform-wide defect.** The re-protection *path* now exists
    and has been exercised once. `positive_control_phase3` will still
    reproduce D-9 the moment it closes: issuing its record will be a
@@ -6408,6 +6602,24 @@ reproducibility, or experiment validity.
   rather than as "the check passes" because the standalone script exits
   non-zero on that documented inventory today, before and after this
   work; a criterion asserting otherwise would be false on its face.)*
+
+**Forward note, 2026-07-26 (post-AD-075 governance hardening pass).
+AC-75-14's text above is unaltered and remains this entry's own,
+historical claim: AD-075 itself closed no more than R-4/G-5/D-9 for
+`reference_h4`'s archived bytes, and never claimed to close R-4b,
+Register self-integrity, or `DatasetIntegrityChecker`.** A later,
+separate pass — recorded at AD-073 Status items 14–17, AD-074 §7A's
+"B-1 reversed" and §9 item 6, and the "Does not close" items 2 and 3
+above — has since discharged part of what AC-75-14 disclaims: dataset
+integrity is implemented and orchestrated (`DatasetIntegrityChecker`,
+§9 item 6, fully discharged), and Register self-integrity's *second*
+case — an uncommitted working-tree rewrite — is closed, while its
+*first* case — a committed tamper, defended only by human `git log -p`
+review — remains open. Neither discharge is performed by AD-075, is
+backdated onto it, or changes what AC-75-14 says AD-075 itself did;
+this note exists so a reader of AC-75-14 in isolation is pointed to the
+later record rather than left to assume the disclaimed gaps are still
+fully open today.
 
 **Relationship to prior ADs.** AD-075 is subordinate to AD-074 exactly as
 AD-074 is subordinate to AD-073: it adds no mechanism, changes no

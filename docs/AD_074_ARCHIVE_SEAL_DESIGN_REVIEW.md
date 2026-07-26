@@ -703,6 +703,60 @@ fails first if the commit cannot be found at all, so the ancestry check was
 never doing work the durability rule does not already do, only work that
 introduced the contradiction.
 
+**B-1 reversed (2026-07-26, post-AD-075 governance hardening pass). The
+premise above is withdrawn: it is false, and demonstrably so, not merely
+debatable.** The withdrawn sentence is *"an unreachable sealing commit is
+already `UNVERIFIABLE` under D3 … the commit-resolution step already fails
+first if the commit cannot be found at all."* It does not. `git commit-tree`
+mints a commit object that no ref names and no ref reaches, and
+`git rev-parse --verify <id>^{commit}` — the commit-resolution step §5.4
+step 1 actually runs — resolves that object exactly as it resolves any
+ordinary, referenced commit. **Resolution proves an object is present in the
+object database; it never proves the object is part of this repository's
+history.** D3 (git durability) is a statement about *readability*, not about
+*membership in history*, and the two were conflated above.
+
+What that gap costs is the seal's own threat model, not a hypothetical one:
+an actor able to write a Register record — the same actor D5/§9 item 9
+already names as untrusted for a *committed* Register tamper — can stage a
+tampered archive, `git write-tree` / `git commit-tree` it into a commit no
+branch reaches, name that commit as `sealed_commit`, and obtain `MATCHED`
+against a tree that no `git log`, no branch, and no review has ever
+contained. The forged commit is invisible to every history-based defense D5
+relies on, because it is not in any history a reviewer could open.
+
+**Ancestry relative to `HEAD` is restored as a required check**, using the
+predicate
+
+    git merge-base --is-ancestor <sealing-commit> HEAD
+
+Exit `0` means the sealing commit *is* an ancestor of `HEAD` (the check
+passes, silently). Exit `1` means it is not: the sealing commit is treated
+as unreachable, which is `UNVERIFIABLE` — never `MISMATCH` — with the same
+two remedies D3 already gives for an unreadable commit (restore the object,
+or issue a superseding Register record). Any other exit code is an
+undetermined answer, which is itself `UNVERIFIABLE`, never silently treated
+as reachable. Implemented as `archive_seal._unreachable_commit_error()`.
+
+**This is not a return to the original, rejected design, and the concern
+that motivated dropping the check the first time is fully honoured.** The
+check above is bounded exactly the way this section's own "Why" paragraph
+already required: it can only ever move a result *toward* `UNVERIFIABLE`,
+never toward a `MATCHED` or `MISMATCH` the resolution-and-comparison steps
+would not otherwise have reached. `HEAD`'s position still cannot turn an
+`UNVERIFIABLE`/`MISMATCH` result into `MATCHED`, and still cannot turn a
+`MATCHED` result into `MISMATCH` — the seal's result remains a function of
+the sealing commit and the archive bytes, exactly as this section's "Why"
+paragraph argues. What changes is only that the *legitimate* cases the "Why"
+paragraph was written to protect — a squash/rebase merge, a branch deletion
+plus `gc`, a shallow clone, all of which move a sound sealing commit out of
+`HEAD`'s history without touching a single archived byte — now land at
+`UNVERIFIABLE` explicitly, by this check, instead of accidentally at
+`MATCHED` past a check that was never actually redundant. AC-74-13 is
+updated to state plainly that `OverallStatus.SOUND` now also requires the
+Dataset Integrity branch (§9 item 6, discharged below) alongside the
+sealed-tree comparison this section already covers.
+
 **B-2 — dataset-hash exclusion: coverage boundary, not duplicate-hash
 avoidance.** Two statements elsewhere in this review are in tension read
 together: §5.1 excludes `dataset_manifest.json` `snapshot_path` entries
@@ -1375,10 +1429,18 @@ Properties, not tests, in AD-073's own style. Numbered in AD-074's own space.
 - **AC-74-12.** The trust boundary of §5.2 — specifically that history rewrite
   is **not** defeated — is stated in the implementing module's docstring, not
   only here.
-- **AC-74-13.** `OverallStatus.SOUND` means exactly "the sealed archive paths
-  match the sealing commit tree" (§7B D6). No implementation, docstring, or
-  report field may state or imply that `SOUND` additionally confirms dataset
-  hash verification, research reproducibility, or experiment validity.
+- **AC-74-13.** *(Narrowed 2026-07-26, post-AD-075 governance hardening
+  pass — §7A B-1 reversal and §9 item 6 discharge, below.)* `OverallStatus.SOUND`
+  means exactly "the sealed archive paths match the sealing commit tree,
+  the sealing commit is reachable from `HEAD`, and every dataset snapshot
+  matches the hash and row count sealed for it" (§7B D6; the reachability
+  clause and the dataset-hash clause are both new). No implementation,
+  docstring, or report field may state or imply that `SOUND` additionally
+  confirms research reproducibility or experiment validity — that remains
+  Standard §4's human question, untouched. The dataset-hash carve-out this
+  criterion previously stated is discharged, not merely narrowed: it
+  existed only because `DatasetIntegrityChecker` was unimplemented, and it
+  no longer is (`core/governance/dataset_integrity.py`).
 
 ---
 
@@ -1400,10 +1462,24 @@ Stated as problems AD-074 deliberately does **not** solve.
 5. **The post-Archive append question.** AD-073 Non-goals item 9's separate
    ADR still owns it. AD-074 is *compatible* with either answer — that is the
    point of append-only — but does not decide it.
-6. **`DatasetIntegrityChecker`.** Still unimplemented [verified]; the seal
-   delegates to a checker that does not exist yet, so `dataset_hashes/*.jsonl`
-   remains covered by a recorded hash that nothing verifies. **This is a real
-   residual gap and is disclosed, not closed.**
+6. **`DatasetIntegrityChecker`.** *(Discharged 2026-07-26, post-AD-075
+   governance hardening pass; the item below is retained as written,
+   per this document's own no-silent-supersession discipline, rather
+   than deleted.)* Implemented at `core/governance/dataset_integrity.py`
+   and orchestrated by `ArchiveVerifier` as a fourth, always-invoked
+   branch (AD-073 Status, items 14–15). `dataset_hashes/*.jsonl` is no
+   longer covered only by a recorded hash that nothing verifies: its
+   SHA-256 and row count are recomputed against `dataset_manifest.json`
+   read at the sealing commit. This closes the residual disclosed
+   immediately below for every archive with a sealing commit; it does
+   not touch Register self-integrity (item 9) or any other item in this
+   list.
+
+   *Original item, unimplemented at AD-074's acceptance:* Still
+   unimplemented [verified]; the seal delegates to a checker that does
+   not exist yet, so `dataset_hashes/*.jsonl` remains covered by a
+   recorded hash that nothing verifies. **This is a real residual gap
+   and is disclosed, not closed.**
 7. **Retiring `protected_file_hashes.json`.** It keeps the three legacy
    archives. Untouched, unedited, unextended.
 8. **Chain anchoring (R-5/G-4), reproduction, evidence quality,
