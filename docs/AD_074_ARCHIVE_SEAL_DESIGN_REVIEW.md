@@ -1154,17 +1154,46 @@ fragments, and the positional rule would then have reported a corrupt
 Register for a file that was never corrupt. Splitting on LF alone matches
 exactly what the writer joins on.
 
-**D5 — Register self-integrity.** The Archive Seal Register is **not
-protected by the seal it drives.** It is a governance **control input**,
-not a sealed artifact — nothing in this design hashes it, seals it, or
-verifies its own history. A silent edit to a past Register record (changing
-a `sealed_commit`, for instance) is detectable only through the repository's
-own history and human review — the same git-log-based scrutiny that is the
-only defense against a rewritten `transition_records.jsonl` predecessor hash
-(S-4) — and is not detected by `ArchiveVerifier` itself, which trusts the
-Register's latest record for a `project_id` (§5.5 C-2) at face value. This
-is disclosed as a limitation, not remedied: protecting the protector is a
-further-work question (§9), not one this design closes.
+**D5 — Register self-integrity.** *(Corrected 2026-07-26, post-merge AD-074
+governance review: the original wording below overstated what git-log
+review actually catches.)* The Archive Seal Register is **not protected by
+the seal it drives.** It is a governance **control input**, not a sealed
+artifact — nothing in this design hashes it, seals it, or verifies its own
+history. `ArchiveVerifier` does not detect a Register tamper itself; it
+trusts the Register's latest record for a `project_id` (§5.5 C-2) at face
+value.
+
+What git-log-based review actually catches is narrower than "detectable
+through the repository's own history and human review" implies, and the two
+cases below are not the same guarantee:
+
+- **A silent edit to a *committed* past Register record** — changing a
+  `sealed_commit`, appending a forged record, or rewriting one in place,
+  then committing it — is visible in `git log -p` / `git blame` over
+  `docs/archive_seal_register.jsonl`, the same git-log-based scrutiny that is
+  the only defense against a rewritten `transition_records.jsonl`
+  predecessor hash (S-4). This defense is real, but conditional: it catches
+  the edit only if a human actually reviews that history. Nothing in this
+  design runs that review automatically.
+- **An uncommitted working-tree replacement or rewrite of the Register** —
+  editing the file and running verification before, or without ever,
+  committing the change — leaves **no commit to review at all**. Git
+  history review answers "what changed between two commits"; it is
+  structurally blind to a change that is never committed, which is not
+  merely a harder case of the committed-edit defense above but a case that
+  defense does not reach at all.
+
+**Increment 2 (this pass) intentionally does not close this gap.** The
+Register reader (§7B D12, `_latest_register_record`) validates the
+Register's *shape* — canonical JSONL, schema, supersession — not its
+*provenance*, and nothing added by this pass hashes the Register or anchors
+it to a commit the way `sealed_commit` anchors an archive. Closing it would
+require giving the Register the same kind of self-protection
+`transition_records.jsonl` already has — a hash-chained, tamper-evident
+issuance model for the Register itself. That is the planned remedy, tracked
+as further work (§9), not one this design closes — and it is a distinct
+future increment from this document's own §11 Increment 1–3 sequence, which
+sequences the Seal's rollout, not a future Register-hardening pass.
 
 **D6 — `AC-74-13`, added to §8 below.** `OverallStatus.SOUND` means, and
 means only, "the sealed archive paths match the sealing commit tree." It
@@ -1172,6 +1201,32 @@ does not imply dataset-hash verification (`DatasetIntegrityChecker` is
 unimplemented, §9 item 6), research reproducibility, or experiment
 validity — Standard §4's human question, untouched by any branch this AD
 defines.
+
+---
+
+## 7C. Hardening item registry — `BLOCKER`/`M` labels
+
+*(Added 2026-07-26, post-merge AD-074 governance review.)* `core/governance/archive_seal.py`
+and `tests/test_governance_archive_verifier.py` mark several of the §7B findings above with
+short inline labels — `BLOCKER 1`–`BLOCKER 3`, `M-1`, `M-3`–`M-6` — that were introduced during
+the 2026-07-26 Increment 2 hardening pass but never given an authoritative definition in this
+document or in `ARCHITECTURE_DECISIONS.md`. That gap is closed here. No label is renamed and no
+code comment is touched; this table only records, for each label already in use, the finding it
+names, where it is implemented, and what tests exercise it. Line numbers are as of this
+document's writing (`archive_seal.py` at HEAD `2392de2`) and are a locator, not a contract — the
+function names are the durable reference.
+
+| Label | Meaning | Implementation | Tests | §7B / AC ref |
+|---|---|---|---|---|
+| **BLOCKER 1** | `protected_file_hashes.json`'s exclusion set must be read **at the sealing commit**, never the working tree — a working-tree read would let anyone exempt an archive path from verification after the fact, with no commit and no Register trace. | `_protected_file_hashes_exclusion_set` (`archive_seal.py:1278`) | `test_seal_post_seal_protected_fixture_edit_cannot_launder_a_tampered_file`, `test_seal_protected_fixture_absent_at_sealing_commit_excludes_nothing`, `test_seal_protected_fixture_malformed_at_sealing_commit_is_unverifiable` | D9 |
+| **BLOCKER 2** | The git attribute stack — system/global attribute files, `$GIT_COMMON_DIR/info/attributes`, per-repo `.gitattributes`, `filter` drivers, and `attr.tree`/`GIT_ATTR_SOURCE` source selection — is a live third input to the hash comparison and must be pinned or refused so it cannot silently change a `MATCHED` result. | `_gitattributes_drift_error` (800), `_filter_attribute_error` (861), `_attribute_source_directories` (785), attribute-stack env pinning in `_git_env`/`_run_git` (377, 399) | `test_seal_post_seal_gitattributes_edit_is_unverifiable`, `test_seal_gitattributes_appearing_after_the_seal_is_unverifiable`, `test_seal_gitattributes_inside_the_archive_is_also_verified`, `test_seal_info_attributes_override_is_unverifiable`, `test_seal_clean_filter_on_a_compared_path_is_refused` | D7, AC-74-5a |
+| **BLOCKER 3** | `sealed_commit` must be a full-length lowercase hex object id, never a symbolic ref (`HEAD`, a branch, a tag) or an abbreviated hash — and the resolved id must round-trip-match the recorded string, so a peeled annotated-tag id cannot stand in for the commit it peels to. | `_fixed_commit_id_error` (447), `_resolved_commit_id` (485), `_SEALED_COMMIT_PATTERN` (166) | `test_seal_non_fixed_object_id_is_rejected_before_resolution`, `test_seal_head_naming_the_sealed_commit_is_still_rejected`, `test_seal_full_lowercase_object_id_is_accepted`, `test_seal_ref_named_like_an_object_id_is_ignored_by_git_itself` (and the annotated-tag peel test) | D11, AC-74-5b |
+| **M-1** | A `dataset_manifest.json` `snapshot_path` entry must resolve strictly inside `dataset_hashes/` (no `..`, no absolute path, no drive letter, no backslash), checked lexically, or the exclusion set is underivable. | `_is_contained_snapshot_path` (1245), `_DATASET_SNAPSHOT_ROOT` (157) | `test_seal_escaping_snapshot_path_refuses_the_exclusion_set` | D9 (`snapshot_path` containment paragraph), AC-74-5 |
+| **M-2** | **Unused / reserved — no historical meaning recoverable.** No definition, code path, test, or git history reference (`git log -S` across all branches, and a full-text search of both files) exists anywhere in this repository under this label. The `BLOCKER`/`M` sequence otherwise runs contiguously (`BLOCKER 1`–`3`, `M-1`, `M-3`–`M-6`); `M-2` is a gap in that numbering, not a finding whose text was lost. Recorded here as reserved rather than invented, per this review's own discipline against unstated blanket claims (§7 A-1). If a future pass needs a ninth hardening-item label, it should not reuse `M-2` for an unrelated finding without first confirming no earlier meaning surfaces. | — | — | — |
+| **M-3** | Legacy archives (`reference_v1`, `reference_v2_h1`, `reference_h3`, or any archive declaring `lifecycle_version: "legacy"`) are refused **before** the Register is consulted, so they can never report `MATCHED` even if given a manifest and a Register record. | `_legacy_archive_error` (943) | `test_seal_legacy_project_id_with_a_register_record_is_still_unverifiable`, `test_seal_lifecycle_version_legacy_with_a_register_record_is_unverifiable` | AC-74-9 |
+| **M-4** | An excluded path's **existence** is still checked even though its content is excluded from comparison — deleting an excluded file must produce a `missing` finding, not silence. | `verify_seal` (1336), path-set-vs-narrowed-content-set logic (~1475–1484) | `test_seal_deleted_excluded_dataset_file_is_a_missing_finding`, `test_seal_excluded_file_content_change_remains_matched` | AC-74-4 |
+| **M-5** | Symlinks and gitlinks — and, on Windows, NTFS junctions/reparse points — are refused outright rather than followed or guessed at, checked on both the sealed-tree side (mode check) and the working-tree side. | `_is_link_or_reparse_point` (695), mode check in `verify_seal` (~1449–1465), `_REGULAR_FILE_MODES` (173) | `test_seal_symlink_in_the_archive_is_unverifiable` (plus the F-3 junction regression) | D8 |
+| **M-6** | The Archive Seal Register must be canonical JSONL — LF-only line endings, a required trailing newline, split only on `\n` (never `str.splitlines()`, which breaks on JSON-legal-but-non-LF separators) — or it is refused whole-file. | `_latest_register_record` (975), whole-file validation (~1057–1064) | `test_seal_register_with_crlf_is_refused`, `test_seal_register_missing_trailing_newline_is_refused` | D12 |
 
 ---
 
