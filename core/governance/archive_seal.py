@@ -19,11 +19,19 @@ side is what is physically on disk under ``archive_dir`` right now.
 ``freeze_verifier`` instead compares a **frozen commit against the live
 working tree/HEAD**: "has anything changed since the freeze claim was
 made?" The fixed point differs -- a frozen sealing commit here, a
-time-varying ``HEAD`` there -- which is exactly why this module never
-checks ancestry relative to ``HEAD`` (SS7A B-1, restated below) and why
-``freeze_verifier``'s own comparison helpers are named ``*_since_freeze``
-rather than merely ``*_drift``: the two "has this drifted?" questions
-must never be interchangeable at a call site, only in prose.
+time-varying ``HEAD`` there -- which is why ``freeze_verifier``'s own
+comparison helpers are named ``*_since_freeze`` rather than merely
+``*_drift``: the two "has this drifted?" questions must never be
+interchangeable at a call site, only in prose.
+
+``HEAD`` is consulted here for exactly two things, both of them
+*admissibility* questions about the seal's own inputs and neither of them
+part of the comparison: whether the Register record is committed
+(`_committed_register_text`) and whether the sealing commit is reachable
+(`_unreachable_commit_error`). Both can only move a result toward
+``UNVERIFIABLE``; neither can produce a ``MATCHED`` or a ``MISMATCH``
+that would not otherwise have been reached, so the comparison itself
+remains a function of the sealing commit and the archive bytes alone.
 
 **What this module does not answer.** It answers archive tree integrity
 against a fixed sealing commit, and nothing else. It makes no research
@@ -87,6 +95,19 @@ working-tree or machine state before this pass, and each is now pinned:
   ``HEAD``" design SS6 records as considered and rejected, arrived at
   through data rather than through code.
 
+**The fourth input is the Register record that names the sealing commit,
+and it is the one input that cannot be pinned to that commit**
+(governance hardening pass 2026-07-26, post-AD-075 implementation audit).
+A record naming commit C is written after C exists, so reading the
+Register at C is circular. It is instead read at ``HEAD``, and read as
+**committed content**, never from the working tree -- see
+`_committed_register_text` for why an uncommitted Register is the one
+tamper AD-074 SS7B D5 admits no history review can reach. The commit it
+names must additionally be *reachable* from ``HEAD``, not merely
+*resolvable* -- see `_unreachable_commit_error` for the forged-commit
+attack that distinction defeats, and for why SS7A B-1's contrary
+reasoning does not survive contact with ``git commit-tree``.
+
 **Trust boundary (AD-074 SS5.2), stated here as this module's own
 contract, not only in the design review.** This module defeats:
 accidental mutation, a deliberate edit committed normally, a file added
@@ -112,17 +133,15 @@ comparison) must never be allowed to grow into FreezeVerifier's
 exception type would be the first thread pulling the two together. All
 git access here is read-only, confined to a commit named by the
 Register, and of the same command class ``freeze_verifier`` already
-uses (``rev-parse``, ``cat-file``, ``ls-tree``, ``show``, plus
-``hash-object``, which without ``-w`` computes an identity and writes
-no object, and ``check-attr``, which only reports the attributes already
-in force): nothing here ever writes, commits, checks out, or resets
-anything, and ancestry relative to ``HEAD`` is never checked (SS7A B-1)
--- the seal result must not depend on where ``HEAD`` currently points,
-on which branches exist, or on the state of the index.
+uses (``rev-parse``, ``cat-file``, ``ls-tree``, ``show``, ``merge-base``,
+plus ``hash-object``, which without ``-w`` computes an identity and
+writes no object, and ``check-attr``, which only reports the attributes
+already in force): nothing here ever writes, commits, checks out, or
+resets anything, and the state of the index is never consulted.
 
-**The Register is read-only in this increment** (AD-074 Increment 2
-scope, SS9 item 3). No function here writes a record; issuance --
-appending the first record, for any project -- is Increment 3.
+**The Register is read-only** (AD-074 Increment 2 scope, SS9 item 3). No
+function here writes a record; issuance is a recorded human act (AD-075
+AC-75-4).
 """
 
 from __future__ import annotations
@@ -484,10 +503,7 @@ def _fixed_commit_id_error(commit: str) -> str | None:
 
 def _resolved_commit_id(commit: str, *, repo_root: Path) -> str | None:
     """The object id `commit` resolves to as a commit, or None if it does
-    not resolve to a readable commit object at all. Deliberately does not
-    check ancestry relative to HEAD (SS7A B-1): HEAD's current position
-    is a time-varying repository fact, and the seal's own result must not
-    be a function of it.
+    not resolve to a readable commit object at all.
 
     The caller compares the return value against the id it passed in.
     That round trip is what closes the residual gap
@@ -517,6 +533,114 @@ def _resolved_commit_id(commit: str, *, repo_root: Path) -> str | None:
     if result.returncode != 0:
         return None
     return result.stdout.strip() or None
+
+
+def _unreachable_commit_error(commit: str, *, repo_root: Path) -> str | None:
+    """None if `commit` is an ancestor of ``HEAD``; an explicit reason
+    otherwise (governance hardening pass 2026-07-26, post-AD-075
+    implementation audit).
+
+    **This reverses SS7A B-1, and the reversal is deliberate.** B-1 removed
+    the ancestry requirement on the argument that it was redundant --
+    *"an unreachable sealing commit is already UNVERIFIABLE under D3 ...
+    the commit-resolution step already fails first if the commit cannot be
+    found at all."* That premise is false, and the falseness is
+    demonstrable rather than theoretical: ``git commit-tree`` mints a
+    commit object that no ref names and no ref reaches, and
+    ``rev-parse --verify <id>^{commit}`` resolves it exactly like any
+    other. Resolution proves an object is *present in the object
+    database*, never that it is *part of this repository's history*.
+
+    What that gap costs is the seal's entire threat model. An actor who
+    can write the Register can stage a tampered archive, ``write-tree``/
+    ``commit-tree`` it into an unreferenced commit, name that commit as
+    ``sealed_commit``, and obtain ``MATCHED`` against a tree that no
+    review, no ``git log``, and no branch has ever contained -- the
+    forged commit is invisible to every history-based defense D5 relies
+    on, because it is not in any history.
+
+    B-1's *actual* concern survives and is respected: ancestry is a
+    time-varying fact, so this check can only ever move a result toward
+    ``UNVERIFIABLE`` -- never toward ``MISMATCH``, and never toward a
+    ``MATCHED`` that would not otherwise have been reached. A legitimate
+    squash merge, rebase, branch deletion plus ``gc``, or shallow clone
+    lands here rather than at resolution, and reports "cannot currently
+    verify" with the same two remedies D3 already names (restore the
+    object, or issue a superseding Register record). That is the same
+    class of answer B-1's own D3 paragraph already accepts as correct;
+    what changes is that a forged commit now lands there too, instead of
+    reporting ``MATCHED``.
+
+    ``merge-base --is-ancestor`` exits 0 for "is an ancestor", 1 for "is
+    not", and anything else for a failure to determine -- which is itself
+    UNVERIFIABLE, never silently treated as reachable."""
+    result = _run_git(["merge-base", "--is-ancestor", commit, "HEAD"], repo_root=repo_root)
+    if result.returncode == 0:
+        return None
+    if result.returncode != 1:
+        return (
+            f"could not determine whether sealing commit {commit!r} is reachable from HEAD "
+            f"(git merge-base --is-ancestor failed: {result.stderr.strip()!r}) -- an undetermined "
+            f"reachability answer is UNVERIFIABLE, never assumed reachable"
+        )
+    return (
+        f"sealing commit {commit!r} exists as an object but is **not reachable from HEAD**. "
+        f"Resolving proves the object is in the object database, not that it is part of this "
+        f"repository's history: an unreferenced commit minted by 'git commit-tree' resolves "
+        f"identically to a real one, so a seal compared against it would attest to a tree no "
+        f"branch has ever contained and no history review can reach. This is also how a sound "
+        f"archive presents after a legitimate squash/rebase merge, a branch deletion plus 'gc', "
+        f"or a shallow clone -- all of which are 'cannot currently verify', never evidence of "
+        f"tampering (AD-074 SS7B D3). Remedies: restore the sealing commit to a reachable "
+        f"history (deepen the clone, or restore the ref), or issue a superseding Register record"
+    )
+
+
+def _committed_register_text(repo_root: Path) -> tuple[str | None, str | None]:
+    """(text, error) for the Archive Seal Register **as committed at
+    ``HEAD``** -- never the working-tree copy (governance hardening pass
+    2026-07-26, post-AD-075 implementation audit; closes the second of
+    AD-074 SS7B D5's two cases).
+
+    D5 states the gap precisely and this closes exactly it: a *committed*
+    Register tamper "is visible in ``git log -p`` / ``git blame``", but an
+    *uncommitted* working-tree rewrite "leaves **no commit to review at
+    all**" -- a case history review "does not reach at all". Reading the
+    blob rather than the file removes the unreviewable case outright: an
+    edit that is never committed is never read, so the Register the seal
+    obeys is always one a reviewer can diff. It does not, and does not
+    claim to, close D5's *first* case; a committed forgery is still only
+    as defended as the human review of that commit.
+
+    **``HEAD`` is the only available fixed point, and this is the one
+    input that cannot be pinned to the sealing commit.** Every other
+    input to the comparison is read at ``sealed_commit`` (SS7B D2, D9,
+    BLOCKER 1/2), but the Register record *names* that commit and is
+    therefore written strictly after it exists -- reading the Register at
+    the commit it points to is circular by construction. ``HEAD``
+    reintroduces a bounded time-varying dependency, in the same direction
+    as `_unreachable_commit_error`'s: a Register record that has not been
+    committed, or that has been rewritten out of the current history,
+    yields ``UNVERIFIABLE``, never a spurious ``MATCHED`` and never a
+    spurious ``MISMATCH``.
+
+    ``(None, None)`` means no Register is committed at ``HEAD`` at all --
+    including an unborn ``HEAD`` in a repository with no commits -- which
+    is exactly the "no record has been issued" case, not an error."""
+    blob_id = _sealed_blob_id("HEAD", ARCHIVE_SEAL_REGISTER_RELATIVE_PATH, repo_root=repo_root)
+    if blob_id is None:
+        return None, None
+    raw = _sealed_blob_bytes("HEAD", ARCHIVE_SEAL_REGISTER_RELATIVE_PATH, repo_root=repo_root)
+    if raw is None:
+        return None, (
+            f"{ARCHIVE_SEAL_REGISTER_RELATIVE_PATH} resolves to object {blob_id} at HEAD but its "
+            f"content could not be read -- the Register is UNVERIFIABLE rather than read from the "
+            f"working tree, which is not a reviewable source"
+        )
+    try:
+        return raw.decode("utf-8"), None
+    except UnicodeDecodeError as exc:
+        return None, f"{ARCHIVE_SEAL_REGISTER_RELATIVE_PATH} at HEAD is not valid UTF-8 ({exc})"
 
 
 def _read_blob(commit: str, path: str, *, repo_root: Path) -> str | None:
@@ -972,8 +1096,11 @@ def _legacy_archive_error(identity: ArchiveIdentity) -> str | None:
     return None
 
 
-def _latest_register_record(project_id: str, register_path: Path) -> tuple[SealRegisterRecord | None, str | None]:
-    """(record, error).
+def _latest_register_record(project_id: str, text: str | None) -> tuple[SealRegisterRecord | None, str | None]:
+    """(record, error). `text` is the Register's **committed** content at
+    ``HEAD`` (`_committed_register_text`), or None when no Register is
+    committed there at all -- this reader never touches the filesystem,
+    so an uncommitted working-tree Register cannot reach it.
 
     ``(None, None)`` -- no Register record exists for `project_id` at
     all (an empty or absent Register, or one with records for other
@@ -984,9 +1111,9 @@ def _latest_register_record(project_id: str, register_path: Path) -> tuple[SealR
     closed and never falls back to an earlier valid record for the same
     `project_id` (SS5.5 C-3); (b) a line this reader cannot attribute to
     any project at all appears *after* that project's latest candidate
-    (see below); or (c) the Register file itself exists but could not be
-    opened/read, which is fatal for every archive checked against it in
-    this run, not just this one (SS5.5 C-3 third bullet).
+    (see below); or (c) the committed Register is not canonical JSONL,
+    which is fatal for every archive checked against it in this run, not
+    just this one (SS5.5 C-3 third bullet).
 
     **Positional fail-closed rule for unattributable lines (integrity
     audit item 5, 2026-07-26).** A line that is not valid JSON, is not a
@@ -1043,16 +1170,11 @@ def _latest_register_record(project_id: str, register_path: Path) -> tuple[SealR
     than the canonical reader is also fixed below: it split on
     ``str.splitlines()``, which breaks on line separators JSON permits
     unescaped inside a string."""
-    if not register_path.exists():
+    if text is None:
         return None, None
-    try:
-        raw = register_path.read_bytes()
-    except OSError as exc:
-        return None, f"{register_path} could not be read ({exc.__class__.__name__}: {exc})"
-    try:
-        text = raw.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        return None, f"{register_path} is not valid UTF-8 ({exc})"
+    # Named for the error messages only: this reader is handed committed
+    # content and never opens a path.
+    register_path = f"HEAD:{ARCHIVE_SEAL_REGISTER_RELATIVE_PATH}"
 
     # Whole-file canonical-JSONL validation (hardening item M-6,
     # 2026-07-26), applied here rather than delegated to
@@ -1229,7 +1351,7 @@ def _dataset_manifest_exclusion_set(
 
     exclusions: set[str] = set()
     for entry in manifest.datasets:
-        if not _is_contained_snapshot_path(entry.snapshot_path):
+        if not is_contained_snapshot_path(entry.snapshot_path):
             return None, (
                 f"dataset_manifest.json at sealing commit {sealed_commit!r} declares snapshot_path "
                 f"{entry.snapshot_path!r} for dataset {entry.dataset_id!r}, which does not resolve to a "
@@ -1242,7 +1364,7 @@ def _dataset_manifest_exclusion_set(
     return exclusions, None
 
 
-def _is_contained_snapshot_path(snapshot_path: str) -> bool:
+def is_contained_snapshot_path(snapshot_path: str) -> bool:
     """True iff `snapshot_path` is an archive-relative path resolving
     strictly inside ``dataset_hashes/`` (hardening item M-1,
     2026-07-26).
@@ -1333,21 +1455,125 @@ def _protected_file_hashes_exclusion_set(
     return set(data.keys()), None
 
 
+@dataclass(frozen=True, slots=True)
+class SealingCommit:
+    """A resolved, reachable sealing commit and the archive it seals.
+    The common prefix of every sealed-archive question -- the Seal's own
+    comparison, and `core.governance.dataset_integrity`'s independent
+    check of the dataset bytes the Seal excludes -- so that both read the
+    *same* commit, established by the *same* rules, from the *same*
+    Register. Two components deriving a sealing commit two ways is the
+    duplicate-source-of-truth failure AD-073 Decision part 8 exists to
+    prevent, one level up."""
+
+    project_id: str
+    sealed_commit: str
+    archive_relative_prefix: str
+    repo_root: Path
+
+
+def resolve_sealing_commit(
+    archive_dir: Path, *, repo_root: Path | None = None
+) -> tuple[SealingCommit | None, str | None]:
+    """(sealing_commit, reason). Resolves which commit `archive_dir` is
+    sealed at, applying every trust rule in this module's docstring:
+    identity from the archive's own manifest, the legacy refusal, the
+    **committed** Register at ``HEAD``, the fixed-object-id syntax check,
+    the resolution round trip, and reachability from ``HEAD``.
+
+    ``(None, <reason>)`` for every case that cannot establish one; the
+    caller reports it as its own branch's UNVERIFIABLE/FAILED. Raises
+    only `NotAGitRepositoryError`, for an environmental problem.
+
+    **Git repository status is now checked before the Register lookup**,
+    where it previously came after. That ordering was justified by the
+    Register being "a plain file read that needs no git at all" -- which
+    ceased to be true when the Register moved to committed content
+    (`_committed_register_text`). Identity resolution and the legacy
+    refusal still precede it and still need no git, so the two outcomes
+    that ordering protected (no manifest, a legacy archive) are decided
+    exactly as before."""
+    root = (repo_root if repo_root is not None else REPO_ROOT).resolve()
+    archive_dir = archive_dir.resolve()
+
+    identity, identity_error = _read_archive_identity(archive_dir)
+    if identity is None:
+        return None, identity_error or "project_id could not be resolved"
+
+    # Before the Register is even consulted: a legacy archive is never
+    # sealed, so a Register record naming one is an issuance error this
+    # reader refuses to act on rather than a seal to verify (AC-74-9).
+    legacy_error = _legacy_archive_error(identity)
+    if legacy_error is not None:
+        return None, legacy_error
+
+    _assert_git_repo(root)  # raises NotAGitRepositoryError -- caller translates
+
+    register_text, register_error = _committed_register_text(root)
+    if register_error is not None:
+        return None, register_error
+    record, record_error = _latest_register_record(identity.project_id, register_text)
+    if record is None:
+        return None, (
+            record_error
+            or f"no committed Archive Seal Register record for project_id {identity.project_id!r}"
+        )
+
+    # The sealing commit must be a fixed object id, checked syntactically
+    # before any resolution is attempted, then confirmed by round trip.
+    fixed_id_error = _fixed_commit_id_error(record.sealed_commit)
+    if fixed_id_error is not None:
+        return None, fixed_id_error
+    resolved_commit = _resolved_commit_id(record.sealed_commit, repo_root=root)
+    if resolved_commit is None:
+        return None, f"sealing commit {record.sealed_commit!r} does not exist or is not readable"
+    if resolved_commit != record.sealed_commit:
+        return None, (
+            f"sealing commit {record.sealed_commit!r} resolves to {resolved_commit!r} -- it names a "
+            f"reference rather than the object it appears to name, and a seal's fixed point may not be "
+            f"a name that something else can re-point"
+        )
+
+    # Resolution proves presence in the object database, never membership
+    # in this repository's history -- see `_unreachable_commit_error`.
+    unreachable_error = _unreachable_commit_error(record.sealed_commit, repo_root=root)
+    if unreachable_error is not None:
+        return None, unreachable_error
+
+    try:
+        archive_relative_prefix = archive_dir.relative_to(root).as_posix()
+    except ValueError:
+        return None, f"{archive_dir} is not inside repo_root {root} -- cannot compare against git history"
+
+    return (
+        SealingCommit(
+            project_id=identity.project_id,
+            sealed_commit=record.sealed_commit,
+            archive_relative_prefix=archive_relative_prefix,
+            repo_root=root,
+        ),
+        None,
+    )
+
+
+def read_text_at_commit(commit: str, repo_path: str, *, repo_root: Path) -> str | None:
+    """`repo_path`'s content at `commit`, as UTF-8 text, or None if it
+    does not exist there or is not valid UTF-8. The public form of
+    `_read_blob`, for sibling governance modules that must read a
+    sealed-commit artifact through the same attribute-pinned, index-free
+    git access this module already establishes rather than opening a
+    second, laxer path to git of their own."""
+    return _read_blob(commit, repo_path, repo_root=repo_root)
+
+
 def verify_seal(archive_dir: Path, *, repo_root: Path | None = None) -> SealOutcome:
     """Verify `archive_dir` against the Archive Seal Register. Never
     raises for a failed verification -- only `NotAGitRepositoryError`,
     for an environmental problem, mirroring `freeze_verifier.verify_freeze`'s
     own contract.
 
-    Git repository status is checked only once a Register record is
-    actually going to be used (after project_id resolution and Register
-    lookup succeed) -- both of those are plain file reads that need no
-    git at all, so an UNVERIFIABLE outcome decided before that point
-    (no manifest, no Register record, a malformed latest record) never
-    depends on `archive_dir` being inside a git working tree.
-
-    **`archive_dir` is resolved exactly once, here, at this public
-    boundary** (integrity audit item 3), and every function below
+    **`archive_dir` is resolved exactly once**, at `resolve_sealing_commit`'s
+    public boundary (integrity audit item 3), and every function below
     receives the resolved path. A caller-supplied relative path
     (`Path("research_archive/reference_h4")`) previously reached
     `_working_tree_paths`, whose `Path.relative_to(repo_root)` -- with
@@ -1356,48 +1582,13 @@ def verify_seal(archive_dir: Path, *, repo_root: Path | None = None) -> SealOutc
     verification question. Resolving at the boundary rather than at each
     use also guarantees the path set, the repo-relative prefix, and the
     filesystem reads all describe the same directory."""
-    root = (repo_root if repo_root is not None else REPO_ROOT).resolve()
+    sealing, sealing_error = resolve_sealing_commit(archive_dir, repo_root=repo_root)
+    if sealing is None:
+        return _unverifiable(sealing_error or "no sealing commit could be resolved")
+
+    root = sealing.repo_root
     archive_dir = archive_dir.resolve()
-
-    identity, identity_error = _read_archive_identity(archive_dir)
-    if identity is None:
-        return _unverifiable(identity_error or "project_id could not be resolved")
-
-    # Before the Register is even consulted: a legacy archive is never
-    # sealed, so a Register record naming one is an issuance error this
-    # reader refuses to act on rather than a seal to verify (AC-74-9).
-    legacy_error = _legacy_archive_error(identity)
-    if legacy_error is not None:
-        return _unverifiable(legacy_error)
-
-    register_path = root / ARCHIVE_SEAL_REGISTER_RELATIVE_PATH
-    record, record_error = _latest_register_record(identity.project_id, register_path)
-    if record is None:
-        return _unverifiable(
-            record_error or f"no Archive Seal Register record for project_id {identity.project_id!r}"
-        )
-
-    _assert_git_repo(root)  # raises NotAGitRepositoryError -- caller translates
-
-    # The sealing commit must be a fixed object id, checked syntactically
-    # before any resolution is attempted, then confirmed by round trip.
-    fixed_id_error = _fixed_commit_id_error(record.sealed_commit)
-    if fixed_id_error is not None:
-        return _unverifiable(fixed_id_error)
-    resolved_commit = _resolved_commit_id(record.sealed_commit, repo_root=root)
-    if resolved_commit is None:
-        return _unverifiable(f"sealing commit {record.sealed_commit!r} does not exist or is not readable")
-    if resolved_commit != record.sealed_commit:
-        return _unverifiable(
-            f"sealing commit {record.sealed_commit!r} resolves to {resolved_commit!r} -- it names a "
-            f"reference rather than the object it appears to name, and a seal's fixed point may not be "
-            f"a name that something else can re-point"
-        )
-
-    try:
-        archive_relative_prefix = archive_dir.relative_to(root).as_posix()
-    except ValueError:
-        return _unverifiable(f"{archive_dir} is not inside repo_root {root} -- cannot compare against git history")
+    archive_relative_prefix = sealing.archive_relative_prefix
 
     # The attribute stack is a third input to the comparison alongside
     # the sealing commit and the archive bytes (see
@@ -1409,13 +1600,13 @@ def verify_seal(archive_dir: Path, *, repo_root: Path | None = None) -> SealOutc
         return _unverifiable(info_attributes_error)
 
     dataset_exclusions, dataset_error = _dataset_manifest_exclusion_set(
-        record.sealed_commit, archive_relative_prefix, repo_root=root
+        sealing.sealed_commit, archive_relative_prefix, repo_root=root
     )
     if dataset_exclusions is None:
         return _unverifiable(dataset_error or "dataset-manifest exclusion set underivable")
 
     protected_exclusions, protected_error = _protected_file_hashes_exclusion_set(
-        record.sealed_commit, repo_root=root
+        sealing.sealed_commit, repo_root=root
     )
     if protected_exclusions is None:
         return _unverifiable(protected_error or "protected_file_hashes.json exclusion set underivable")
@@ -1435,10 +1626,10 @@ def verify_seal(archive_dir: Path, *, repo_root: Path | None = None) -> SealOutc
     }
     excluded_paths = tuple(sorted(excluded))
 
-    sealed_entries = _sealed_tree_entries(record.sealed_commit, archive_relative_prefix, repo_root=root)
+    sealed_entries = _sealed_tree_entries(sealing.sealed_commit, archive_relative_prefix, repo_root=root)
     if sealed_entries is None:
         return _unverifiable(
-            f"could not enumerate {archive_relative_prefix!r} at sealing commit {record.sealed_commit!r} "
+            f"could not enumerate {archive_relative_prefix!r} at sealing commit {sealing.sealed_commit!r} "
             f"(ls-tree failed, its output was not the documented shape, or its stored path bytes are "
             f"not valid UTF-8)",
             excluded_paths=excluded_paths,
@@ -1457,7 +1648,7 @@ def verify_seal(archive_dir: Path, *, repo_root: Path | None = None) -> SealOutc
     )
     if irregular:
         return _unverifiable(
-            f"sealing commit {record.sealed_commit!r} records non-regular tree entries under "
+            f"sealing commit {sealing.sealed_commit!r} records non-regular tree entries under "
             f"{archive_relative_prefix!r}: {irregular}. The Seal compares regular files only -- a symlink "
             f"(120000) or a gitlink/submodule (160000) is outside what blob-identity comparison can "
             f"honestly answer, and is reported UNVERIFIABLE rather than compared (AD-074 SS7B D8)",
@@ -1492,7 +1683,7 @@ def verify_seal(archive_dir: Path, *, repo_root: Path | None = None) -> SealOutc
 
     # The attribute stack governs every hash computed below, so it is
     # verified before the first one is (see `_ATTRIBUTE_TRUST_MODEL`).
-    attributes_error = _gitattributes_drift_error(record.sealed_commit, compared, repo_root=root)
+    attributes_error = _gitattributes_drift_error(sealing.sealed_commit, compared, repo_root=root)
     if attributes_error is not None:
         return _unverifiable(attributes_error, excluded_paths=excluded_paths)
     filter_error = _filter_attribute_error(compared, repo_root=root)
@@ -1512,7 +1703,7 @@ def verify_seal(archive_dir: Path, *, repo_root: Path | None = None) -> SealOutc
             # incomplete comparison is never MATCHED.
             return _unverifiable(
                 f"could not compute a blob identity for {path!r} on the archive filesystem side "
-                f"at sealing commit {record.sealed_commit!r} -- the comparison is incomplete",
+                f"at sealing commit {sealing.sealed_commit!r} -- the comparison is incomplete",
                 excluded_paths=excluded_paths,
             )
         if sealed_blob != working_blob:
@@ -1523,7 +1714,7 @@ def verify_seal(archive_dir: Path, *, repo_root: Path | None = None) -> SealOutc
         return SealOutcome(
             status="mismatch",
             findings=tuple(findings),
-            reason=f"{len(findings)} finding(s) against sealing commit {record.sealed_commit}",
+            reason=f"{len(findings)} finding(s) against sealing commit {sealing.sealed_commit}",
             excluded_paths=excluded_paths,
         )
     return SealOutcome(status="matched", findings=(), reason=None, excluded_paths=excluded_paths)

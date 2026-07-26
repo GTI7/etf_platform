@@ -150,6 +150,15 @@ def git_repo(tmp_path: Path) -> Path:
     _git(["init", "-q"], cwd=tmp_path)
     _git(["config", "user.email", "test@example.com"], cwd=tmp_path)
     _git(["config", "user.name", "Test"], cwd=tmp_path)
+    # Committed bytes must survive verbatim, because several tests below
+    # assert on exactly which bytes a governance artifact holds *at a
+    # commit*. The real repository gets this from `.gitattributes`'s
+    # `*.jsonl -text`; a throwaway repo has no `.gitattributes`, so
+    # without this it inherits the machine's global `core.autocrlf`,
+    # which on Windows is `true` and rewrites CRLF to LF on the way into
+    # the object database. A test that writes a CRLF Register to prove it
+    # is refused would then silently commit an LF one and prove nothing.
+    _git(["config", "core.autocrlf", "false"], cwd=tmp_path)
     return tmp_path
 
 
@@ -876,9 +885,36 @@ def _write_register_raw(repo_root: Path, content: str) -> None:
     # write would introduce CRLF and be refused -- correctly, and for
     # exactly the reason `_write_transition_records_raw` above already
     # writes bytes.
+    #
+    # **And then committed.** `archive_seal` reads the Register at HEAD,
+    # never from the working tree, so a test that only wrote the file
+    # would be exercising a Register the implementation is now required
+    # to ignore. Committing here is what keeps every register test below
+    # testing what it says it tests; the one thing that must *not* be
+    # done is to relax the implementation so an unwritten-to-history
+    # Register is honoured again -- see
+    # `test_seal_uncommitted_working_tree_register_is_ignored`.
+    #
+    # The commit names the Register path explicitly rather than using
+    # `add -A`: several tests below tamper with the archive in the
+    # working tree and assert MISMATCH, which only holds while that
+    # tamper stays uncommitted.
     docs_dir = repo_root / "docs"
     docs_dir.mkdir(parents=True, exist_ok=True)
-    (docs_dir / "archive_seal_register.jsonl").write_bytes(content.encode("utf-8"))
+    register_path = docs_dir / "archive_seal_register.jsonl"
+    register_path.write_bytes(content.encode("utf-8"))
+    _commit_register(repo_root)
+
+
+def _commit_register(repo_root: Path) -> None:
+    """Commit the Register alone, if `repo_root` is a git repository.
+    A non-git `repo_root` is left as a plain file write: those tests
+    assert the environmental refusal, not a Register outcome."""
+    if not (repo_root / ".git").exists():
+        return
+    relative = "docs/archive_seal_register.jsonl"
+    _git(["add", "--", relative], cwd=repo_root)
+    _git(["commit", "-q", "-m", "register", "--", relative], cwd=repo_root)
 
 
 def _write_register(repo_root: Path, records: list[dict[str, object]]) -> None:
@@ -944,11 +980,17 @@ def test_seal_missing_project_id_is_unverifiable(tmp_path: Path) -> None:
     assert "project_id" in report.seal.reason
 
 
-def test_seal_malformed_latest_record_is_unverifiable_never_falls_back(tmp_path: Path) -> None:
+def test_seal_malformed_latest_record_is_unverifiable_never_falls_back(git_repo: Path) -> None:
     # Test requirement 3: the FIRST record for this project_id is
     # perfectly valid; the LATEST one (by file order, C-2) is missing
     # sealed_commit. This must fail closed to UNVERIFIABLE rather than
     # silently using the earlier valid record (AD-074 SS5.5 C-3).
+    #
+    # Runs in a git repository because the Register is now read from
+    # committed content: a Register question can no longer be asked of a
+    # non-git directory, and asking one there tests the environmental
+    # refusal instead of the record-shape rule this test is about.
+    tmp_path = git_repo
     project_id = "seal_malformed_project"
     archive_dir = tmp_path / project_id
     _write_manifest(archive_dir)
@@ -2571,3 +2613,166 @@ def test_seal_uncomputable_working_side_hash_is_unverifiable_not_mismatch(git_re
         assert report.seal.findings == ()
     finally:
         os.chmod(target, original_mode or stat.S_IWRITE | stat.S_IREAD)
+
+
+# --------------------------------------------------------------------------
+# Register trust hardening (governance hardening pass 2026-07-26, post-AD-075
+# implementation audit). Two defects, verified against the shipped code
+# before being fixed, and demonstrated together below because they compose:
+# the working-tree Register supplies the commit id, and the missing
+# reachability check makes an unreferenced forged commit an acceptable one.
+# --------------------------------------------------------------------------
+
+
+def _forged_unreachable_commit(repo: Path, message: str = "forged, unreferenced") -> str:
+    """A commit object that exists in the object database and is named by
+    no ref and reachable from none -- exactly what `git commit-tree`
+    produces, and exactly what `rev-parse --verify <id>^{commit}`
+    resolves as readily as any other commit. Built from the current
+    index, so a caller that has staged a tamper gets a commit whose tree
+    contains it."""
+    tree = subprocess.run(
+        ["git", "write-tree"], cwd=repo, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    forged = subprocess.run(
+        ["git", "commit-tree", tree, "-p", _head_commit(repo), "-m", message],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    _git(["reset", "-q"], cwd=repo)
+    return forged
+
+
+def test_seal_uncommitted_working_tree_register_is_ignored(git_repo: Path) -> None:
+    """AD-074 SS7B D5's second case, closed: an *uncommitted* Register
+    rewrite "leaves no commit to review at all", so history review cannot
+    reach it. The Register is read at HEAD, as committed content, and a
+    working-tree edit therefore has no effect whatsoever -- neither to
+    grant a seal nor to revoke one."""
+    project_id = "seal_dirty_register_project"
+    archive_dir, sealed_commit = _sealed_archive(git_repo, project_id)
+
+    committed = verify_archive(archive_dir, repo_root=git_repo)
+    assert committed.seal.status is SealStatus.MATCHED
+
+    # Overwrite the Register in the working tree only -- never committed.
+    register = git_repo / "docs" / "archive_seal_register.jsonl"
+    register.write_bytes(
+        (json.dumps(_register_record(project_id, "b" * 40)) + "\n").encode("utf-8")
+    )
+    assert "archive_seal_register.jsonl" in subprocess.run(
+        ["git", "status", "--porcelain"], cwd=git_repo, capture_output=True, text=True, check=True
+    ).stdout
+
+    after = verify_archive(archive_dir, repo_root=git_repo)
+
+    # The uncommitted record named a commit that does not exist. Had it
+    # been read, this would be UNVERIFIABLE; it is ignored, so the seal is
+    # still the committed one's.
+    assert after.seal.status is SealStatus.MATCHED
+    assert after.seal == committed.seal
+
+
+def test_seal_uncommitted_register_cannot_grant_a_seal(git_repo: Path) -> None:
+    """The direction that matters for tamper resistance: writing a
+    perfectly well-formed Register record for an unsealed archive, and
+    never committing it, grants nothing."""
+    project_id = "seal_uncommitted_grant_project"
+    archive_dir, sealed_commit = _sealed_archive(git_repo, project_id, register=False)
+
+    docs_dir = git_repo / "docs"
+    docs_dir.mkdir(parents=True, exist_ok=True)
+    (docs_dir / "archive_seal_register.jsonl").write_bytes(
+        (json.dumps(_register_record(project_id, sealed_commit)) + "\n").encode("utf-8")
+    )
+
+    report = verify_archive(archive_dir, repo_root=git_repo)
+
+    assert report.seal.status is SealStatus.UNVERIFIABLE
+    assert report.seal.reason is not None
+    assert "no committed Archive Seal Register record" in report.seal.reason
+
+
+def test_seal_unreachable_sealing_commit_is_unverifiable_not_matched(git_repo: Path) -> None:
+    """The forged-commit attack SS7A B-1 assumed was impossible. B-1 removed
+    the reachability requirement on the premise that "an unreachable
+    sealing commit is already UNVERIFIABLE ... the commit-resolution step
+    already fails first if the commit cannot be found at all." It does
+    not: `git commit-tree` mints a resolvable commit that no ref reaches,
+    so resolution succeeds and the seal would attest to a tree that is in
+    no history and no review."""
+    project_id = "seal_forged_commit_project"
+    archive_dir, _ = _sealed_archive(git_repo, project_id, register=False)
+
+    # Stage a tampered archive and freeze it into an unreferenced commit.
+    (archive_dir / "methodology.md").write_bytes(b"methodology\nTAMPERED\n")
+    _git(["add", "-A"], cwd=git_repo)
+    forged = _forged_unreachable_commit(git_repo)
+
+    # The forged commit resolves exactly like a real one ...
+    resolved = subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", f"{forged}^{{commit}}"],
+        cwd=git_repo,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    assert resolved == forged
+    # ... and is reachable from nothing.
+    assert (
+        subprocess.run(
+            ["git", "merge-base", "--is-ancestor", forged, "HEAD"], cwd=git_repo, capture_output=True
+        ).returncode
+        == 1
+    )
+
+    _write_register(git_repo, [_register_record(project_id, forged)])
+
+    report = verify_archive(archive_dir, repo_root=git_repo)
+
+    assert report.seal.status is SealStatus.UNVERIFIABLE
+    assert report.seal.status is not SealStatus.MATCHED
+    assert report.seal.reason is not None
+    assert "not reachable from HEAD" in report.seal.reason
+    assert report.overall_status is OverallStatus.UNVERIFIABLE
+
+
+def test_seal_unreachable_commit_reports_cannot_verify_never_tampering(git_repo: Path) -> None:
+    """The same code path is how a *sound* archive presents after a
+    legitimate squash/rebase merge, a branch deletion plus gc, or a
+    shallow clone (AD-074 SS7B D3). It must therefore never read as
+    MISMATCH, and its message must name the remedies rather than accuse."""
+    project_id = "seal_unreachable_legit_project"
+    archive_dir, _ = _sealed_archive(git_repo, project_id, register=False)
+    _git(["add", "-A"], cwd=git_repo)
+    orphan = _forged_unreachable_commit(git_repo, message="an orphaned but honest commit")
+    _write_register(git_repo, [_register_record(project_id, orphan)])
+
+    report = verify_archive(archive_dir, repo_root=git_repo)
+
+    assert report.seal.status is SealStatus.UNVERIFIABLE
+    assert report.seal.findings == ()
+    reason = report.seal.reason or ""
+    assert "shallow clone" in reason
+    assert "superseding Register record" in reason
+
+
+def test_seal_still_matched_when_head_moves_on_a_descendant(git_repo: Path) -> None:
+    """Reachability is a bounded dependency on HEAD, not the "compare
+    against HEAD" design SS6 rejected. Commits made after the seal leave
+    the sealing commit reachable, so the result is unchanged -- what the
+    check refuses is a commit outside the history entirely."""
+    project_id = "seal_head_advance_project"
+    archive_dir, sealed_commit = _sealed_archive(git_repo, project_id)
+
+    before = verify_archive(archive_dir, repo_root=git_repo)
+    assert before.seal.status is SealStatus.MATCHED
+
+    _commit(git_repo, "unrelated.txt", "later work\n", "after the seal")
+
+    after = verify_archive(archive_dir, repo_root=git_repo)
+
+    assert after.seal.status is SealStatus.MATCHED
+    assert after.overall_status is before.overall_status
