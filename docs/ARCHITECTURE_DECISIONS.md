@@ -1730,7 +1730,7 @@ is restated inside a second block.**
 | Prefix | Source ruling record | Consequence list | Items |
 |---|---|---|---|
 | **A5-C#** | [A-5 — chain anchoring](PHASE_4_A5_CHAIN_ANCHORING_RULING_2026-07-22.md) | §7 | C-1 … C-13 |
-| **A8-C#** | [A-8 — machine-artifact location](PHASE_4_A8_MACHINE_ARTIFACT_LOCATION_RULING_2026-07-22.md) | §6 | C-1 … C-11 |
+| **A8-C#** | [A-8 — machine-artifact location](PHASE_4_A8_MACHINE_ARTIFACT_LOCATION_RULING_2026-07-22.md) | §6 | C-1 … C-11, plus **A8-C12** (2026-07-26 amendment, AD-074, not in the original ruling) |
 | **A9-C#** | [A-9 — single writer](PHASE_4_A9_SINGLE_WRITER_RULING_2026-07-22.md) | §9 | A9-C1 … A9-C10 |
 
 Two items from those lists are **not** carried here, because their own
@@ -1978,7 +1978,7 @@ it. **No filesystem-level immutability, no read-only permissions, no git
 hook, no CI check.** Each requires a new AD to reopen; none may be
 treated as an obvious extension of this one.
 
-#### A-8 — machine-artifact location (A8-C1 … A8-C11)
+#### A-8 — machine-artifact location (A8-C1 … A8-C11, plus A8-C12 amendment)
 
 **A8-C1 — the partition rule, and no platform-level machine artifact**
 *(A-8 R-1, §4.1)*. An artifact whose subject is a **single cycle** lives
@@ -2104,6 +2104,44 @@ location, it agrees with this rule for all three backfilled entries,
 created** — consistent with A-6 R-2's refusal to mechanize the
 archive↔registry relation. The only place the two could ever be
 reconciled is `core/research/lifecycle.py`.
+
+**A8-C12 — amendment (AD-074, 2026-07-26): the Archive Seal Register is
+the first allowed platform-level governance machine artifact.** A8-C1's
+partition rule states, without exception, that "every governance machine
+artifact is per-cycle." The Archive Seal Register
+(`docs/archive_seal_register.jsonl`, `AD_074_ARCHIVE_SEAL_DESIGN_REVIEW.md`
+§5.5/§C) is a machine artifact — append-only, machine-written,
+machine-read — whose subject spans cycles: it names one sealing commit
+per closed archive, and no single cycle's directory can hold it. This is
+not a stylistic choice; `AD_074_ARCHIVE_SEAL_DESIGN_REVIEW.md` §3 S-1
+proves it is structurally required: the sealing commit is the commit
+that *first contains the complete closed archive*, so the record naming
+that commit cannot be written before that commit exists, and therefore
+cannot live inside `research_archive/<cycle_name>/` without the record
+being either absent from the very tree it seals or added by a second,
+later commit that mutates a directory Phase G's remediation decision §8
+already holds immutable. A per-cycle location is not merely
+inconvenient here; S-1 shows it is impossible.
+
+A8-C8 independently forecloses the seemingly obvious alternative — a new
+top-level location, e.g. `governance_records/` or `.governance/`: "No new
+top-level directory, and nothing outside the repository." Between a rule
+that forbids a platform-level machine artifact (A8-C1) and a rule that
+forbids inventing a new location for one (A8-C8), the only location
+consistent with both is the existing platform-level tier itself —
+`docs/`, where A8-C1 already places human-authored, cross-cycle prose.
+The Archive Seal Register is machine-written and machine-read, not
+prose: the first artifact of that kind ever placed there, and an
+exception to A8-C1's own rule, not an application of it.
+
+**This is a narrow, named exception, not a repeal of A8-C1.** It applies
+only to the Archive Seal Register, for the one structural reason given
+above (S-1), and does not license any other platform-level machine
+artifact by analogy: a future proposal for a second one must
+independently satisfy A8-C1 or argue its own S-1-shaped impossibility,
+not cite this exception as precedent. A8-C1 stands unamended for every
+other governance machine artifact, including `transition_records.jsonl`
+itself (A8-C2), which remains strictly per-cycle.
 
 #### A-9 — single-writer enforcement (A9-C1 … A9-C10)
 
@@ -4585,6 +4623,225 @@ existence must not be cited as partial closure of R-3.
 amends: no code, test, fixture, or archive changes, and R-3's gating
 condition and forward-condition wording are untouched by it.
 
+**Amended, 2026-07-26** (AD-074 acceptance-with-conditions remediation).
+`docs/AD_074_ARCHIVE_SEAL_DESIGN_REVIEW.md` was reviewed the same day and
+received **Accept with conditions**; four of those conditions are narrow
+amendments to this AD's own text, applied inline below and listed here so
+that "amended" is never a claim this document makes about itself without
+saying where. Like the correction above, this amendment is
+documentation-only — no code, test, fixture, or archive changes — and
+R-3's and R-4's gating conditions are untouched by it.
+
+1. **Responsibilities — the Archive Seal's git-access bar was over-broad
+   relative to its own stated rationale.** "does not … verify any commit,
+   resolve any git reference, or observe repository state" is replaced
+   below with a bar scoped to *freeze-claim verification* and
+   *time-varying repository state*, not to git access as such. The
+   Archive Seal may now read git objects at a commit fixed at archive
+   close — a read, not a commit verification — while `FreezeVerifier`
+   remains the only component that verifies a freeze claim, a live,
+   time-varying fact. Neither component's responsibility grows into the
+   other's: the Archive Seal still never calls `verify_freeze()`, and
+   `FreezeVerifier` still never reads `research_archive/`.
+2. **Decision part 5 — "the Archive Seal never verifies a commit" is
+   replaced with the same narrower bar.** `AD_074_ARCHIVE_SEAL_DESIGN_REVIEW.md`
+   §3 S-5 shows the old sentence was never load-bearing against a
+   *fixed-commit, archive-local* comparison — only against a *live,
+   time-varying* one, which is what this AD's own rationale (the
+   Architecture overview's "third row") actually argues against.
+3. **Status vocabulary and the Architecture overview table —
+   "sealed manifest" is replaced with "the sealing commit tree identified
+   by an Archive Seal Register record."** AD-074 §5 resolves what this AD
+   left as Non-goals item 1: the Seal's expected value is not an authored
+   manifest but a git tree, named by one record in the Archive Seal
+   Register (AD-074 §5.5). Every other use of "sealed manifest" in this
+   AD's text below — Non-goals item 1, Migration items 2 and 5, Future
+   work's R-4 line, the Worked example, and AC-11 — describes the
+   undecided state *at this AD's original 2026-07-25 acceptance* and is
+   superseded by AD-074, not rewritten here; a reader encountering
+   "sealed manifest" elsewhere in this AD should read it as historical.
+4. **A8-C1 — the Archive Seal Register is the first allowed
+   platform-level governance machine artifact.** Recorded at **A8-C12**,
+   in the A-8 section below, not here, because A8-C1 is owned by that
+   section's transcription discipline, not by this AD. This AD's own
+   Decision and Non-goals sections are otherwise unaffected: seal
+   issuance's format is now decided by AD-074, but *where* AD-073 itself
+   grants write authority (Decision part 7, AD-062) is unchanged — AD-074
+   grants none beyond what Non-goals item 1 already contemplated.
+5. **Nothing else in this AD's text changes.** Decision parts 1, 2, 3, 4,
+   6, 7, 8 stand as corrected 2026-07-25; the aggregation rule, AC-1,
+   AC-2, and AC-4…AC-17 stand; AC-11 is satisfied more strongly than
+   before (`AD_074_ARCHIVE_SEAL_DESIGN_REVIEW.md` §2 O-3). This
+   enumeration — items 1–4 above — is exhaustive of this amendment; it is
+   not a general loosening, and no future reader may cite it to justify
+   an edit beyond the four sentences it actually changes.
+6. **This amendment is recorded here, in the owning decision document,
+   not only in AD-074's own text.** AD-074 §7 cross-references this block
+   rather than restating it as the authority; where the two documents'
+   prose differs, this block, being the amendment to the accepted AD,
+   governs.
+
+**Further amended, 2026-07-26** (AD-074 Increment 2 governance hardening
+pass — the second adversarial audit of the shipped
+`core/governance/archive_seal.py`, whose remediation *is* a code change,
+unlike the two documentation-only passes above). One further amendment to
+this AD's own text is required, and it is item 5's first exception:
+
+7. **AC-15 — lifecycle closure is the completeness branch's question,
+   not the Archive Seal's.** AC-15 as accepted reads "Completeness and
+   the Archive Seal **both** read `transition_records.jsonl`'s terminal
+   record before running," and requires an unclosed `lifecycle_version:
+   "v1"` archive to report *both* branches `UNVERIFIABLE`. The Seal
+   branch does not do this and, on the reasoning below, must not. The
+   clause is amended to:
+
+   > **AC-15 (amended 2026-07-26).** The completeness branch reads
+   > `transition_records.jsonl`'s terminal record before running. A
+   > `lifecycle_version: "v1"` archive whose terminal `to_phase` is not
+   > `Archive` — including an absent or empty `transition_records.jsonl`
+   > — reports the completeness branch `UNVERIFIABLE`, never failing and
+   > never exempt, and therefore reports `OverallStatus.UNVERIFIABLE`
+   > for the archive under the aggregation rule. The Archive Seal branch
+   > makes no closure judgement of its own; it answers only whether the
+   > archive's tree matches the sealing commit named by the Register.
+
+   **Why the code was not changed to match the accepted text instead.**
+   This was a genuine fork, and the deciding argument is the same one
+   that drove the rest of this hardening pass. `transition_records.jsonl`
+   is read from the **working tree**. Making the Seal's answer depend on
+   it would have added a live, post-seal-editable input to a comparison
+   whose every other input this pass just finished pinning to the sealing
+   commit — the exact defect class the pass exists to remove, reintroduced
+   by an acceptance criterion. Three further points, none of them alone
+   decisive:
+
+   - AC-15's *user-visible* guarantee is unchanged. `overall_status` is
+     derived, and an unclosed cycle already reports `UNVERIFIABLE`
+     through the completeness branch, so no report changes shape.
+   - Under AD-074 the Seal has a **stronger** structural guard than a
+     closure read: an unclosed cycle has no Register record, because
+     issuance happens after the Decision → Archive record is committed
+     (AD-074 §5.3). Absence of a record is already `UNVERIFIABLE`.
+   - Were a record somehow issued for an unclosed cycle, that is an
+     *issuance* error. The Seal's answer — "this tree matches the commit
+     you named" — remains true and correctly scoped; suppressing it
+     would make the Seal report on a question it did not ask.
+
+   AC-15's original phrasing predates AD-074: it was written when the
+   Seal's expected value was an unspecified "sealed manifest" with no
+   issuance discipline, and a closure read was the only available guard.
+   AD-074 §5.3 supplied a better one.
+
+8. **Nothing else changes, again.** Item 5's enumeration stands as
+   amended by item 7 and by nothing else. AC-1…AC-14, AC-16 and AC-17 are
+   untouched, and AC-15's amendment narrows one branch's responsibility
+   rather than relaxing any check: no archive reports `SOUND` under the
+   amended text that would have reported otherwise under the original.
+
+**Further amended, 2026-07-26** (AD-074 Increment 2 **acceptance audit**
+remediation — the independent audit of the hardening pass above, which
+found the architecture correct and withheld acceptance on two blocking
+findings). This block records the corrected trust model here, in the
+owning register, so that no reader has to reach
+`AD_074_ARCHIVE_SEAL_DESIGN_REVIEW.md` to find out that the previous
+block's claim was too strong.
+
+9. **RF-1 — the Git attribute *source* stack was not fully pinned, and
+   the claim that it was is withdrawn.** The hardening pass above
+   described the attribute inputs to the Seal comparison as **"four
+   stacked sources"**, all pinned. That enumeration was complete for git
+   <2.40 and stopped being complete when git 2.40 added `attr.tree`
+   (config) and `GIT_ATTR_SOURCE` (environment). The correct statement is
+   **five possible attribute influences, including `attr.tree` /
+   `GIT_ATTR_SOURCE` attribute-source selection.**
+
+   Neither adds an attribute rule; both redirect attribute lookup to an
+   arbitrary tree, which makes the fourth source's blob-for-blob
+   verification *vacuous* — that check confirms the working-tree
+   `.gitattributes` matches the sealing commit, not that git consulted
+   it. Verified end to end: with either set to a tree containing no
+   `.gitattributes`, a `-text` (byte-exact) archive artifact tampered to
+   CRLF hashed back to its sealed blob and the archive reported
+   **`MATCHED`** instead of `MISMATCH`. That is a tampered archive
+   certified sound by an input outside the sealing commit, which is
+   exactly what AC-74-5a forbids.
+
+   Seal verification now explicitly neutralises **all five**: system
+   attributes (`GIT_ATTR_NOSYSTEM=1`), global attributes
+   (`-c core.attributesFile=`), `$GIT_COMMON_DIR/info/attributes`
+   (refused outright — `UNVERIFIABLE`, since git offers no way to
+   disable it), working-tree `.gitattributes` (verified blob-for-blob
+   against the sealing commit), and `attr.tree` / `GIT_ATTR_SOURCE`
+   selection (`-c attr.tree=` on every invocation **and**
+   `GIT_ATTR_SOURCE` removed from the environment — the environment
+   variable overrides the config setting, so the config pin alone does
+   not close it).
+
+   **AC-74-5a is amended to read:** *"No input outside the sealing commit
+   may change a `MATCHED` result, including Git attribute source
+   selection."*
+
+10. **RF-2 — a regression test was a false positive; no production code
+    was wrong.** The round-trip identity check on `sealed_commit` (D11)
+    was justified by, and tested through, a *ref whose name is 40 hex
+    characters* impersonating an object id. That case is **not
+    reachable**: git deliberately ignores refs whose names end in 40 hex
+    characters when resolving a 40-hex revision, so the decoy never
+    resolved and the record failed earlier, as an unreadable commit. The
+    test asserted only that *some* reason was returned, so it passed
+    whether or not the round-trip check existed — confirmed by deleting
+    the check and watching it still pass.
+
+    The check itself is correct and is retained unchanged. Its
+    **reachable** case is an **annotated tag**: a tag object's id is a
+    full-length lowercase hexadecimal string, so it clears the syntactic
+    fixed-id check, and `^{commit}` then peels it to a *different*
+    object. The test is replaced with that case and asserts the identity
+    failure specifically; it fails when the check is removed. D11's
+    rationale is corrected accordingly, and the 40-hex-refname claim is
+    withdrawn from it.
+
+11. **The working-tree reparse-point refusal (D8) had a Windows-shaped
+    hole.** *(Recorded here 2026-07-26; previously documented only in
+    `AD_074_ARCHIVE_SEAL_DESIGN_REVIEW.md`, §7B, under the label
+    **F-3** — not renumbered here to avoid colliding with this same
+    document's own, unrelated **F-3** a few hundred lines above (the
+    AD-073 correction pass's applicability-prose finding); the two are
+    different findings from different audit passes that happen to share
+    a label only in the design review.)* D8's refusal was implemented
+    with `Path.is_symlink()`,
+    which reports **False** for a Windows NTFS **junction** — a reparse
+    point that redirects a directory without being a symlink by that
+    test. `os.walk(followlinks=False)` does not close the gap either: it
+    suppresses descent into *symlinked* directories only. So on Windows
+    the archive walk descended into a junction and reported the target
+    directory's files as the archive's own — the identical defect D8
+    closed for symlinks, left open on the platform where it is **more**
+    reachable, since creating a junction needs no privilege while
+    creating a symlink needs Developer Mode or elevation.
+
+    **[verified]** before the fix, a junction planted inside a sealed
+    archive produced `MISMATCH` with an `unexpected` finding naming a
+    file outside the archive entirely; after it, `UNVERIFIABLE`.
+    Detection is now "symlink **or** reparse point"
+    (`os.path.isjunction`, with an `st_file_attributes` /
+    `FILE_ATTRIBUTE_REPARSE_POINT` fallback for interpreters predating
+    it). Existing symlink behaviour is unchanged — the symlink test runs
+    first — and the change only ever *adds* refusals, so it can convert
+    a wrong `MATCHED`/`MISMATCH` into `UNVERIFIABLE` and never the
+    reverse. Like items 9 and 10, this is a tightening: no archive
+    reports `SOUND` under it that would not have reported `SOUND`
+    before.
+
+12. **Nothing else changes.** Items 9, 10, and 11 are exhaustive of this
+    amendment. All three are *tightenings*: item 9 only ever converts a
+    wrongly-`MATCHED` archive into `MISMATCH` or `UNVERIFIABLE`, item 10
+    changes no production behaviour at all, and item 11 only ever
+    converts a wrongly-`MATCHED`/`MISMATCH` archive into `UNVERIFIABLE`.
+    No archive reports `SOUND` under this amendment that would not have
+    reported `SOUND` before, and the AD-073 acceptance criteria are
+    otherwise untouched.
+
 ---
 
 **Context.**
@@ -4707,9 +4964,14 @@ in either direction.
 modified by this AD.** Commit binding (Q3) remains entirely
 `core/governance/freeze_verifier.py`'s responsibility, with its existing
 semantics (AD-033), its existing three-valued outcome (AD-047, AD-051),
-and its existing `covered_paths` field (AD-060) unchanged. The Archive
-Seal never verifies a commit; `ArchiveVerifier` never verifies a commit
-itself.
+and its existing `covered_paths` field (AD-060) unchanged. *(Amended
+2026-07-26 — see Status, item 2.)* The Archive Seal performs no
+freeze-claim verification and observes no time-varying repository state;
+it may read git objects at a commit recorded at archive close, where both
+sides of any comparison are archive-local and fixed, without replacing or
+duplicating any part of `FreezeVerifier`'s responsibility.
+`ArchiveVerifier` itself still never verifies a commit — that remains
+exclusively `FreezeVerifier`'s act, invoked, not reimplemented.
 
 **6. `ArchiveVerifier` produces exactly one report, composed of
 separately attributed component findings.** One call, one report — but
@@ -4764,7 +5026,7 @@ properties:
 | Branch | Subject of verification | Stable once the archive closes? | Owner |
 |---|---|---|---|
 | Completeness | The evidence package's structure, against Standard §5's seven required items | Yes — the required shape is fixed by the Standard, and the package is immutable | `ArchiveVerifier`'s own layer |
-| Archive Seal | The archived files' bytes, against a sealed manifest | Yes — both sides of the comparison are archive-local | Archive Seal primitive |
+| Archive Seal | The archived files' bytes, against the sealing commit tree identified by an Archive Seal Register record *(amended 2026-07-26)* | Yes — both sides of the comparison are archive-local | Archive Seal primitive |
 | Freeze binding | The **repository's current state**, against a commit reference the archive claims | **No** — the answer can legitimately change after the archive closes | `FreezeVerifier` |
 
 The third row is the load-bearing one. A freeze-verification result is a
@@ -4819,16 +5081,19 @@ one branch is never mistaken for the same fact in another:
   legacy archive, AC-14, the v1 layout check waived), `UNVERIFIABLE`
   (the cycle has not closed, AC-15). These four belong to this branch
   alone.
-- **Archive Seal branch** — a distinct, seal-owned vocabulary:
-  `MATCHED` (a sealed manifest exists and every covered file's bytes
-  match it), `MISMATCH` (a sealed manifest exists and at least one
-  covered file is modified, missing, or unexpected — AC-7's three
-  finding kinds are preserved in the attributed findings and never
-  collapsed; `MISMATCH` is the branch-level summary of "one or more
-  occurred," not a replacement for them), `UNVERIFIABLE` (no sealed
-  manifest exists to compare against — including, under *Migration*
-  item 2, every archive for as long as Non-goals item 1's manifest
-  format remains undecided).
+- **Archive Seal branch** — a distinct, seal-owned vocabulary
+  *(amended 2026-07-26 — see Status, item 3)*: `MATCHED` (the sealing
+  commit tree identified by an Archive Seal Register record exists and
+  every covered file's bytes match it), `MISMATCH` (a Register record
+  exists and at least one covered file is modified, missing, or
+  unexpected — AC-7's three finding kinds are preserved in the attributed
+  findings and never collapsed; `MISMATCH` is the branch-level summary of
+  "one or more occurred," not a replacement for them), `UNVERIFIABLE` (no
+  Archive Seal Register record identifies a sealing commit tree to
+  compare against for this archive — including, at this AD's original
+  acceptance, every archive, since seal issuance's format was then
+  undecided; AD-074 resolves the format and leaves the per-archive rule
+  unchanged).
 
 `UNVERIFIABLE` is the one value name shared across all three
 vocabularies, and it means the same fact in each: this branch could not
@@ -4922,8 +5187,12 @@ otherwise conflate them:
   manifest records what was sealed, not what the Standard requires; an
   archive can be perfectly sealed and materially incomplete, and the seal
   must report the former without implying the latter;
-- verify any commit, resolve any git reference, or observe repository
-  state;
+- perform freeze-claim verification, resolve a freeze commit reference,
+  or observe time-varying repository state — that remains exclusively
+  `FreezeVerifier`'s responsibility (Decision part 5). It may read git
+  objects at the commit recorded in the Archive Seal Register, fixed at
+  archive close, where both sides of the comparison are archive-local
+  *(amended 2026-07-26 — see Status, item 1)*;
 - verify decision-chain linkage — `verify_chain_intact()` /
   `verify_chain_anchored()` remain `decision_recorder`'s, and a seal that
   re-derived chain semantics from file bytes would be a second, weaker
@@ -5366,9 +5635,14 @@ deliberately implementation-neutral:
 - **AC-2.** `ArchiveVerifier`'s own layer computes no content hash and
   contains no integrity algorithm; every integrity finding originates in
   the seal primitive.
-- **AC-3.** The seal primitive performs no commit resolution, no git
-  invocation, no chain-linkage verification, and no Standard §5
-  completeness judgment.
+- **AC-3.** *(Amended 2026-07-26 — see Status, item 1.)* The seal
+  primitive performs no freeze-claim verification, resolves no freeze
+  commit reference, observes no time-varying repository state, no
+  chain-linkage verification, and makes no Standard §5 completeness
+  judgment. It may read git objects at a commit fixed at archive close,
+  where both sides of the comparison are archive-local and stable, and it
+  never invokes `verify_freeze()`, `verify_chain_intact()`, or
+  `verify_chain_anchored()`.
 - **AC-4.** Every finding in the report is attributed to exactly one of
   the three branches, and each branch's own status is individually
   readable from the report.
@@ -5408,11 +5682,18 @@ deliberately implementation-neutral:
   `archive_manifest.json` under its own AD-030/`RESEARCH_ARCHIVE_MANIFEST.md`
   applicability contract, **not** one of Standard §5's seven — with the
   same failure severity as any missing §5 item, never as exempt.
-- **AC-15.** Completeness and the Archive Seal both read
-  `transition_records.jsonl`'s terminal record before running. A
-  `lifecycle_version: "v1"` archive whose terminal `to_phase` is not
-  `Archive` — including an absent or empty `transition_records.jsonl` —
-  reports both branches `UNVERIFIABLE`, never failing and never exempt.
+- **AC-15** *(amended 2026-07-26 — see Status, item 7; the original text
+  required the Archive Seal branch to read the terminal record too)*. The
+  completeness branch reads `transition_records.jsonl`'s terminal record
+  before running. A `lifecycle_version: "v1"` archive whose terminal
+  `to_phase` is not `Archive` — including an absent or empty
+  `transition_records.jsonl` — reports the completeness branch
+  `UNVERIFIABLE`, never failing and never exempt, and therefore reports
+  `OverallStatus.UNVERIFIABLE` for the archive under the aggregation
+  rule. The Archive Seal branch makes no closure judgement of its own; it
+  answers only whether the archive's tree matches the sealing commit
+  named by the Register. `transition_records.jsonl` is a working-tree
+  file, and the Seal's inputs are all fixed at the sealing commit.
 - **AC-16.** A freeze branch exists exactly when the caller requested
   freeze verification, and then always. Where it exists, both
   `verify_freeze()` inputs come from the same record: `transition_records.jsonl`'s terminal

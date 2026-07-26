@@ -1,11 +1,13 @@
-"""Archive verification (Governance) -- AD-073 Phase 1 + Phase B.
+"""Archive verification (Governance) -- AD-073 Phase 1 + Phase B + AD-074
+Increment 2.
 
-Implements the completeness branch, the Archive Seal *stub*, and the
+Implements the completeness branch, the Archive Seal branch, and the
 freeze branch of ``ArchiveVerifier``, per ``docs/ARCHITECTURE_DECISIONS.md``
-AD-073. ``verify_archive()`` is the one public entry point (AC-1): it
-takes an archive *location*, not a ``ProjectId`` (AD-073 conflict C-1 --
-Governance may never import Research's ``ProjectRegistry``, exactly the
-tension AD-033 already resolved for ``FreezeVerifier``).
+AD-073 (as amended 2026-07-26) and AD-074. ``verify_archive()`` is the
+one public entry point (AC-1): it takes an archive *location*, not a
+``ProjectId`` (AD-073 conflict C-1 -- Governance may never import
+Research's ``ProjectRegistry``, exactly the tension AD-033 already
+resolved for ``FreezeVerifier``).
 
 **Scope.** Three branches from AD-073's Architecture overview:
 
@@ -17,12 +19,18 @@ tension AD-033 already resolved for ``FreezeVerifier``).
   ``lifecycle_version: "v1"`` archive whose cycle has not closed
   (``transition_records.jsonl``'s terminal record's ``to_phase`` is not
   ``"Archive"``) is ``UNVERIFIABLE`` (AC-15).
-- **Archive Seal** -- a stub only, per AD-073 Migration item 2: no sealed
-  manifest format exists yet (Non-goals item 1), so this branch reports
-  ``UNVERIFIABLE`` for every archive, unconditionally. It computes no
-  hash and reads no archived bytes (AC-2, AC-3). Seal *logic* is
-  deliberately not implemented here -- that is future work gated on a
-  sealed-manifest format decision this AD does not make.
+- **Archive Seal** -- delegates to ``core.governance.archive_seal.verify_seal()``
+  (AD-074 Increment 2), which compares the archive's working-tree bytes
+  against the sealing commit tree named by an Archive Seal Register
+  record (``docs/archive_seal_register.jsonl``). This module contains no
+  integrity algorithm of its own (AC-2): every ``modified``/``missing``/
+  ``unexpected`` finding originates in ``archive_seal``. The Register is
+  empty as of this increment (AD-074 SS11 Increment 2 scope, SS9 item 3
+  -- no automatic issuance, and no record has been issued for any
+  archive yet), so every real archive still reports ``UNVERIFIABLE``
+  today -- but now because *no seal has been issued for this project*, a
+  per-archive fact, rather than because *no sealed-manifest format
+  exists*, a platform-wide one (AD-074 SS11).
 - **Freeze** -- invoked only when the caller requests it (AD-073's
   "where appropriate" means exactly and only "the caller asked").
   ``verify_archive(archive_dir, verify_freeze=True)`` reads
@@ -45,7 +53,13 @@ reader, not a verification authority. This module never calls
 verification remains exclusively ``decision_recorder``'s question
 (AD-073 Responsibilities, ``ArchiveVerifier`` -- does; Compatibility
 AD-063 note). ``freeze_verifier.verify_freeze()`` is likewise read-only
-over git (rev-parse, cat-file -e, diff, status --porcelain only).
+over git (rev-parse, cat-file -e, diff, status --porcelain only), and so
+is ``archive_seal.verify_seal()`` (cat-file, ls-tree -z, show,
+rev-parse, check-attr, and hash-object without ``-w`` -- see that
+module's own docstring for what it defeats, what it does not, why its
+comparison deliberately avoids ``git diff``'s dependency on the index,
+and how the attribute stack that governs ``hash-object`` is itself
+pinned to the sealing commit rather than trusted as live state).
 
 **Overall status.** ``ArchiveReport.overall_status`` is never stored --
 it is a property, recomputed on every access from the invoked branch
@@ -55,10 +69,15 @@ precedence (AD-073 Decision part 6, AC-5): a confirmed problem
 which outranks a confirmed-good result. An absent freeze branch (the
 caller did not request one) takes no part in this computation -- it is
 not the same fact as an invoked branch reporting ``UNVERIFIABLE``.
-Because the Seal branch is a stub that can only ever report
-``UNVERIFIABLE``, ``overall_status`` can never be ``SOUND`` yet -- an
-accurate reflection of "content integrity has never actually been
-checked", not a defect in the derivation.
+
+**What ``OverallStatus.SOUND`` means, and does not mean (AD-074
+AC-74-13).** With a real Seal branch, ``SOUND`` is reachable for the
+first time -- but it means exactly "the completeness check passed (or
+was exempt) and the sealed archive paths match the sealing commit tree
+(and, if requested, the freeze claim verified)". It does not mean, and
+must never be reported as meaning, that dataset-hash verification
+(``DatasetIntegrityChecker`` is still unimplemented), research
+reproducibility, or experiment validity have been confirmed.
 """
 
 from __future__ import annotations
@@ -69,6 +88,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from core.governance import archive_seal
 from core.governance.decision_recorder import (
     ARCHIVE_MANIFEST_FILENAME,
     TRANSITION_RECORDS_FILENAME,
@@ -107,13 +127,6 @@ _REQUIRED_ITEMS: tuple[tuple[str, str], ...] = (
     (ARCHIVE_MANIFEST_FILENAME, "file"),
 )
 
-_SEAL_STUB_REASON = (
-    "seal comparison deferred: no sealed-manifest format exists yet "
-    "(AD-073 Non-goals item 1, Migration item 2) -- reports UNVERIFIABLE "
-    "for every archive until one is decided"
-)
-
-
 class CompletenessStatus(str, Enum):
     """Four-valued -- this branch's own vocabulary (AD-073 Architecture
     overview, Status vocabulary), never merged with the Seal's or the
@@ -126,11 +139,11 @@ class CompletenessStatus(str, Enum):
 
 
 class SealStatus(str, Enum):
-    """The Seal's own three-valued vocabulary. ``MATCHED`` and
-    ``MISMATCH`` are unreachable through this module's public API in
-    Phase 1 -- the stub only ever produces ``UNVERIFIABLE`` -- but both
-    are defined here because they are this branch's real vocabulary
-    under AD-073, not a Phase-1-only shape."""
+    """The Seal's own three-valued vocabulary (AD-073 Status vocabulary,
+    as amended by AD-074). ``MATCHED`` requires an Archive Seal Register
+    record naming a sealing commit whose tree matches the working tree;
+    since the Register is empty as of AD-074 Increment 2 (no issuance
+    yet), every real archive still reports ``UNVERIFIABLE`` today."""
 
     MATCHED = "matched"
     MISMATCH = "mismatch"
@@ -166,9 +179,11 @@ class CompletenessReport:
 
 @dataclass(frozen=True, slots=True)
 class SealFinding:
-    """Reserved shape for a future, non-stub Seal implementation
-    (AC-7's three distinguishable finding kinds: ``"modified"``,
-    ``"missing"``, ``"unexpected"``). Always empty in Phase 1."""
+    """One path's comparison outcome (AC-7's three distinguishable
+    finding kinds, never collapsed): ``"modified"``, ``"missing"``
+    (present at the sealing commit, absent from the working tree), or
+    ``"unexpected"`` (present in the working tree, absent from the
+    sealing commit)."""
 
     path: str
     kind: str
@@ -176,9 +191,19 @@ class SealFinding:
 
 @dataclass(frozen=True, slots=True)
 class SealReport:
+    """``excluded_paths`` (AD-074 AC-74-4, added in Increment 2): the
+    dataset-manifest ``snapshot_path`` entries and
+    ``protected_file_hashes.json`` paths this comparison excluded from
+    scope, reported explicitly rather than left implicit -- "bounded
+    coverage that a reader cannot see is coverage a reader cannot
+    trust" (AD-074 SS5.6). Empty when no exclusion set could be (or
+    needed to be) computed, e.g. an UNVERIFIABLE result reached before
+    that point."""
+
     status: SealStatus
     findings: tuple[SealFinding, ...]
     reason: str | None
+    excluded_paths: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -448,13 +473,39 @@ def _verify_completeness(archive_dir: Path) -> CompletenessReport:
     return CompletenessReport(status=status, findings=findings, reason=None)
 
 
-def _verify_seal(archive_dir: Path) -> SealReport:
-    """Stub only (AD-073 Migration item 2). ``archive_dir`` is accepted
-    for interface stability with the future non-stub implementation but
-    is not otherwise inspected: no file under it is opened, hashed, or
-    enumerated."""
-    del archive_dir
-    return SealReport(status=SealStatus.UNVERIFIABLE, findings=(), reason=_SEAL_STUB_REASON)
+_SEAL_STATUS_BY_OUTCOME = {
+    "matched": SealStatus.MATCHED,
+    "mismatch": SealStatus.MISMATCH,
+    "unverifiable": SealStatus.UNVERIFIABLE,
+}
+
+
+def _verify_seal(archive_dir: Path, *, repo_root: Path | None) -> SealReport:
+    """Delegates entirely to ``archive_seal.verify_seal()`` (AD-074
+    Increment 2, AC-2): this function computes no hash and contains no
+    integrity algorithm of its own, only the translation from
+    ``archive_seal.SealOutcome`` to this module's own ``SealReport``
+    shape. ``archive_seal.verify_seal()`` never raises for a failed
+    verification -- only ``archive_seal.NotAGitRepositoryError``, for an
+    environmental problem (``repo_root`` not inside a git working tree),
+    which is caught and translated the same way the freeze branch
+    already translates ``freeze_verifier.NotAGitRepositoryError``."""
+    try:
+        outcome = archive_seal.verify_seal(archive_dir, repo_root=repo_root)
+    except archive_seal.NotAGitRepositoryError as exc:
+        return SealReport(
+            status=SealStatus.UNVERIFIABLE,
+            findings=(),
+            reason=f"seal verification environment error: {exc}",
+            excluded_paths=(),
+        )
+    findings = tuple(SealFinding(path=finding.path, kind=finding.kind) for finding in outcome.findings)
+    return SealReport(
+        status=_SEAL_STATUS_BY_OUTCOME[outcome.status],
+        findings=findings,
+        reason=outcome.reason,
+        excluded_paths=outcome.excluded_paths,
+    )
 
 
 def verify_archive(
@@ -464,21 +515,37 @@ def verify_archive(
     repo_root: Path | None = None,
 ) -> ArchiveReport:
     """The single public entry point for the archive-soundness question
-    (AC-1). Read-only: composes the completeness branch, the Seal stub,
-    and (when requested) the freeze branch into one report with
+    (AC-1). Read-only: composes the completeness branch, the Seal
+    branch, and (when requested) the freeze branch into one report with
     per-branch attribution (AC-4). Does not touch anything under
     research_archive/ beyond reading it, and never writes, commits, or
-    otherwise mutates the repository FreezeVerifier reads.
+    otherwise mutates the repository FreezeVerifier or the Seal branch
+    reads.
 
     ``verify_freeze`` is the caller's request (AD-073's "where
     appropriate" == caller request, and nothing else) -- ``False`` (the
     default) omits the freeze branch entirely, matching Phase 1's
-    behaviour exactly. ``repo_root`` is forwarded to
-    ``freeze_verifier.verify_freeze()`` unchanged (``None`` defers to its
-    own default) and is ignored when ``verify_freeze`` is ``False``."""
+    behaviour exactly. The Seal branch, unlike the freeze branch, is
+    always invoked (AD-074 SS5.4: "invoked unconditionally, alongside
+    completeness"). ``repo_root`` is forwarded unchanged to both
+    ``archive_seal.verify_seal()`` and (when requested)
+    ``freeze_verifier.verify_freeze()`` (``None`` defers to each one's
+    own default).
+
+    ``archive_dir`` is **resolved exactly once, here** (integrity audit
+    item 3, 2026-07-26), and the resolved path is what every branch
+    receives and what ``ArchiveReport.archive_dir`` records -- a report
+    naming a relative path would be ambiguous evidence the moment the
+    reader's working directory differed from the caller's. A relative
+    ``archive_dir`` previously reached the Seal branch unresolved and
+    raised ``ValueError`` out of a verifier contracted never to raise
+    for a verification question; ``archive_seal.verify_seal()`` resolves
+    at its own public boundary too, for callers that reach it directly,
+    and resolving an already-resolved path is a no-op."""
+    resolved_dir = archive_dir.resolve()
     return ArchiveReport(
-        archive_dir=archive_dir,
-        completeness=_verify_completeness(archive_dir),
-        seal=_verify_seal(archive_dir),
-        freeze=_verify_freeze_branch(archive_dir, repo_root=repo_root) if verify_freeze else None,
+        archive_dir=resolved_dir,
+        completeness=_verify_completeness(resolved_dir),
+        seal=_verify_seal(resolved_dir, repo_root=repo_root),
+        freeze=_verify_freeze_branch(resolved_dir, repo_root=repo_root) if verify_freeze else None,
     )

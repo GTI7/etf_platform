@@ -78,28 +78,33 @@ def _parse_entry(raw: dict[str, Any], index: int) -> DatasetEntry:
     )
 
 
-def parse_dataset_manifest(path: Path) -> DatasetManifest:
-    """Parse and structurally validate a dataset_manifest.json file.
-    Raises DatasetManifestError -- never a bare json/KeyError -- for any
-    shape this schema does not allow, including a manifest that omits
-    one of the three required source tables or that (incorrectly)
-    includes a Calendar entry."""
+def parse_dataset_manifest_text(text: str, *, source: str = "<text>") -> DatasetManifest:
+    """Parse and structurally validate `text` as a dataset_manifest.json
+    document. `source` is used only to label error messages -- it need
+    not be a real filesystem path, which is what lets a caller parse
+    content read from a git blob (e.g. a git-show of the file at a
+    specific commit, AD-074 SS7B D2) through the same validation
+    `parse_dataset_manifest` applies to an on-disk file. Raises
+    DatasetManifestError -- never a bare json/KeyError -- for any shape
+    this schema does not allow, including a manifest that omits one of
+    the three required source tables or that (incorrectly) includes a
+    Calendar entry."""
     try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
+        raw = json.loads(text)
     except json.JSONDecodeError as exc:
-        raise DatasetManifestError(f"{path} is not valid JSON: {exc}") from exc
+        raise DatasetManifestError(f"{source} is not valid JSON: {exc}") from exc
 
     schema_version = raw.get("schema_version")
     if schema_version != MANIFEST_SCHEMA_VERSION:
         raise DatasetManifestError(
-            f"{path}: schema_version must be {MANIFEST_SCHEMA_VERSION}, got {schema_version!r}"
+            f"{source}: schema_version must be {MANIFEST_SCHEMA_VERSION}, got {schema_version!r}"
         )
 
     entries = tuple(_parse_entry(entry, i) for i, entry in enumerate(raw.get("datasets", [])))
 
     source_tables = [entry.source_table for entry in entries]
     if len(set(source_tables)) != len(source_tables):
-        raise DatasetManifestError(f"{path}: duplicate source_table entries: {source_tables}")
+        raise DatasetManifestError(f"{source}: duplicate source_table entries: {source_tables}")
 
     actual_tables = frozenset(source_tables)
     if actual_tables != REQUIRED_SOURCE_TABLES:
@@ -114,7 +119,7 @@ def parse_dataset_manifest(path: Path) -> DatasetManifest:
                 f"SS A.4): {sorted(unexpected)}"
             )
         raise DatasetManifestError(
-            f"{path}: datasets must cover exactly {sorted(REQUIRED_SOURCE_TABLES)}. {'; '.join(detail)}"
+            f"{source}: datasets must cover exactly {sorted(REQUIRED_SOURCE_TABLES)}. {'; '.join(detail)}"
         )
 
     return DatasetManifest(
@@ -123,3 +128,12 @@ def parse_dataset_manifest(path: Path) -> DatasetManifest:
         generated_at=raw.get("generated_at", ""),
         datasets=entries,
     )
+
+
+def parse_dataset_manifest(path: Path) -> DatasetManifest:
+    """Parse and structurally validate a dataset_manifest.json file.
+    Raises DatasetManifestError -- never a bare json/KeyError -- for any
+    shape this schema does not allow, including a manifest that omits
+    one of the three required source tables or that (incorrectly)
+    includes a Calendar entry."""
+    return parse_dataset_manifest_text(path.read_text(encoding="utf-8"), source=str(path))

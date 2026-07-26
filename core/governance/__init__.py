@@ -10,14 +10,17 @@ As of Migration Plan Step 4 / Phase 1C, Tier 1 is implemented:
 automate the two checks docs/RESEARCH_PLATFORM_RETROSPECTIVE.md Section
 3 items 1-2 identified as manual, one-off audit passes (see
 docs/H3_GOVERNANCE_COMPLIANCE_AUDIT.md for what those passes looked like
-before automation). ``archive_verifier.verify_archive`` (AD-073 Phases 1 and B) is also
-implemented, with three per-branch-attributed results: a completeness
-branch (Standard Section 5's required-items check), a Seal branch (a
-stub -- always ``UNVERIFIABLE``, pending a sealed-manifest format
-decision), and a freeze branch (invoked only when the caller requests
-it, delegating to ``freeze_verifier.verify_freeze`` unmodified).
-``DatasetIntegrityChecker`` and ``ReproducibilityChecker`` remain
-unimplemented.
+before automation). ``archive_verifier.verify_archive`` (AD-073 Phases 1 and B, AD-074
+Increment 2) is also implemented, with three per-branch-attributed
+results: a completeness branch (Standard Section 5's required-items
+check), a Seal branch (``archive_seal.verify_seal`` -- tree comparison
+against a sealing commit named by the Archive Seal Register,
+``docs/archive_seal_register.jsonl``; the Register carries no issued
+records yet, so every real archive still reports ``UNVERIFIABLE`` today,
+now per-archive rather than platform-wide), and a freeze branch (invoked
+only when the caller requests it, delegating to
+``freeze_verifier.verify_freeze`` unmodified). ``DatasetIntegrityChecker``
+and ``ReproducibilityChecker`` remain unimplemented.
 
 Decision logging is deliberately not part of this package's planned
 surface. ``docs/PLATFORM_ARCHITECTURE_V1.md``'s own ``DecisionLogger``

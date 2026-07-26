@@ -41,6 +41,21 @@ Read-only. Every git invocation here is a read-only plumbing command
 (``rev-parse``, ``cat-file -e``, ``diff``, ``status --porcelain``);
 nothing in this module ever writes, commits, checks out, or resets
 anything.
+
+**Comparison direction, stated once here to disambiguate from
+``core.governance.archive_seal`` (added AD-074, governance hardening
+pass 2026-07-26).** This module always compares a **frozen commit
+against the live working tree/HEAD**: "has anything changed since the
+freeze claim was made?" ``core.governance.archive_seal`` instead
+compares a **sealed commit's tree against the archive's on-disk
+files**: "does the archive still match the bytes it was sealed at?"
+The two questions sound alike -- both ask "has this drifted?" -- but
+answer to different fixed points (a time-varying ``HEAD`` here, a
+frozen sealing commit there) and this module's own helpers are named
+``*_since_freeze`` specifically to keep that distinction visible at
+every call site, never merely in prose. Neither module imports the
+other's git-comparison helpers; see ``archive_seal``'s own module
+docstring for its side of this contract.
 """
 
 from __future__ import annotations
@@ -124,16 +139,22 @@ def _path_exists_at_commit(resolved_hash: str, path: str, *, repo_root: Path) ->
     return result.returncode == 0
 
 
-def _has_committed_drift(resolved_hash: str, path: str, *, repo_root: Path) -> bool:
+def _has_committed_drift_since_freeze(resolved_hash: str, path: str, *, repo_root: Path) -> bool:
     """True if HEAD's content for `path` differs from its content at
-    `resolved_hash` (a committed change since the freeze)."""
+    `resolved_hash` (a committed change since the freeze) -- i.e. the
+    frozen-commit-to-HEAD comparison this module owns, never the
+    sealed-commit-to-archive-files comparison ``archive_seal`` owns."""
     result = _run_git(["diff", "--quiet", resolved_hash, "HEAD", "--", path], repo_root=repo_root)
     return result.returncode != 0
 
 
-def _has_uncommitted_drift(path: str, *, repo_root: Path) -> bool:
+def _has_uncommitted_drift_since_freeze(path: str, *, repo_root: Path) -> bool:
     """True if the working tree has any uncommitted change to `path`
-    relative to HEAD (staged or unstaged)."""
+    relative to HEAD (staged or unstaged) -- the other half of "has
+    anything changed since the freeze claim was made?", HEAD's own
+    time-varying position being exactly what makes this a freeze-branch
+    question and not an archive-seal one (the seal never depends on
+    HEAD, see ``archive_seal.verify_seal``)."""
     result = _run_git(["status", "--porcelain", "--", path], repo_root=repo_root)
     return bool(result.stdout.strip())
 
@@ -186,9 +207,9 @@ def verify_freeze(
         if not _path_exists_at_commit(resolved_hash, path, repo_root=root):
             errors.append(f"{path!r} does not exist at commit {resolved_hash}")
             continue
-        if _has_committed_drift(resolved_hash, path, repo_root=root) or _has_uncommitted_drift(
-            path, repo_root=root
-        ):
+        committed_drift = _has_committed_drift_since_freeze(resolved_hash, path, repo_root=root)
+        uncommitted_drift = _has_uncommitted_drift_since_freeze(path, repo_root=root)
+        if committed_drift or uncommitted_drift:
             drifted.append(path)
 
     if errors:
