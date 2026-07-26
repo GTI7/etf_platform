@@ -1,0 +1,92 @@
+# The platform's only workflow. Three checks, all of which already
+# existed and were run by hand; nothing here is a new rule.
+#
+# It is deliberately not a release, packaging, or deployment pipeline:
+# AD-075 AC-75-4 forbids CI *enforcement* of seal issuance, and issuance
+# stays a recorded human act. This workflow verifies; it never issues,
+# writes, or publishes anything.
+name: governance
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    # Windows is in the matrix, not merely tolerated, because the seal
+    # has a documented Windows-shaped defect class of its own: the D8
+    # working-tree shape refusal was implemented with `Path.is_symlink()`,
+    # which reports False for an NTFS junction, and the fix (AD-073
+    # Status item 11, design review F-3) is untested by an Ubuntu-only
+    # runner, since junctions do not exist there. `core.autocrlf`'s
+    # default also differs by platform and is exactly the fixture hazard
+    # `tests/test_governance_archive_verifier.py`'s `git_repo` fixture
+    # pins `core.autocrlf=false` against. Running both catches a
+    # regression in either direction instead of trusting one platform to
+    # stand in for both.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # REQUIRED, and the single most load-bearing line in this file.
+          # The Archive Seal compares each archive against a *sealing
+          # commit* named in docs/archive_seal_register.jsonl -- today
+          # 29553b7, which is far behind HEAD. actions/checkout defaults
+          # to fetch-depth: 1, and in that shallow clone the sealing
+          # commit is absent, so verify_seal() reports UNVERIFIABLE and
+          # tests/test_sealed_archive_integrity.py fails with a message
+          # naming exactly this cause (AD-074 §7B D3, AD-075 AC-75-6).
+          # That failure is accurate -- the seal genuinely cannot be
+          # verified in a shallow clone -- so the fix is full history,
+          # never relaxing the assertion.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install pytest
+        # The platform itself is stdlib-only (AD-005: no third-party
+        # dependency). pytest is the test runner, not a dependency of
+        # anything under core/, so it is the only install here and there
+        # is no requirements file to honour.
+        run: python -m pip install --upgrade pip pytest
+
+      - name: Test suite
+        run: python -m pytest -q
+
+      - name: Governance verification
+        # Sweeps every archive through verify_archive() with all four
+        # branches invoked, including freeze. Fails on UNSOUND only;
+        # UNVERIFIABLE is reported but not failed, because it is the
+        # correct and permanent status for the legacy archives (AD-073
+        # Non-goals item 8). The archives that must be SOUND are asserted
+        # hard by tests/test_sealed_archive_integrity.py in the step
+        # above -- that is the gate, this is the sweep and the report.
+        run: python tools/verify_archives.py
+
+      - name: Import-boundary validation
+        # tests/test_import_boundaries.py is the authoritative form of
+        # this check and already ran in the test suite above: it pins the
+        # documented ETF-coupling inventory exactly (5 violations across
+        # the data -> etf and governance -> etf edges, AD-068/AD-069) and
+        # fails if that inventory grows *or* shrinks without the
+        # documentation changing.
+        #
+        # The standalone script is run here for its report, and its exit
+        # code is deliberately ignored: it exits non-zero on that same
+        # documented, accepted inventory today (AD-075 AC-75-15 states
+        # this explicitly), so gating on it would make CI permanently red
+        # for a condition the platform has already accepted. Printing the
+        # inventory keeps it visible on every run instead of discoverable
+        # only by reading a test.
+        run: python tools/check_import_boundaries.py || true
