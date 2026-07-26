@@ -5875,3 +5875,262 @@ design is not an implementation; R-3's gating condition is unchanged;
 and if the next cycle reaches Phase 8 with neither an implementation nor
 a §8 deferral record, this document will have made the register longer
 without making the archive safer.
+
+---
+
+### AD-074: The Archive Seal is a witnessed commit reference, verified by tree comparison (accepted 2026-07-26, after implementation)
+
+**Review basis.** Level 2 (AI-assisted adversarial review), across four
+sequential passes over the same material, each re-verified against
+`core/governance/archive_verifier.py`, `freeze_verifier.py`,
+`decision_recorder.py`, `dataset_manifest.py`, `tools/archive_manifest.py`,
+`tests/test_repository_integrity_snapshot.py`,
+`tests/fixtures/protected_file_hashes.json`,
+AD-030/AD-033/AD-047/AD-051/AD-060/AD-062/AD-063/AD-065/AD-072/AD-073, and
+`docs/REFERENCE_H4_PHASE_G_REMEDIATION_DECISION.md` §§4/5/8/10: the design
+review itself, an accept-with-conditions review of it, a governance
+hardening pass conducted against the *shipped*
+`core/governance/archive_seal.py` rather than against the design, and an
+acceptance audit of that hardening pass. The four passes are recorded in
+`docs/AD_074_ARCHIVE_SEAL_DESIGN_REVIEW.md` as, respectively, §§1–12,
+§7/§7A, §7B D7–D12, and §7B's RF-1/RF-2/F-3 amendments.
+
+**Level 3 is unavailable and no Level 3 review was performed. No review
+of AD-074 is independent, and none may be cited as such** (Standard §4:
+"no document may describe a Level 2 review using the unqualified word
+'independent'"). This applies to the fourth pass in particular: AD-073's
+2026-07-26 amendment block above introduces it as "the **independent**
+audit of the hardening pass," and that word is used there in the narrow
+sense of *a separate pass over the implementing pass's output* — it
+asserts no organizational independence, no distinct accountable party,
+and no external reviewer, because none existed. AD-074 does not inherit
+that word, and the phrasing in the block above is disclosed here rather
+than rewritten, per this register's own no-silent-supersession rule.
+
+**Acceptance basis.** This entry accepts
+`docs/AD_074_ARCHIVE_SEAL_DESIGN_REVIEW.md` — its §5 contract, §8
+acceptance criteria AC-74-1…AC-74-13, and §7's four amendments to AD-073,
+all of which are already applied inline in this document — as an
+architecture decision of this register.
+
+It is recorded **after** the implementation it accepts, and says so
+rather than presenting a tidier sequence. The design review's §11
+sequences the work as three separately-approvable increments; what
+actually happened is:
+
+| Increment | §11's plan | What occurred |
+|---|---|---|
+| 1 — accept AD-074 + the AD-073 amendment, documentation only | first | **Performed by this entry, 2026-07-26.** The AD-073 amendments it names were applied inside `2392de2`; the AD-074 register entry itself was never written until now. |
+| 2 — implement the Seal branch and the Register reader, Register empty | second | **Done at `2392de2`** (`feat(governance): implement AD-074 archive seal hardening`), corrected documentation-only at `a8f031b` (`docs(governance): clarify AD-074 hardening references and register limits`). |
+| 3 — issue `reference_h4`'s seal and wire the check | third | **Not started.** `docs/archive_seal_register.jsonl` is empty (0 bytes) [verified]. |
+
+Three things this acceptance therefore does **not** claim, stated
+explicitly because each is the kind of claim an ordered register invites
+a later reader to assume:
+
+1. **It does not claim Increment 1 happened before Increment 2.** It did
+   not. The implementation landed first, the register entry second, and
+   the gap between them is the defect this entry repairs — not a
+   sequence it retroactively asserts.
+2. **It does not claim a Level 3 or independent review.** See *Review
+   basis*.
+3. **It does not close R-4.** §11 is explicit that only Increment 3 does.
+   D-9/G-5 stay live, `reference_h4` stays unprotected by any seal, and
+   no archive can report `SOUND` while the Register is empty.
+
+**Numbering.** AD-070 and AD-071 remain unconsumed, for the reason AD-072
+and AD-073 both record: per `docs/PHASE_F_PRE_IMPLEMENTATION_AMENDMENT_PLAN.md`
+§8 they are the named (not formally reserved) candidates Track C's own
+commit C0 may claim for Golden Run 001. This AD takes AD-074, the next
+number after AD-073, and claims neither. No AD number is reserved by this
+entry for any future work, including the Register self-integrity gap
+(design review §9 item 9), which is recorded there as unassigned.
+
+**Status.** **Accepted, 2026-07-26.** This entry is documentation only:
+no code, test, fixture, archive, or protected-file snapshot is changed by
+it, and `docs/archive_seal_register.jsonl` is neither written nor
+populated. The implementation it accepts already exists, at `2392de2` and
+`a8f031b`, and is unmodified by this acceptance.
+
+**Decision.** A **sealed archive** is one for which a **sealing commit**
+has been recorded in the **Archive Seal Register**
+(`docs/archive_seal_register.jsonl`, canonical JSONL, append-only, one
+record per issuance). `ArchiveVerifier`'s Seal branch verifies that every
+in-scope file under the archive's working-tree directory is identical to
+the same path at that commit, and that the two path sets agree. In the
+design review's terms, the Seal is a *witnessed commit reference* (the
+Register) plus *tree comparison against it* (the mechanism) — §4's
+candidates (c) and (d), which compose rather than compete.
+
+The load-bearing parts, each stated so that this entry is readable
+without the design review:
+
+1. **Subject.** `research_archive/<project_id>/**`, minus that archive's
+   `dataset_manifest.json` `snapshot_path` set and the
+   `protected_file_hashes.json` key set — **both read at the sealing
+   commit**, never the working tree, so the seal's own scope is a
+   property of that commit and of nothing else (§7B D2, D9). Excluded
+   paths' *existence* is still checked (AC-74-4).
+2. **Comparison.** Blob identities — `git rev-parse <commit>:<path>`
+   against `git hash-object --path <path> -- <file>` — never `git diff`
+   (which routes one side through the index, falsifiable in both
+   directions) and never `cat-file blob` against raw working-tree bytes
+   (which applies no filters). Path enumeration is NUL-delimited (§7B
+   D4).
+3. **Fixed reference.** `sealed_commit` is a full-length lowercase
+   hexadecimal object id, validated syntactically before resolution and
+   round-tripped against the resolved id; a symbolic ref, a tag, or an
+   abbreviated hash is `UNVERIFIABLE` (§7B D11, AC-74-5b). **Ancestry
+   relative to `HEAD` is not checked** — `HEAD`'s position is a
+   time-varying topology fact and must not affect a seal result (§7A
+   B-1).
+4. **Third input, pinned.** The git attribute stack governs *how* the
+   bytes are hashed and is therefore an input to the result alongside the
+   commit and the bytes. All five influences are neutralised: system
+   attributes (`GIT_ATTR_NOSYSTEM=1`), global (`-c core.attributesFile=`),
+   `$GIT_COMMON_DIR/info/attributes` (refused — `UNVERIFIABLE`, since git
+   offers no way to disable it), working-tree `.gitattributes` (verified
+   blob-for-blob against the sealing commit), and `attr.tree` /
+   `GIT_ATTR_SOURCE` source selection (`-c attr.tree=` **and** the
+   environment variable removed, since it overrides the config). A
+   `filter` attribute on a compared path is refused outright, its `clean`
+   driver being arbitrary code configured outside every artifact this
+   design verifies (§7B D7, AC-74-5a).
+5. **Shape refusals.** Symlinks, gitlinks, and — on Windows — NTFS
+   junctions and other reparse points are refused rather than followed
+   (§7B D8 and its F-3 follow-up).
+6. **Vocabulary and boundary.** The Seal reports `MATCHED` /
+   `MISMATCH` (findings `modified`, `missing`, `unexpected`, never
+   collapsed) / `UNVERIFIABLE`, distinct from `FreezeStatus`'s values.
+   It makes no closure judgement (AD-073 AC-15 as amended, item 7 above),
+   enters no gate or decision record (AC-74-10), writes nothing under
+   `research_archive/` (AC-74-7), and defeats accidental mutation,
+   committed edits, additions, and deletions — **not** history rewrite
+   and not loss of the repository (§5.2, AC-74-12).
+7. **Issuance is a recorded human act**, performed after the Decision →
+   Archive record is committed, and mechanised by nothing (§5.3, §9 item
+   3). Supersession is attributable, not preventable: a re-seal is a new
+   record naming its `supersedes` predecessor, the latest record by file
+   order governs, and the prior record stays readable (§5.5 C-2,
+   AC-74-6).
+
+**Relationship to AD-073.** AD-074 answers the question AD-073 named and
+deliberately declined to design — Non-goals item 1, seal issuance: format,
+author, location, write authority. It is *subordinate* to AD-073, not a
+replacement: AD-073 remains the architecture (three branches, one entry
+point, one owner per question, one authoritative hash record per file),
+and AD-074 fills the one hole that made the Seal branch a permanent stub
+and `OverallStatus.SOUND` structurally unreachable.
+
+Four amendments to AD-073's accepted text were required, and all four are
+already applied inline above, in the "Amended, 2026-07-26" block (items
+1–6) — the Responsibilities git-access bar, Decision part 5, the Status
+vocabulary and Architecture overview's "sealed manifest", and A8-C1's
+first platform-level machine-artifact exception at **A8-C12**. A fifth,
+AC-15 (items 7–8), and the trust-model corrections RF-1/RF-2/F-3 (items
+9–12) followed from the Increment 2 passes. **This acceptance adds no
+amendment of its own.** Where the design review's §7 prose and this
+document's amended AD-073 text differ, the amended AD-073 text governs,
+per §7's own statement.
+
+AD-074 does not reopen AD-062 (the Register is a new artifact class with
+one writer, not a second writer of an existing artifact), AD-063 (no
+Decision Chain authority), AD-059 (no `compose_transition()`
+participation), AD-072 (issuance is not a lifecycle transition and holds
+no authorization floor), or AD-030 (`archive_manifest.json`'s schema is
+untouched). `tools/check_import_boundaries.py` passes unmodified
+(AC-74-8).
+
+**Consequences.**
+
+- `ArchiveVerifier`'s Seal branch is real, so an archive's report can now
+  be `UNVERIFIABLE` for a *per-archive* reason ("no seal has been
+  issued") instead of a platform-wide one ("no format exists"). This is
+  what closes **R-3**'s design-and-implementation pair together with the
+  completeness branch (`da9ca34`) and the freeze branch (`414b07e`).
+- **R-4 / D-9 remain open**, and this entry must never be cited as
+  closing them. They close when Increment 3 issues `reference_h4`'s
+  Register record naming `29553b7`, adds the `SOUND` assertion, and drops
+  the expired exclusion clauses at
+  `tests/test_repository_integrity_snapshot.py`:100–106.
+- The Archive Seal Register is not protected by the seal it drives, and
+  nothing in AD-074 hashes or anchors it (design review §7B D5, §9 item
+  9). A committed tamper is visible to `git log`-based review only if a
+  human performs that review; an uncommitted working-tree rewrite leaves
+  no commit to review at all. Disclosed, unassigned, not closed.
+- `DatasetIntegrityChecker` is still unimplemented, so
+  `dataset_hashes/*.jsonl` remains excluded from the seal and covered by
+  a recorded hash that nothing verifies (§9 item 6). Inherited from
+  AD-073, not widened here.
+- The design review's §7C registry is now the authoritative definition of
+  the `BLOCKER 1`–`3` and `M-1`/`M-3`–`M-6` labels that appear as inline
+  comments in `core/governance/archive_seal.py` and
+  `tests/test_governance_archive_verifier.py`; `M-2` is recorded there as
+  an unused gap in that numbering, reserved rather than reassigned.
+
+**Rejected alternatives.** Recorded because §7 states the first of them
+as a genuine fork the accepting authority had to decide, not a rhetorical
+one:
+
+- *Candidate (b) — a second per-file SHA-256 hash fixture, parallel to
+  the Phase-0 one (R-4's own named candidate, and §7's stated fallback if
+  the AD-073 amendment were refused).* Rejected: it records a second
+  expected hash for bytes git already content-addresses, needs an
+  issuance component and a write authority, and — decisively — **must be
+  re-issued on every legitimate supersession**, so a tamper-evidence
+  control would have to be rewritten to stay true. Its one real advantage
+  is disclosed rather than dismissed: it survives squash/rebase merges,
+  branch deletion plus gc, and shallow clones, all of which make a
+  git-anchored seal `UNVERIFIABLE` with no archived byte having changed
+  (§7B D3).
+- *Candidate (a) — a manifest hash.* Rejected as a category error: a
+  hash-of-hashes is an encoding choice inside a design, not the design.
+- *Compare the working tree against `HEAD`.* Rejected: detects only
+  uncommitted mutation, so a committed edit — threat 2, the one that
+  matters — reads as clean.
+- *Treat "the archive is in git" as sufficient.* Rejected: it is exactly
+  the claim the Phase G decision §8 already refused, "immutable as a
+  matter of governance and unprotected as a matter of mechanism."
+- *Store the seal inside `research_archive/<project>/`.* Rejected as
+  structurally impossible, not merely undesirable: the sealing commit is
+  the commit that first contains the complete closed archive, so a record
+  naming it cannot exist inside the tree it seals (§3 S-1), and Phase G
+  §8 holds that directory immutable (S-2).
+
+**Adversarial self-review.**
+
+*What assumption could still be wrong?* That the sealing commit is
+unambiguous. It is, for `reference_h4`, because that archive closed in a
+single commit [verified]. A future cycle whose Archive phase spans
+several commits has no single "the archive is now complete" commit, and
+issuance would pick one by human judgment; `sealed_by` makes that
+judgment attributable, which is the most the design can do and less than
+mechanical.
+
+*What future implementation mistake could this AD accidentally allow?*
+Reading the sealing commit from anywhere other than the Register — from
+`HEAD`, from the terminal record's `commit_hash`, or from `git log` over
+the archive path. All three look reasonable and §3 S-1 proves the second
+is wrong: the terminal record's own `commit_hash` (`8bc3f93`) precedes
+the archive-closing commit (`29553b7`) and sees one fewer record, so a
+seal keyed to it would report `MISMATCH` on a sound archive.
+
+*Does accepting an AD after its implementation weaken this register?*
+Yes, and the honest answer is that it does so in a specific, bounded way:
+the acceptance could not have refused the design without also reverting
+shipped code, so it carried less optionality than an Increment-1-first
+acceptance would have. Two things bound the cost. The implementation was
+adversarially audited twice *as shipped* — which an acceptance before
+implementation could not have done, and which is what found the attribute
+stack, the index-mediated comparison, and the Windows junction hole. And
+the sequence is recorded here rather than smoothed over, so the register
+shows what happened. The correct lesson is the one §11 already stated and
+this cycle did not follow: increments exist to be taken in order, and an
+entry like this one is the repair, not the pattern.
+
+*Is accepting AD-074 a way of appearing to close R-4 without closing it?*
+That is the sharpest objection available, and it is why *Acceptance
+basis* item 3 and *Consequences* both state the negative explicitly. If
+Increment 3 never lands, this entry will have made the register longer
+without making `reference_h4` any safer — the same failure AD-073
+disclosed against itself, repeated here rather than assumed learned.

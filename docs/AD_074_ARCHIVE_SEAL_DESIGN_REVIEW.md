@@ -1,13 +1,50 @@
 # Archive Seal — Design Review and Proposed AD-074
 
-**Status:** Design review. **Reviewed 2026-07-26: Accept with conditions.**
+**Status:** **Accepted as AD-074, 2026-07-26** — recorded in
+`docs/ARCHITECTURE_DECISIONS.md` under **AD-074**, which is the accepted
+decision; this document remains the design review that entry accepts.
+See the **Acceptance record** immediately below for the commits that
+acceptance covers and for what it does and does not claim.
+
+**Review history.** **Reviewed 2026-07-26: Accept with conditions.**
 The conditions are remediated below (§7, §7A, §7B, and the count correction
-in §2); this document is **not yet formally accepted as an AD** pending that
-remediation's own review. One architecture document,
+in §2). Until the acceptance recorded above, this document read "not yet
+formally accepted as an AD pending that remediation's own review" — and it
+still read that way after the Increment 2 implementation landed. That gap
+is what the AD-074 register entry closes, and it is why that entry records
+acceptance *after* implementation rather than before it. One architecture
+document,
 `docs/ARCHITECTURE_DECISIONS.md`, **is** changed — narrowly, by the four
 amendments §7 enumerates (AD-073's Responsibilities, Decision part 5, AC-3,
 Status vocabulary, the Architecture overview table, and new **A8-C12**) —
 and, under the hardening pass below, by one further amendment to AC-15.
+
+**Acceptance record (2026-07-26).** Three commits, in the order they were
+made, stated as the audit trail rather than as a sequence anyone planned:
+
+| Commit | What it did |
+|---|---|
+| `2392de2` | `feat(governance): implement AD-074 archive seal hardening` — **Increment 2** (§11): `core/governance/archive_seal.py`, the Seal branch in `core/governance/archive_verifier.py`, the empty `docs/archive_seal_register.jsonl`, this document, and the AD-073 amendment blocks + **A8-C12** in `docs/ARCHITECTURE_DECISIONS.md`. |
+| `a8f031b` | `docs(governance): clarify AD-074 hardening references and register limits` — documentation-only correction of Increment 2: §7C's `BLOCKER`/`M` registry and the D5 rewording. No behaviour changed. |
+| *this commit* | `docs(governance): formally accept AD-074 archive seal decision` — adds the **AD-074 entry to `docs/ARCHITECTURE_DECISIONS.md`**, sets this document's status to accepted, and fixes D1's symbol names, D5's forward reference, and §7B's heading range. Documentation only. |
+
+What that trail means, stated plainly:
+
+- **`2392de2` and `a8f031b` implemented Increment 2** — the Seal branch and
+  the Register reader, with the Register left empty. They did not, and
+  could not, perform Increment 1.
+- **This acceptance closes the Increment 1 documentation gap.** §11's
+  Increment 1 ("accept AD-074 + the AD-073 AC-3 amendment", documentation
+  only) was never performed as its own act: the AD-073 amendments it names
+  were applied inside the implementation commit, and no AD-074 register
+  entry was ever written. This commit writes that entry. It records
+  acceptance **as of today**, after implementation; it does **not** claim
+  Increment 1 preceded Increment 2, and no reader may cite it as evidence
+  that it did.
+- **Increment 3 remains future work.** No Register record has been issued,
+  `docs/archive_seal_register.jsonl` is empty (0 bytes) **[verified]**, no
+  archive can report `SOUND`, and **R-4 / D-9 stay live** — exactly as §11
+  warns.
 
 **Amended 2026-07-26 — Increment 2 governance hardening pass.** A second
 adversarial audit, against the *shipped*
@@ -698,7 +735,20 @@ duplication-avoidance.
 
 ---
 
-## 7B. Hidden assumptions (D1–D6)
+## 7B. Hidden assumptions (D1–D12)
+
+*(Heading range corrected 2026-07-26 at acceptance: it read "D1–D6" while
+the section had held D1–D12 since the Increment 2 hardening pass added
+D7–D12.)* **Order of items, stated because it is not sequential and is
+deliberately left alone:** D1, D2, D3, D4, then the hardening pass's
+D7, D8 (with its Windows follow-up **F-3**), D9, D10, D11, D12, then the
+original D5 and D6 last. D7–D12 were appended where the pass wrote them
+rather than interleaved, and D5/D6 are not renumbered or moved, because
+every cross-reference elsewhere in this document and in
+`core/governance/archive_seal.py` cites these items by label. **F-3** is
+a label local to this section; `ARCHITECTURE_DECISIONS.md`'s AD-073 entry
+carries an unrelated **F-3** from the 2026-07-25 correction pass, and its
+item 11 already records that collision.
 
 **D1 — project ID resolution.** `project_id` comes only from
 `archive_manifest.json`'s own `project_id` field. It is never taken from:
@@ -725,7 +775,12 @@ sealing commit to look up the `project_id` used to find it. "Read at the
 sealing commit" is not merely unimplemented for D1; it describes a
 lookup sequence with no valid starting point.
 
-The implementation (`_read_project_id`, `core/governance/archive_seal.py`)
+The implementation (`_read_archive_identity`,
+`core/governance/archive_seal.py` — *symbol name corrected 2026-07-26 at
+acceptance; no such function as `_read_project_id` exists, and the
+function that does this work also reads `lifecycle_version` for the
+legacy refusal AC-74-9 requires, which is why it is named for the
+identity rather than for the one field*)
 resolves `project_id` from the **working-tree** copy of
 `archive_manifest.json` at `archive_dir` — the only copy available before
 any commit is known — and this is the corrected rule, not merely the
@@ -737,15 +792,22 @@ implementation's own workaround: **D1 lookup sequence, stated explicitly.**
 2. Look up that `project_id`'s latest record in the Archive Seal Register
    → `sealed_commit` (§5.4 step 1, C-2's "latest by file order" rule).
 3. Every subsequent read — the dataset-manifest exclusion set (D2), the
-   sealed tree's path enumeration, the per-file `git diff` comparison —
-   is anchored to `sealed_commit`, resolved in step 2, never to the
+   sealed tree's path enumeration, the per-file blob-identity comparison
+   (D4's 2026-07-26 amendment; the original text here said "`git diff`",
+   which that amendment replaced — *corrected 2026-07-26 at acceptance*)
+   — is anchored to `sealed_commit`, resolved in step 2, never to the
    working tree again.
 
 This does not weaken the trust boundary D1's opening paragraph states,
 for a reason worth making explicit rather than merely asserted: a working
 tree `project_id` edited to name a *different* project's Register record
-does not launder a tampered archive to `MATCHED`. `_ls_tree_paths` and
-the working-tree walk in `verify_seal` are both scoped to
+does not launder a tampered archive to `MATCHED`. `_sealed_tree_entries`
+(*symbol name corrected 2026-07-26 at acceptance; `_ls_tree_paths` does
+not exist, and the shipped function returns `{path: (mode, object_id)}`
+rather than a bare path set, because D8's symlink/gitlink refusal needs
+the mode*) and
+the working-tree walk in `verify_seal` (`_working_tree_entries`) are both
+scoped to
 `archive_relative_prefix` — `archive_dir`'s own repository-relative path,
 independent of whatever `project_id` resolved to — so a mismatched
 lookup finds the *wrong project's* files (or none) at `sealed_commit`
@@ -1190,10 +1252,18 @@ Register's *shape* — canonical JSONL, schema, supersession — not its
 it to a commit the way `sealed_commit` anchors an archive. Closing it would
 require giving the Register the same kind of self-protection
 `transition_records.jsonl` already has — a hash-chained, tamper-evident
-issuance model for the Register itself. That is the planned remedy, tracked
-as further work (§9), not one this design closes — and it is a distinct
-future increment from this document's own §11 Increment 1–3 sequence, which
-sequences the Seal's rollout, not a future Register-hardening pass.
+issuance model for the Register itself. That is the *shape* of the remedy,
+not a commitment that it is the one chosen.
+
+**Forward reference corrected 2026-07-26 at acceptance.** This paragraph
+previously said the remedy was "tracked as further work (§9)" when §9
+contained no such item — a forward reference that resolved to nothing.
+§9 now carries it as **item 9, "Register self-integrity"**, stated there
+as what it actually is: a disclosed residual gap that AD-074 does not
+close, **unassigned** — no AD number is reserved for it, no increment
+owns it, and no work is scheduled. It remains distinct from this
+document's own §11 Increment 1–3 sequence, which sequences the Seal's
+rollout and not a future Register-hardening pass.
 
 **D6 — `AC-74-13`, added to §8 below.** `OverallStatus.SOUND` means, and
 means only, "the sealed archive paths match the sealing commit tree." It
@@ -1338,6 +1408,23 @@ Stated as problems AD-074 deliberately does **not** solve.
    archives. Untouched, unedited, unextended.
 8. **Chain anchoring (R-5/G-4), reproduction, evidence quality,
    authorization floors.** All unchanged.
+9. **Register self-integrity.** *(Added 2026-07-26 at acceptance, as the
+   destination of §7B D5's forward reference.)* The Archive Seal Register
+   is a governance **control input**, not a sealed artifact: nothing in
+   this design hashes it, anchors it to a commit, or verifies its own
+   history, and `ArchiveVerifier` trusts its latest record for a
+   `project_id` at face value. §7B D5 states the two cases and their
+   asymmetry — a *committed* Register edit is visible in `git log -p` /
+   `git blame` **if a human reviews that history**, which nothing here
+   automates, while an *uncommitted* working-tree rewrite leaves no
+   commit for that review to reach at all. **This is a real residual gap
+   and is disclosed, not closed**, on the same terms as item 6. Closing
+   it would take a hash-chained, tamper-evident issuance model for the
+   Register itself, of the kind `transition_records.jsonl` already has.
+   **No AD number is reserved for that work, no increment owns it, and
+   nothing schedules it** — this item exists so that the gap is recorded
+   as unassigned rather than referred onward to a plan that does not
+   exist.
 
 ---
 
