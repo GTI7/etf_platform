@@ -30,13 +30,14 @@ why `test_fixture_and_seal_coverage_are_disjoint` exists, and why the
 exclusion clauses in the snapshot test were re-based onto Seal authority
 rather than dropped.
 
-**What this file does not assert.** `OverallStatus.SOUND` means exactly what
-AD-074 AC-74-13 says: the completeness check passed and the sealed archive
-paths match the sealing commit tree. It is not a claim about dataset-hash
-verification (`DatasetIntegrityChecker` is still unimplemented, so the three
-`dataset_hashes/*.jsonl` files are excluded from the content comparison and
-covered by a recorded hash that nothing verifies), about research
-reproducibility, or about experiment validity. Nor does the Seal defeat
+**What this file does not assert.** `OverallStatus.SOUND` now also requires
+the dataset branch (`core.governance.dataset_integrity`), which recomputes
+the three `dataset_hashes/*.jsonl` files' SHA-256 and row counts against the
+`dataset_manifest.json` read at the sealing commit -- so AC-74-13's
+dataset-hash carve-out no longer applies: those bytes were "covered by a
+recorded hash that nothing verifies" only for as long as
+`DatasetIntegrityChecker` was unimplemented. `SOUND` remains no claim about
+research reproducibility or experiment validity. Nor does the Seal defeat
 history rewrite or the loss of the repository (AD-074 §5.2) -- see
 `_unverifiable_guidance` below, which is where that ceiling is turned into
 an actionable failure message instead of a mystery.

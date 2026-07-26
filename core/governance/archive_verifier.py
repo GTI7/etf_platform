@@ -43,6 +43,39 @@ resolved for ``FreezeVerifier``).
   them, and no wrapper type is introduced. A caller that does not
   request freeze verification gets no freeze branch: ``ArchiveReport.freeze``
   is ``None`` and the branch takes no part in ``overall_status``.
+- **Dataset integrity** -- delegates to
+  ``core.governance.dataset_integrity.verify_dataset_integrity()``,
+  which recomputes each ``dataset_hashes/*.jsonl`` snapshot's SHA-256 and
+  row count against the ``dataset_manifest.json`` **read at the sealing
+  commit**. This is the branch AD-073 Decision part 8 delegated when it
+  excluded those bytes from the Seal's coverage, and AD-073 *Future
+  work* left as a decision between orchestration and independence;
+  orchestration is what is built here, so the exclusion is now a handoff
+  to a control that exists rather than to a named absence. Invoked
+  unconditionally, like the Seal: the subject is archive-local bytes
+  against a value fixed at archive close, which is the Seal's stability
+  property, not the freeze branch's. This module contains no hash
+  algorithm of its own, exactly as it contains no seal algorithm (AC-2).
+
+  **Disclosed cost: the sealing commit is resolved twice, deliberately.**
+  ``_verify_seal`` and ``_verify_dataset_branch`` are two independently
+  invoked branches, each calling ``archive_seal.resolve_sealing_commit()``
+  on its own -- once inside ``archive_seal.verify_seal()``, once inside
+  ``dataset_integrity.verify_dataset_integrity()`` -- so every archive
+  verified with both branches present pays the Register read, the
+  syntactic and round-trip commit checks, and the ``git merge-base
+  --is-ancestor`` reachability check (§7A B-1, reversed) twice over,
+  as two separate sets of ``git`` subprocess invocations. This is the
+  accepted price of the one-authoritative-resolution rule the
+  ``SealingCommit`` dataclass exists to keep: threading a single resolved
+  ``SealingCommit`` between the two branches would require this module to
+  resolve it once at the top of ``verify_archive()`` and pass it down,
+  which would make ``ArchiveVerifier`` itself perform sealing-commit
+  resolution -- a duplicate-source-of-truth risk one level up, and the
+  exact failure Decision part 8 exists to prevent, traded for a
+  micro-optimisation over a handful of read-only, local ``git``
+  invocations. Not a performance concern at today's archive counts and
+  not planned to be revisited unless it becomes one.
 
 **Read-only, always.** Nothing here opens a file for writing. Closure and
 applicability determination read ``archive_manifest.json`` (plain JSON
@@ -71,13 +104,26 @@ caller did not request one) takes no part in this computation -- it is
 not the same fact as an invoked branch reporting ``UNVERIFIABLE``.
 
 **What ``OverallStatus.SOUND`` means, and does not mean (AD-074
-AC-74-13).** With a real Seal branch, ``SOUND`` is reachable for the
-first time -- but it means exactly "the completeness check passed (or
-was exempt) and the sealed archive paths match the sealing commit tree
-(and, if requested, the freeze claim verified)". It does not mean, and
-must never be reported as meaning, that dataset-hash verification
-(``DatasetIntegrityChecker`` is still unimplemented), research
-reproducibility, or experiment validity have been confirmed.
+AC-74-13, narrowed 2026-07-26 by the dataset branch).** ``SOUND`` means
+exactly "the completeness check passed (or was exempt), the sealed
+archive paths match the sealing commit tree, every dataset snapshot
+matches the hash and row count sealed for it, and -- if the caller
+requested it -- the freeze claim verified". It does not mean, and must
+never be reported as meaning, that research reproducibility or
+experiment validity have been confirmed; those remain Standard SS4's
+human question. AC-74-13's dataset-hash carve-out is discharged rather
+than restated: the reason it existed was that
+``DatasetIntegrityChecker`` was unimplemented.
+
+**``SOUND`` and the freeze branch.** A caller that does not request
+freeze verification can still reach ``SOUND``, because AD-073's
+aggregation rule makes an uninvoked freeze branch absent rather than
+failing, deliberately: freeze binding is the one branch whose subject is
+*live repository state*, so folding it into the archive's own verdict
+would make that verdict change with facts outside the archive (AD-073
+Architecture overview, "the third row is the load-bearing one"). A
+governance caller that wants all four dimensions asserted at once passes
+``verify_freeze=True``, which is what the standing CI check does.
 """
 
 from __future__ import annotations
@@ -89,6 +135,11 @@ from pathlib import Path
 from typing import Any
 
 from core.governance import archive_seal
+from core.governance.dataset_integrity import (
+    DatasetIntegrityReport,
+    DatasetIntegrityStatus,
+    verify_dataset_integrity as _verify_dataset_integrity,
+)
 from core.governance.decision_recorder import (
     ARCHIVE_MANIFEST_FILENAME,
     TRANSITION_RECORDS_FILENAME,
@@ -221,18 +272,26 @@ class ArchiveReport:
     archive_dir: Path
     completeness: CompletenessReport
     seal: SealReport
+    dataset: DatasetIntegrityReport
     freeze: VerificationResult | None = None
 
     @property
     def overall_status(self) -> OverallStatus:
         freeze_status = self.freeze.status if self.freeze is not None else None
-        return derive_overall_status(self.completeness.status, self.seal.status, freeze_status)
+        return derive_overall_status(
+            self.completeness.status,
+            self.seal.status,
+            freeze_status,
+            dataset=self.dataset.status,
+        )
 
 
 def derive_overall_status(
     completeness: CompletenessStatus,
     seal: SealStatus,
     freeze: FreezeStatus | None = None,
+    *,
+    dataset: DatasetIntegrityStatus,
 ) -> OverallStatus:
     """AD-073's *Overall status aggregation rule*. Fixed precedence,
     first match wins: confirmed problem, then unverifiable, then
@@ -240,17 +299,32 @@ def derive_overall_status(
     (AD-073 Architecture overview). ``freeze=None`` means the branch was
     not invoked (the caller did not request freeze verification) and
     takes no part in the computation -- not the same fact as an invoked
-    branch reporting ``FreezeStatus.UNVERIFIABLE``."""
+    branch reporting ``FreezeStatus.UNVERIFIABLE``.
+
+    ``dataset`` is the fourth branch (AD-073 *Future work*,
+    ``DatasetIntegrityChecker``, resolved in favour of orchestration).
+    It is keyword-only and has no default: unlike the freeze branch, this
+    one is invoked unconditionally, exactly as the Seal branch is, so
+    there is no "not invoked" state for it to default to, and a caller
+    reasoning about the rule "in isolation" would otherwise silently
+    reason about a branch this module no longer allows to be absent. Its
+    two non-good values slot into the *existing* precedence rather than
+    extending it -- ``DRIFTED`` is a confirmed problem alongside
+    ``FreezeStatus.DRIFTED``, ``FAILED`` is this branch's spelling of
+    "could not reach a verdict" -- so no fourth outcome, weighting, or
+    partial-credit case is introduced, which AD-073's rule forbids."""
     if (
         completeness is CompletenessStatus.INCOMPLETE
         or seal is SealStatus.MISMATCH
         or freeze is FreezeStatus.DRIFTED
+        or dataset is DatasetIntegrityStatus.DRIFTED
     ):
         return OverallStatus.UNSOUND
     if (
         completeness is CompletenessStatus.UNVERIFIABLE
         or seal is SealStatus.UNVERIFIABLE
         or freeze is FreezeStatus.UNVERIFIABLE
+        or dataset is DatasetIntegrityStatus.FAILED
     ):
         return OverallStatus.UNVERIFIABLE
     return OverallStatus.SOUND
@@ -508,6 +582,26 @@ def _verify_seal(archive_dir: Path, *, repo_root: Path | None) -> SealReport:
     )
 
 
+def _verify_dataset_branch(archive_dir: Path, *, repo_root: Path | None) -> DatasetIntegrityReport:
+    """Delegates entirely to ``dataset_integrity.verify_dataset_integrity()``
+    (AD-073 Decision part 8): this function computes no hash of its own,
+    exactly as ``_verify_seal`` computes none. Invoked unconditionally,
+    alongside completeness and the Seal -- the dataset snapshots are
+    archive-local bytes compared against an expected value fixed at the
+    sealing commit, so this branch has the Seal's stability properties,
+    not the freeze branch's, and nothing about it is the caller's to
+    elect. Translates the one environmental exception the same way the
+    Seal and freeze branches already do."""
+    try:
+        return _verify_dataset_integrity(archive_dir, repo_root=repo_root)
+    except archive_seal.NotAGitRepositoryError as exc:
+        return DatasetIntegrityReport(
+            status=DatasetIntegrityStatus.FAILED,
+            findings=(),
+            reason=f"dataset integrity verification environment error: {exc}",
+        )
+
+
 def verify_archive(
     archive_dir: Path,
     *,
@@ -547,5 +641,6 @@ def verify_archive(
         archive_dir=resolved_dir,
         completeness=_verify_completeness(resolved_dir),
         seal=_verify_seal(resolved_dir, repo_root=repo_root),
+        dataset=_verify_dataset_branch(resolved_dir, repo_root=repo_root),
         freeze=_verify_freeze_branch(resolved_dir, repo_root=repo_root) if verify_freeze else None,
     )

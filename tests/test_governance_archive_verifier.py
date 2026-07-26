@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import hashlib
 import json
 import os
 import stat
@@ -20,6 +21,7 @@ from core.governance.archive_verifier import (
     derive_overall_status,
     verify_archive,
 )
+from core.governance.dataset_integrity import DatasetIntegrityStatus
 
 _REQUIRED_FILES = ("hypothesis.md", "methodology.md", "dataset_manifest.json", "decision_log.md")
 _REQUIRED_DIRS = ("dataset_hashes", "experiment_results", "reviewer_reports")
@@ -481,23 +483,62 @@ def test_transition_records_replaced_by_directory_is_unverifiable_not_raised(tmp
 
 
 def test_overall_status_precedence() -> None:
+    # `dataset` has no default (it is invoked unconditionally, exactly as
+    # the Seal branch is) -- every call below pins it to VERIFIED so this
+    # test's own subject, Completeness/Seal precedence, stays isolated
+    # from the dataset branch's precedence, covered separately by
+    # `test_derive_overall_status_dataset_branch_precedence`.
     # UNSOUND: a confirmed problem in either branch wins outright,
     # including when both branches report a problem simultaneously.
-    assert derive_overall_status(CompletenessStatus.INCOMPLETE, SealStatus.MATCHED) is OverallStatus.UNSOUND
-    assert derive_overall_status(CompletenessStatus.COMPLETE, SealStatus.MISMATCH) is OverallStatus.UNSOUND
-    assert derive_overall_status(CompletenessStatus.INCOMPLETE, SealStatus.MISMATCH) is OverallStatus.UNSOUND
+    assert (
+        derive_overall_status(CompletenessStatus.INCOMPLETE, SealStatus.MATCHED, dataset=DatasetIntegrityStatus.VERIFIED)
+        is OverallStatus.UNSOUND
+    )
+    assert (
+        derive_overall_status(CompletenessStatus.COMPLETE, SealStatus.MISMATCH, dataset=DatasetIntegrityStatus.VERIFIED)
+        is OverallStatus.UNSOUND
+    )
+    assert (
+        derive_overall_status(CompletenessStatus.INCOMPLETE, SealStatus.MISMATCH, dataset=DatasetIntegrityStatus.VERIFIED)
+        is OverallStatus.UNSOUND
+    )
     # UNSOUND outranks UNVERIFIABLE: a confirmed problem in one branch
     # beats an unresolved verdict in the other.
-    assert derive_overall_status(CompletenessStatus.INCOMPLETE, SealStatus.UNVERIFIABLE) is OverallStatus.UNSOUND
-    assert derive_overall_status(CompletenessStatus.UNVERIFIABLE, SealStatus.MISMATCH) is OverallStatus.UNSOUND
+    assert (
+        derive_overall_status(
+            CompletenessStatus.INCOMPLETE, SealStatus.UNVERIFIABLE, dataset=DatasetIntegrityStatus.VERIFIED
+        )
+        is OverallStatus.UNSOUND
+    )
+    assert (
+        derive_overall_status(
+            CompletenessStatus.UNVERIFIABLE, SealStatus.MISMATCH, dataset=DatasetIntegrityStatus.VERIFIED
+        )
+        is OverallStatus.UNSOUND
+    )
     # UNVERIFIABLE: no confirmed problem, but at least one branch
     # could not reach a verdict.
-    assert derive_overall_status(CompletenessStatus.UNVERIFIABLE, SealStatus.MATCHED) is OverallStatus.UNVERIFIABLE
-    assert derive_overall_status(CompletenessStatus.COMPLETE, SealStatus.UNVERIFIABLE) is OverallStatus.UNVERIFIABLE
-    assert derive_overall_status(CompletenessStatus.EXEMPT, SealStatus.UNVERIFIABLE) is OverallStatus.UNVERIFIABLE
+    assert (
+        derive_overall_status(CompletenessStatus.UNVERIFIABLE, SealStatus.MATCHED, dataset=DatasetIntegrityStatus.VERIFIED)
+        is OverallStatus.UNVERIFIABLE
+    )
+    assert (
+        derive_overall_status(CompletenessStatus.COMPLETE, SealStatus.UNVERIFIABLE, dataset=DatasetIntegrityStatus.VERIFIED)
+        is OverallStatus.UNVERIFIABLE
+    )
+    assert (
+        derive_overall_status(CompletenessStatus.EXEMPT, SealStatus.UNVERIFIABLE, dataset=DatasetIntegrityStatus.VERIFIED)
+        is OverallStatus.UNVERIFIABLE
+    )
     # SOUND: every invoked branch reports its confirmed-good value.
-    assert derive_overall_status(CompletenessStatus.COMPLETE, SealStatus.MATCHED) is OverallStatus.SOUND
-    assert derive_overall_status(CompletenessStatus.EXEMPT, SealStatus.MATCHED) is OverallStatus.SOUND
+    assert (
+        derive_overall_status(CompletenessStatus.COMPLETE, SealStatus.MATCHED, dataset=DatasetIntegrityStatus.VERIFIED)
+        is OverallStatus.SOUND
+    )
+    assert (
+        derive_overall_status(CompletenessStatus.EXEMPT, SealStatus.MATCHED, dataset=DatasetIntegrityStatus.VERIFIED)
+        is OverallStatus.SOUND
+    )
 
 
 # --- Phase B: FreezeVerifier integration -----------------------------------
@@ -658,33 +699,58 @@ def test_open_cycle_with_valid_freeze_claim_still_verifies_freeze(git_repo: Path
 
 
 def test_overall_status_precedence_with_freeze() -> None:
+    # `dataset` has no default, for the same reason noted in
+    # `test_overall_status_precedence`; pinned to VERIFIED throughout so
+    # this test's own subject, the freeze branch, stays isolated.
     # Freeze DRIFTED is a confirmed problem -- UNSOUND, even when both
     # other branches are confirmed-good.
     assert (
-        derive_overall_status(CompletenessStatus.COMPLETE, SealStatus.MATCHED, FreezeStatus.DRIFTED)
+        derive_overall_status(
+            CompletenessStatus.COMPLETE,
+            SealStatus.MATCHED,
+            FreezeStatus.DRIFTED,
+            dataset=DatasetIntegrityStatus.VERIFIED,
+        )
         is OverallStatus.UNSOUND
     )
     # A confirmed problem elsewhere still wins even when freeze is VERIFIED.
     assert (
-        derive_overall_status(CompletenessStatus.INCOMPLETE, SealStatus.MATCHED, FreezeStatus.VERIFIED)
+        derive_overall_status(
+            CompletenessStatus.INCOMPLETE,
+            SealStatus.MATCHED,
+            FreezeStatus.VERIFIED,
+            dataset=DatasetIntegrityStatus.VERIFIED,
+        )
         is OverallStatus.UNSOUND
     )
     # Freeze UNVERIFIABLE, no confirmed problem elsewhere -- UNVERIFIABLE.
     assert (
-        derive_overall_status(CompletenessStatus.COMPLETE, SealStatus.MATCHED, FreezeStatus.UNVERIFIABLE)
+        derive_overall_status(
+            CompletenessStatus.COMPLETE,
+            SealStatus.MATCHED,
+            FreezeStatus.UNVERIFIABLE,
+            dataset=DatasetIntegrityStatus.VERIFIED,
+        )
         is OverallStatus.UNVERIFIABLE
     )
-    # All three branches confirmed-good -- SOUND.
+    # All four branches confirmed-good -- SOUND.
     assert (
-        derive_overall_status(CompletenessStatus.COMPLETE, SealStatus.MATCHED, FreezeStatus.VERIFIED)
+        derive_overall_status(
+            CompletenessStatus.COMPLETE,
+            SealStatus.MATCHED,
+            FreezeStatus.VERIFIED,
+            dataset=DatasetIntegrityStatus.VERIFIED,
+        )
         is OverallStatus.SOUND
     )
     # freeze=None (branch not invoked) takes no part in the computation --
-    # identical to the two-argument call, confirming an absent branch is
+    # identical to the freeze-omitted call, confirming an absent branch is
     # never conflated with an invoked branch reporting UNVERIFIABLE.
     assert derive_overall_status(
-        CompletenessStatus.COMPLETE, SealStatus.MATCHED, None
-    ) is derive_overall_status(CompletenessStatus.COMPLETE, SealStatus.MATCHED)
+        CompletenessStatus.COMPLETE, SealStatus.MATCHED, None, dataset=DatasetIntegrityStatus.VERIFIED
+    ) is derive_overall_status(
+        CompletenessStatus.COMPLETE, SealStatus.MATCHED, dataset=DatasetIntegrityStatus.VERIFIED
+    )
 
 
 # --- Phase B audit: F-1, F-2, F-3 -------------------------------------------
@@ -835,6 +901,18 @@ def test_highest_sequence_number_wins_regardless_of_file_order(git_repo: Path) -
 # --- AD-074 Increment 2: Archive Seal branch --------------------------------
 
 
+# The exact bytes every synthetic archive's dataset snapshots hold. A
+# `bytes` literal, not a `str` one: `Path.write_text()` translates "\n"
+# to os.linesep, so on Windows these files were silently CRLF -- which
+# both breaks `read_canonical_jsonl` and makes the recorded hash
+# platform-dependent. Canonical JSONL is LF-only by definition
+# (`core.governance.canonical_jsonl`), and the real archives get that
+# from `.gitattributes`'s `*.jsonl -text`; a fixture must not be laxer
+# than the format it stands in for.
+_SEAL_TEST_SNAPSHOT_BYTES = b'{"row": 1}\n'
+_SEAL_TEST_SNAPSHOT_HASH = "sha256:" + hashlib.sha256(_SEAL_TEST_SNAPSHOT_BYTES).hexdigest()
+
+
 def _dataset_manifest_dict(project_id: str) -> dict[str, object]:
     def entry(source_table: str) -> dict[str, object]:
         return {
@@ -843,7 +921,12 @@ def _dataset_manifest_dict(project_id: str) -> dict[str, object]:
             "source_table": source_table,
             "row_count": 1,
             "snapshot_path": f"dataset_hashes/{source_table}.jsonl",
-            "content_hash": "sha256:" + "a" * 64,
+            # The snapshot's *real* hash, not a placeholder. A manifest
+            # whose declared hash never matched its own snapshot made the
+            # fixture internally inconsistent, which was invisible while
+            # nothing verified those bytes and is a permanent DRIFTED
+            # dataset branch now that something does.
+            "content_hash": _SEAL_TEST_SNAPSHOT_HASH,
             "schema_version": 1,
         }
 
@@ -870,7 +953,7 @@ def _write_seal_test_archive(repo_root: Path, project_id: str) -> Path:
     dataset_hashes_dir = archive_dir / "dataset_hashes"
     dataset_hashes_dir.mkdir(exist_ok=True)
     for table in ("ETF", "PriceBar", "TradingSession"):
-        (dataset_hashes_dir / f"{table}.jsonl").write_text('{"row": 1}\n', encoding="utf-8")
+        (dataset_hashes_dir / f"{table}.jsonl").write_bytes(_SEAL_TEST_SNAPSHOT_BYTES)
     (archive_dir / "dataset_manifest.json").write_text(
         json.dumps(_dataset_manifest_dict(project_id)), encoding="utf-8"
     )
@@ -2776,3 +2859,62 @@ def test_seal_still_matched_when_head_moves_on_a_descendant(git_repo: Path) -> N
 
     assert after.seal.status is SealStatus.MATCHED
     assert after.overall_status is before.overall_status
+
+
+def test_derive_overall_status_dataset_branch_precedence() -> None:
+    """The dataset branch enters AD-073's *existing* precedence rather
+    than extending it: DRIFTED is a confirmed problem alongside
+    `FreezeStatus.DRIFTED`, FAILED is this branch's spelling of "could
+    not reach a verdict". No fourth outcome, no weighting, no partial
+    credit -- which the rule forbids."""
+    # 1. Confirmed problem outranks everything, including a clean Seal.
+    assert (
+        derive_overall_status(
+            CompletenessStatus.COMPLETE,
+            SealStatus.MATCHED,
+            FreezeStatus.VERIFIED,
+            dataset=DatasetIntegrityStatus.DRIFTED,
+        )
+        is OverallStatus.UNSOUND
+    )
+    # 2. Then unverifiable.
+    assert (
+        derive_overall_status(
+            CompletenessStatus.COMPLETE,
+            SealStatus.MATCHED,
+            dataset=DatasetIntegrityStatus.FAILED,
+        )
+        is OverallStatus.UNVERIFIABLE
+    )
+    # ... but never over a confirmed problem elsewhere.
+    assert (
+        derive_overall_status(
+            CompletenessStatus.INCOMPLETE,
+            SealStatus.MATCHED,
+            dataset=DatasetIntegrityStatus.FAILED,
+        )
+        is OverallStatus.UNSOUND
+    )
+    # 3. Confirmed good only when every invoked branch is.
+    assert (
+        derive_overall_status(
+            CompletenessStatus.COMPLETE,
+            SealStatus.MATCHED,
+            dataset=DatasetIntegrityStatus.VERIFIED,
+        )
+        is OverallStatus.SOUND
+    )
+
+
+def test_archive_report_never_omits_the_dataset_branch(git_repo: Path) -> None:
+    """Unlike freeze, the dataset branch is not the caller's to elect --
+    its subject is archive-local bytes against a value fixed at archive
+    close, which is the Seal's stability property. AD-073's "exactly one
+    branch can be absent, and for exactly one reason" still holds, and
+    that branch is still freeze."""
+    archive_dir, _ = _sealed_archive(git_repo, "dataset_branch_present_project")
+
+    report = verify_archive(archive_dir, repo_root=git_repo)
+
+    assert report.dataset is not None
+    assert report.freeze is None

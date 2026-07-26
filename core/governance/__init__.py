@@ -19,10 +19,15 @@ against a sealing commit named by the Archive Seal Register,
 record as of AD-075 -- ``reference_h4``, sealed at commit ``29553b7`` --
 so that archive reports ``MATCHED`` and every other real archive reports
 ``UNVERIFIABLE`` for the per-archive reason "no seal has been issued"),
-and a freeze branch (invoked
-only when the caller requests it, delegating to
-``freeze_verifier.verify_freeze`` unmodified). ``DatasetIntegrityChecker``
-and ``ReproducibilityChecker`` remain unimplemented.
+a dataset-integrity branch
+(``dataset_integrity.verify_dataset_integrity`` -- each
+``dataset_hashes/*.jsonl`` snapshot's SHA-256 and row count against the
+``dataset_manifest.json`` read at the sealing commit; this is
+``DatasetIntegrityChecker``, and it closes the delegation AD-073
+Decision part 8 made when it put those bytes outside the Seal's
+coverage), and a freeze branch (invoked only when the caller requests
+it, delegating to ``freeze_verifier.verify_freeze`` unmodified).
+``ReproducibilityChecker`` remains unimplemented.
 
 Decision logging is deliberately not part of this package's planned
 surface. ``docs/PLATFORM_ARCHITECTURE_V1.md``'s own ``DecisionLogger``
