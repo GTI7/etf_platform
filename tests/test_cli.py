@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import date, datetime, timezone
 from decimal import Decimal
@@ -287,6 +288,68 @@ def test_format_etf_analysis_report_handles_no_dimension_scores_and_no_max_drawd
     assert "Max drawdown: N/A" in output
 
 
+_FORBIDDEN_WORDS = (
+    "recommend",
+    "buy",
+    "sell",
+    "best",
+    "worst",
+    "should",
+    "good",
+    "bad",
+    "strong",
+    "weak",
+)
+
+# Opaque machine identifiers -- generated profile ids, run ids, ISO dates
+# -- are values the CLI echoes back, not prose it authors, so they are
+# removed before the guard below reads the text. Without this the guard
+# is flaky by construction: `bad` is spellable in hex digits (b, a, d),
+# and the generated id `fd311c41b4bad897ac24cad069df0` failed this test
+# once for that reason alone. `bad` is the only forbidden word this can
+# happen to -- every other one contains a non-hex letter -- but a guard
+# that fails on a coin flip teaches people to re-run it, which is worse
+# than the flake.
+_OPAQUE_IDENTIFIER = re.compile(r"\b[0-9a-f-]{8,}\b")
+
+
+def _advisory_language_in(text: str) -> list[str]:
+    """Every forbidden word occurring as a *word* in `text`, ignoring
+    opaque machine identifiers.
+
+    Matching is anchored at a word boundary on the **left only**, which
+    preserves what the original bare-substring check was really after:
+    stems still count, so `recommendation`, `stronger` and `selling` are
+    exactly as forbidden as their roots. What no longer counts is a
+    letter sequence buried inside a generated identifier, which is not a
+    word the CLI chose to write."""
+    prose = _OPAQUE_IDENTIFIER.sub(" ", text.lower())
+    return [word for word in _FORBIDDEN_WORDS if re.search(rf"\b{word}", prose)]
+
+
+def test_advisory_language_detector_catches_advisory_prose() -> None:
+    """The guard's own guard. `_advisory_language_in` exists to remove a
+    flake, and the way such a fix fails is by quietly removing the check
+    along with it -- so the detector is tested directly: it must still
+    catch inflected forms, and must still ignore identifiers."""
+    assert _advisory_language_in("This ETF is a strong buy.") == ["buy", "strong"]
+    assert _advisory_language_in("We recommend selling; performance was bad.") == [
+        "recommend",
+        "sell",
+        "bad",
+    ]
+    # Inflections and stems, which a naive \bword\b would have missed.
+    assert _advisory_language_in("Our recommendation: the stronger candidates.") == [
+        "recommend",
+        "strong",
+    ]
+    # Identifiers are not prose, in either direction.
+    assert _advisory_language_in("Scoring profile id: fd311c41b4bad897ac24cad069df0") == []
+    assert _advisory_language_in("Ticker: SPY\nOverall score: 80\nMax drawdown: N/A") == []
+    # A forbidden word next to an identifier is still caught.
+    assert _advisory_language_in("id: fd311c41b4bad897ac24cad069df0 -- a good buy") == ["buy", "good"]
+
+
 def test_cli_output_contains_no_forbidden_wording(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -301,21 +364,9 @@ def test_cli_output_contains_no_forbidden_wording(
     )
     assert exit_code == 0
 
-    out = capsys.readouterr().out.lower()
-    forbidden = [
-        "recommend",
-        "buy",
-        "sell",
-        "best",
-        "worst",
-        "should",
-        "good",
-        "bad",
-        "strong",
-        "weak",
-    ]
-    for word in forbidden:
-        assert word not in out
+    out = capsys.readouterr().out
+
+    assert _advisory_language_in(out) == []
 
 
 # ---------------------------------------------------------------------------
@@ -632,20 +683,14 @@ def test_update_output_contains_no_forbidden_wording(
     assert exit_code == 0
 
     out = capsys.readouterr().out.lower()
-    forbidden = [
-        "recommend",
-        "buy",
-        "sell",
-        "best",
-        "worst",
-        "should",
-        "good",
-        "bad",
-        "strong",
-        "weak",
-    ]
-    for word in forbidden:
-        assert word not in out
+    # Routed through `_advisory_language_in` rather than a bare substring
+    # scan, for the reason that helper documents: this output carries
+    # generated run ids, and `bad` is spellable in hex digits, so the
+    # substring form failed on roughly 1 in 160 runs on nothing but the
+    # value of `uuid4()` -- measured, not estimated. A flake in a *guard*
+    # is the worst place for one: it teaches people to re-run the check
+    # that exists to stop advisory language shipping.
+    assert _advisory_language_in(out) == []
 
 
 def test_format_update_result_contains_only_result_fields() -> None:
@@ -864,20 +909,14 @@ def test_status_output_contains_no_forbidden_wording(
     assert exit_code == 0
 
     out = capsys.readouterr().out.lower()
-    forbidden = [
-        "recommend",
-        "buy",
-        "sell",
-        "best",
-        "worst",
-        "should",
-        "good",
-        "bad",
-        "strong",
-        "weak",
-    ]
-    for word in forbidden:
-        assert word not in out
+    # Routed through `_advisory_language_in` rather than a bare substring
+    # scan, for the reason that helper documents: this output carries
+    # generated run ids, and `bad` is spellable in hex digits, so the
+    # substring form failed on roughly 1 in 160 runs on nothing but the
+    # value of `uuid4()` -- measured, not estimated. A flake in a *guard*
+    # is the worst place for one: it teaches people to re-run the check
+    # that exists to stop advisory language shipping.
+    assert _advisory_language_in(out) == []
 
 
 def test_format_status_contains_only_supplied_run_fields() -> None:
