@@ -15,9 +15,11 @@ Increment 2) is also implemented, with three per-branch-attributed
 results: a completeness branch (Standard Section 5's required-items
 check), a Seal branch (``archive_seal.verify_seal`` -- tree comparison
 against a sealing commit named by the Archive Seal Register,
-``docs/archive_seal_register.jsonl``; the Register carries no issued
-records yet, so every real archive still reports ``UNVERIFIABLE`` today,
-now per-archive rather than platform-wide), and a freeze branch (invoked
+``docs/archive_seal_register.jsonl``; the Register carries one issued
+record as of AD-075 -- ``reference_h4``, sealed at commit ``29553b7`` --
+so that archive reports ``MATCHED`` and every other real archive reports
+``UNVERIFIABLE`` for the per-archive reason "no seal has been issued"),
+and a freeze branch (invoked
 only when the caller requests it, delegating to
 ``freeze_verifier.verify_freeze`` unmodified). ``DatasetIntegrityChecker``
 and ``ReproducibilityChecker`` remain unimplemented.

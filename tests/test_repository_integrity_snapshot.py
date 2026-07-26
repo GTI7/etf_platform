@@ -21,6 +21,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.test_sealed_archive_integrity import SEAL_COVERED_ARCHIVE_PREFIXES
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FIXTURE_PATH = Path(__file__).resolve().parent / "fixtures" / "protected_file_hashes.json"
 
@@ -82,6 +84,40 @@ def test_no_protected_directory_gained_or_lost_files() -> None:
     tooling) and `experiments/validate_h4_kurtosis.py` (the Phase 5
     implementation artifact) are excluded until this cycle reaches Phase 8
     Archive and is closed.
+
+    **`reference_h4` re-basing (2026-07-26, AD-075).** That cycle reached
+    Phase 8 Archive at `29553b7` on 2026-07-25, so the "until this cycle
+    closes" condition above expired -- the finding recorded as D-9 in
+    `docs/REFERENCE_H4_PHASE_G_REMEDIATION_DECISION.md`. The exclusion is
+    **not** dropped in response, and the difference matters. Dropping it
+    would put those 16 files back into the walk below, whose closing
+    assertion is `current_files == set(EXPECTED_HASHES)`; that then fails
+    unless the Phase-0 fixture gains a key for each of them, and the
+    fixture is immutable Phase-0 data (see the module docstring). Worse,
+    a fixture key is exactly what `core.governance.archive_seal` reads
+    **at the sealing commit as its exclusion set** (AD-074 §7B D9), so
+    extending the fixture over `reference_h4` would remove that archive
+    from the Archive Seal's own comparison rather than protect it twice.
+
+    The exclusion is therefore **re-based onto Seal authority**: it is no
+    longer a temporary waiver for an open cycle but a permanent
+    delegation to a control that now exists. Every path under
+    `SEAL_COVERED_ARCHIVE_PREFIXES` (imported from
+    `tests/test_sealed_archive_integrity.py`, which is where that list is
+    declared, once) has its bytes asserted there against sealing commit
+    `29553b7`, and `test_fixture_and_seal_coverage_are_disjoint` asserts
+    that the two controls never overlap. This test and that one partition
+    the repository between them; neither weakens the other.
+
+    The two `experiments/` scripts stay excluded for a different and less
+    comfortable reason, stated plainly rather than folded into the
+    sentence above: they live outside `research_archive/`, so the Seal's
+    subject cannot reach them (AD-074 §5.1), and the Phase-0 fixture may
+    not be extended to them either. They are covered by **no** automated
+    integrity control -- D-9 surviving for two files, disclosed as
+    **R-4b** in AD-075 §4, open and unassigned. Their residual is bounded
+    by `test_reference_h4_unsealed_tooling_is_exactly_two_known_scripts`,
+    which pins the set at exactly those two so it cannot grow silently.
     """
     current_files = set()
     for base in ("research_archive", "experiments", "maintenance"):
@@ -97,13 +133,13 @@ def test_no_protected_directory_gained_or_lost_files() -> None:
                     continue  # new, open Phase 3 cycle -- see addendum above
                 if relative_path == "experiments/positive_control_phase3_pilot.py":
                     continue  # new, open Phase 3 cycle -- see addendum above
-                if relative_path.startswith("research_archive/reference_h4/"):
-                    continue  # new, open first-real-cycle evidence -- see addendum above
+                if relative_path.startswith(SEAL_COVERED_ARCHIVE_PREFIXES):
+                    continue  # delegated to the Archive Seal (AD-075) -- see re-basing above
                 if relative_path in (
                     "experiments/run_reference_h4_lifecycle.py",
                     "experiments/validate_h4_kurtosis.py",
                 ):
-                    continue  # new, open first-real-cycle scripts -- see addendum above
+                    continue  # unsealed, uncovered residual R-4b -- see re-basing above
                 current_files.add(relative_path)
 
     assert current_files == set(EXPECTED_HASHES)
