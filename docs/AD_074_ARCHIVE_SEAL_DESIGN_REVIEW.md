@@ -1452,6 +1452,23 @@ Additive throughout. Nothing existing is rewritten.
 re-written. `reference_h4`'s Register record names `29553b7`, a commit that
 already exists and already contains the correct bytes [verified].
 
+**Correction, 2026-07-26 (AD-075). The final table row above is retained
+as written and is superseded, not rewritten.** "Exclusions can be dropped
+**only** in §11's increment 3" was written on the assumption that
+increment 3 *would* drop them. It cannot: dropping them returns
+`research_archive/reference_h4/**` to that test's gained/lost-files walk,
+whose closing assertion (`current_files == set(EXPECTED_HASHES)`) then
+fails unless `protected_file_hashes.json` gains a key per archived file —
+which this same table's own row forbids ("**None** — not edited, not
+extended"), which §3 S-3 and §9 item 7 forbid, and which §7B D9 makes
+actively harmful, since that fixture's key set is read at the sealing
+commit as the Seal's **exclusion** set. The correct action, taken by
+AD-075, is to **re-base** the clauses onto Seal authority: they remain,
+their rationale changes from a temporary "until this cycle closes"
+waiver to a permanent delegation, and the delegated prefix set is
+declared once and imported. Read this row as: *exclusions may be re-based
+onto the Seal only in increment 3, and are never dropped.*
+
 ---
 
 ## 11. Recommendation — implement now, in three separately-approvable increments
@@ -1504,6 +1521,24 @@ exclusion clauses at `tests/test_repository_integrity_snapshot.py`:100–106.
 **This is the increment that closes R-4** — and only this one. Increments 1
 and 2 leave D-9 exactly as live as it is today, and must not be reported
 otherwise.
+
+**Corrected 2026-07-26 by AD-075; the paragraph above is retained as
+written.** Its third instruction — *"drop the expired exclusion clauses"*
+— is withdrawn, for the reason recorded against §10's table above: the
+clauses cannot be dropped without extending an immutable fixture whose
+key set the Seal reads as an *exclusion* set, so dropping them would
+either fail the suite or, if the fixture were extended, silently remove
+the archive from the very comparison this increment exists to create.
+AD-075 issues the record and adds the `SOUND` assertion exactly as
+written here, and **re-bases** the clauses onto Seal authority instead of
+dropping them. Two further corrections to this paragraph's scope, also
+recorded in AD-075: increment 3 closes R-4/D-9/G-5 **for
+`reference_h4`'s archived bytes only** — `experiments/run_reference_h4_lifecycle.py`
+and `experiments/validate_h4_kurtosis.py` lie outside `research_archive/`,
+so no seal can reach them and they remain covered by no automated
+control (recorded as **R-4b**, open and unassigned) — and "wire the
+check" means a standing test assertion, not a hook, a CLI command, or CI
+enforcement, none of which AD-075 introduces.
 
 **Do not merge the increments.** Increment 3 changes a currently-passing test
 file and takes `reference_h4` from unprotected to protected; it deserves its

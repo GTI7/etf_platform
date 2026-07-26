@@ -532,6 +532,11 @@ the platform ever acquires a second party, the boundary is already drawn.
 | **R-6** | G-6 | Wire `independence_linter.lint()` into the test suite over `research_archive/` and `docs/`, with the statistical-usage false positives resolved (widen the qualifier window, or scope the scan to reviewer-attribution blocks). | Governance domain → Test/CI | No hard gate; do before R-1 lands so the next cycle inherits it |
 | **R-7** | D-2, D-3 | When the Standard is next revised, cite this decision's D-2/D-3 as the worked example of an archived artifact misstating the Standard, and consider requiring approval-state sections to *quote* the Standard's clause rather than paraphrase it. | Platform Architecture | Deferred to the next Standard revision (v1.2) |
 
+**Closure status of this register (added 2026-07-26).** R-3 closed at
+AD-073's implementation; R-4 is **partially closed** by AD-075, whose
+correction to this row's own wording is recorded in §12 below. The table
+above is retained exactly as written on 2026-07-25.
+
 ## 11. Governance effect
 
 This document has **no governance effect until committed**. On commit it
@@ -548,3 +553,88 @@ It does not alter `research_archive/reference_h4/`. It does not alter
 **PASS**.
 
 **Level 3 review not available; this decision was made at Level 2 only.**
+
+---
+
+## 12. Addendum, 2026-07-26 — R-4 closure status under AD-075
+
+**This section is a dated addendum, not an edit.** Nothing above it is
+altered, and no artifact under `research_archive/reference_h4/` is
+touched — §8's immutability determination governs this addendum exactly
+as it governs every other remediation in this register. The addendum
+records what AD-075 (`docs/ARCHITECTURE_DECISIONS.md`) did, what it did
+not do, and one correction to §10's R-4 row.
+
+### 12.1 Correction to R-4's *Interim, actionable now* wording
+
+R-4's interim action reads: *"fold `research_archive/reference_h4/` and
+the two `experiments/` scripts into that mechanism and drop the expired
+exclusion clauses at `tests/test_repository_integrity_snapshot.py`:100–106."*
+Two of its three instructions do not survive contact with the mechanism
+that was built (AD-074's Archive Seal), and the row is corrected here
+rather than rewritten in place:
+
+1. **"Drop the expired exclusion clauses" is withdrawn.** Dropping them
+   returns `research_archive/reference_h4/**` to that test's
+   gained/lost-files walk, whose closing assertion
+   (`current_files == set(EXPECTED_HASHES)`) then fails unless
+   `tests/fixtures/protected_file_hashes.json` gains a key per archived
+   file. That fixture is immutable Phase-0 data — the convention N-3
+   above found was correctly honoured — and, decisively, its key set is
+   what the Seal reads *at the sealing commit* as an **exclusion** set
+   (AD-074 §7B D9). Extending it over `reference_h4` would not
+   double-protect the archive; it would remove the archive from the
+   Seal's own comparison. The clauses are therefore **re-based onto Seal
+   authority and retained**, which is what makes them permanent rather
+   than expired.
+2. **"…and the two `experiments/` scripts" cannot be discharged by this
+   mechanism at all.** `experiments/run_reference_h4_lifecycle.py` and
+   `experiments/validate_h4_kurtosis.py` lie outside
+   `research_archive/`, and the Seal's subject is
+   `research_archive/<project_id>/**` (AD-074 §5.1). No seal reaches
+   them, and the Phase-0 fixture may not be extended to them. They remain
+   covered by **no automated integrity control**, which is D-9's own
+   finding surviving for two files. AD-075 records this as **R-4b**,
+   open and unassigned: no AD number is reserved for it, no increment
+   owns it, and nothing schedules it.
+3. **"Fold `research_archive/reference_h4/` into that mechanism" is
+   discharged**, by the issuance of one Archive Seal Register record
+   naming sealing commit `29553b7`.
+
+### 12.2 What is now closed, and what is not
+
+| Item | Status after AD-075 |
+|---|---|
+| **D-9** — expired protected-file exclusion | **Closed for `research_archive/reference_h4/**`.** Editing, adding, or deleting any file there now fails `tests/test_sealed_archive_integrity.py`. **Open** for the two `experiments/` scripts (R-4b). |
+| **G-5** — no path back into protected status for a closed cycle | **Closed as a missing mechanism**; the path exists and has been exercised once. Still **open as a standing obligation**: `positive_control_phase3` reproduces D-9 the moment it closes, and issuing its record is a separate future human act. |
+| **R-4** | **Partially closed.** The archived bytes are protected; the tooling residual (R-4b) is not. |
+| **R-4b** *(new)* | **Open, unassigned.** The two `experiments/` scripts named above. |
+| Register self-integrity | **Open.** The Archive Seal Register is not protected by the seal it drives (AD-074 §9 item 9). Issuing the first record makes this gap live in practice rather than only in principle. |
+| `DatasetIntegrityChecker` | **Absent.** `reference_h4`'s three `dataset_hashes/*.jsonl` files are excluded from the seal's content comparison and covered by a recorded hash that nothing verifies. Their existence is checked; their bytes are not. |
+| R-1, R-2, R-5, R-6, R-7 | **Unchanged by AD-075.** |
+
+### 12.3 §8's enforcement qualification, restated
+
+§8 above states that `reference_h4`'s immutability is "policy-only" and
+that "any claim that this archive is 'protected' should be read as a
+statement about rules, not about enforcement." **That qualification is
+now lifted for the archived bytes and retained for everything else.**
+`research_archive/reference_h4/**` is protected by mechanism as well as
+by rule; the two `experiments/` scripts are protected by rule only.
+
+Two ceilings remain, and neither is closed by any same-repo mechanism
+(§3 S-4 of the AD-074 design review): a history rewrite that makes
+`29553b7` unreachable — a squash or rebase merge, a force-push, a branch
+deletion followed by `gc`, or a shallow clone — makes this seal report
+`UNVERIFIABLE` with no archived byte having changed, and the loss of the
+repository defeats everything at once, as the 2026-07-21 incident
+demonstrated empirically.
+
+### 12.4 Review level of this addendum
+
+**Level 2 only.** No Level 3 reviewer exists or is available on this
+platform, no review of AD-075 is independent, and nothing in this
+addendum may be cited as an independent or organizationally independent
+finding (Standard §4). This addendum does not reopen, revise, qualify, or
+invalidate the `reference_h4` **PASS**, and it grants no downstream
+authorization that §0 and §11 above withhold.

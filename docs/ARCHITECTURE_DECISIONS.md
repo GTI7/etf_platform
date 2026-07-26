@@ -6053,6 +6053,26 @@ untouched). `tools/check_import_boundaries.py` passes unmodified
   Register record naming `29553b7`, adds the `SOUND` assertion, and drops
   the expired exclusion clauses at
   `tests/test_repository_integrity_snapshot.py`:100–106.
+
+  **Corrected by AD-075, 2026-07-26. The sentence above is retained as
+  written rather than rewritten, per this register's own
+  no-silent-supersession rule.** Its third clause — *"drops the expired
+  exclusion clauses"* — is wrong, and not cosmetically. Dropping them
+  returns `research_archive/reference_h4/**` to the gained/lost-files set
+  in `tests/test_repository_integrity_snapshot.py`, whose closing
+  assertion is `current_files == set(EXPECTED_HASHES)`; that assertion
+  then fails unless `tests/fixtures/protected_file_hashes.json` gains a
+  key for every archived file. That fixture is immutable Phase-0 data
+  (design review §3 S-3, §9 item 7) — and, decisively, its key set is
+  precisely what the Seal reads *at the sealing commit* as an
+  **exclusion** set (§7B D9, hardening item BLOCKER 1). Adding those keys
+  would therefore not double-protect the archive; it would remove the
+  archive from the Seal's comparison. The clauses are **re-based onto
+  Seal authority, not dropped**, and the fixture is not touched. AD-075
+  issues the record, performs that re-basing, and makes the
+  fixture/Seal boundary a permanent partition rather than a temporary
+  exclusion. The first two clauses of the sentence above are correct and
+  are discharged by AD-075 unchanged.
 - The Archive Seal Register is not protected by the seal it drives, and
   nothing in AD-074 hashes or anchors it (design review §7B D5, §9 item
   9). A committed tamper is visible to `git log`-based review only if a
@@ -6134,3 +6154,304 @@ basis* item 3 and *Consequences* both state the negative explicitly. If
 Increment 3 never lands, this entry will have made the register longer
 without making `reference_h4` any safer — the same failure AD-073
 disclosed against itself, repeated here rather than assumed learned.
+
+---
+
+### AD-075: `reference_h4`'s seal is issued, and the Phase-0 fixture / Seal coverage boundary is a permanent partition (accepted 2026-07-26)
+
+**Review basis.** Level 2 (AI-assisted adversarial review), conducted
+against `core/governance/archive_seal.py` and
+`core/governance/archive_verifier.py` as shipped at `2392de2`/`a8f031b`,
+`tests/test_repository_integrity_snapshot.py`,
+`tests/fixtures/protected_file_hashes.json`,
+`docs/AD_074_ARCHIVE_SEAL_DESIGN_REVIEW.md` §§3, 5.6, 7B D2/D3/D5/D9,
+9–11, `docs/REFERENCE_H4_PHASE_G_REMEDIATION_DECISION.md` §§4 D-9, 5 G-5,
+8, 10 R-4, and AD-030/AD-062/AD-063/AD-072/AD-073/AD-074.
+
+**Level 3 is unavailable and no Level 3 review was performed. No review
+of AD-075 is independent, and none may be cited as such** (Standard §4).
+Nothing in this entry, in the Register record it authorizes, or in the
+tests that accompany it asserts organizational independence, a distinct
+accountable party, or an external reviewer, because none exists on this
+platform.
+
+**Status.** **Accepted, 2026-07-26.** This entry is documentation only:
+it changes no code, no test, no fixture, no archive, and it does not
+itself write `docs/archive_seal_register.jsonl`. The issuance it
+authorizes lands in the immediately following commit, separately
+reviewable and separately revertible, per AD-074 design review §11's
+"do not merge the increments."
+
+**Acceptance basis.** This entry accepts AD-074 design review §11's
+**Increment 3** — with one correction to its wording, stated below and
+recorded rather than silently applied — and issues the first Archive
+Seal Register record on this platform.
+
+#### 1. What is issued
+
+Exactly one record, appended to `docs/archive_seal_register.jsonl`:
+
+| Field | Value |
+|---|---|
+| `schema_version` | `1` |
+| `project_id` | `reference_h4` |
+| `sealed_commit` | `29553b7e5d96118b3f38ecc4de27362a07a210d1` |
+| `sealed_by` | supplied by the repository owner at issuance; a human attribution, never generated |
+| `sealed_at` | the UTC instant of issuance |
+| `supersedes` | `null` — first seal for this project |
+
+`29553b7` is the commit that first contains the complete closed archive
+(`research(h4): record Decision -> Archive transition (cycle complete)`).
+It is **not** the terminal transition record's own `commit_hash`
+(`8bc3f93`), which precedes it and sees one fewer record — AD-074 design
+review §3 S-1 proves that a seal keyed to the latter reports `MISMATCH`
+on a sound archive.
+
+**Issuance is a recorded human act and is mechanised by nothing** (AD-074
+§5.3, §9 item 3). This AD commissions no issuance tool, no CLI command,
+no hook, no CI enforcement, no automatic Register writer, and no
+governance gate. The record is appended by a human, `sealed_by` names
+that human, and no part of that attribution is derived from a git
+identity, a session, or any automated actor.
+
+#### 2. The correction to AD-074's Increment 3 wording
+
+AD-074's *Consequences* (and design review §10's migration-impact row and
+§11's Increment 3 paragraph, both annotated in place) state that
+Increment 3 **"drops the expired exclusion clauses"** at
+`tests/test_repository_integrity_snapshot.py`:100–106. **That clause is
+withdrawn as an instruction and retained as history.** It is unsafe on
+its own terms:
+
+1. Dropping the clauses returns `research_archive/reference_h4/**` to
+   that test's gained/lost-files walk, whose closing assertion is
+   `current_files == set(EXPECTED_HASHES)`.
+2. The assertion then fails unless `protected_file_hashes.json` gains a
+   key for every archived file.
+3. That fixture is immutable Phase-0 data by its own docstring, by
+   standing convention (a new legitimate file gets a test-code exclusion
+   clause, never a fixture edit), and by AD-074's own §3 S-3 and §9 item
+   7, which state that it is untouched, unedited, and unextended.
+4. **Decisively:** the fixture's key set is what the Seal reads *at the
+   sealing commit* as an **exclusion** set (AD-074 §7B D9, hardening item
+   `BLOCKER 1`; `archive_seal._protected_file_hashes_exclusion_set`).
+   Adding `research_archive/reference_h4/...` keys to it would not
+   double-protect those bytes — it would **remove them from the Seal's
+   content comparison**, converting the strongest control available into
+   silence.
+
+Only the third clause of that sentence is wrong. Issuing the record and
+adding the `SOUND` assertion — its first two clauses — are correct and
+are discharged here unchanged.
+
+#### 3. The coverage boundary, stated as a partition
+
+`protected_file_hashes.json` and the Archive Seal are **two controls with
+two different roots of trust, over two disjoint path sets, and the
+disjointness is load-bearing rather than incidental**:
+
+| Control | Root of trust | Covers |
+|---|---|---|
+| Phase-0 snapshot fixture | a per-file SHA-256 recorded before Phase 0, immutable | the three legacy archives, `research_archive/README.md`, the historical `experiments/*.py` scripts, `maintenance/remediate_h3_invalid_pricebar_rows.py` |
+| Archive Seal | a sealing commit named in the Register, git's own content addressing | `research_archive/reference_h4/**`, minus that archive's `dataset_manifest.json` `snapshot_path` set |
+
+Because a fixture key is an exclusion *to the Seal*, an overlap is not
+redundancy but a hole. The invariant is therefore stated positively and
+asserted by test: **no key of `protected_file_hashes.json` may name a
+path under a Seal-covered prefix.** The exclusion clauses in
+`tests/test_repository_integrity_snapshot.py` are consequently **re-based
+onto Seal authority, not dropped**: they stop being a temporary "until
+this cycle reaches Phase 8 Archive" waiver — which D-9 correctly found had
+expired — and become a permanent, documented delegation to a control that
+now exists.
+
+The delegated set is declared **once**, as
+`SEAL_COVERED_ARCHIVE_PREFIXES` in `tests/test_sealed_archive_integrity.py`,
+and imported by the snapshot test. One list, one place: a delegation that
+could be spelled differently in two files is a delegation that can drift
+into a gap.
+
+`assert current_files == set(EXPECTED_HASHES)` is preserved verbatim and
+unweakened, and the fixture's SHA-256 logic, the `positive_control_phase3`
+rules, and the `maintenance/` rules are untouched.
+
+#### 4. What closes, and what does not
+
+**Closes — for `reference_h4`'s archived bytes only:**
+
+- **D-9** (the protected-file exclusion had expired by its own terms) and
+  **G-5** (a closed cycle had no path back into protected status) for
+  this archive: `research_archive/reference_h4/**` is now covered by an
+  automated control that fails on an edit, an addition, or a deletion.
+- **R-4**, on its own terms, for this cycle. Phase G §8's qualification —
+  *"immutable as a matter of governance and unprotected as a matter of
+  mechanism"* — no longer holds for these bytes. It still holds for
+  everything in item 5 below.
+
+`OverallStatus.SOUND` becomes reachable for the first time on a real
+archive. It means exactly what AD-074 AC-74-13 says and nothing more: the
+completeness check passed and the sealed archive paths match the sealing
+commit tree. It does **not** assert dataset-hash verification, research
+reproducibility, or experiment validity.
+
+**Does not close:**
+
+1. **R-4b — the unsealed `reference_h4` tooling.** *(Opened by this
+   entry.)* `experiments/run_reference_h4_lifecycle.py` and
+   `experiments/validate_h4_kurtosis.py` are the cycle's orchestration
+   and Phase 5 implementation artifacts. They lie **outside**
+   `research_archive/`, so they are outside the Seal's subject (AD-074
+   §5.1) and cannot be reached by extending it; and they remain excluded
+   from the Phase-0 snapshot, whose fixture may not be extended. They are
+   therefore covered by **no automated integrity control today** —
+   exactly D-9's finding, surviving for two files after AD-075 closes it
+   for sixteen. This is disclosed, bounded, and pinned by test (the
+   residual is exactly those two paths, no more), and it is **open and
+   unassigned**: no AD number is reserved for it, no increment owns it,
+   and nothing schedules it. It must never be reported as closed by this
+   entry.
+2. **Register self-integrity** (AD-074 §9 item 9). The Archive Seal
+   Register is not protected by the seal it drives. Nothing hashes it,
+   anchors it, or verifies its own history, and the Seal trusts the
+   latest record for a `project_id` at face value. A *committed* tamper is
+   visible to `git log -p` review only if a human performs that review,
+   which nothing automates; an *uncommitted* working-tree rewrite leaves
+   no commit for such a review to reach. Issuing the first record makes
+   this gap live in practice rather than only in principle — before this
+   entry the Register was empty, so there was nothing to tamper with.
+   Disclosed, unassigned, **not closed**.
+3. **`DatasetIntegrityChecker`** (AD-073 Decision part 8, AD-074 §9 item
+   6). Still unimplemented. `reference_h4`'s three
+   `dataset_hashes/*.jsonl` files are excluded from the seal's content
+   comparison and are covered by a recorded `content_hash` that nothing
+   verifies. Their *existence* is checked (AC-74-4). Inherited, not
+   widened, and not closed.
+4. **G-5 as a platform-wide defect.** The re-protection *path* now exists
+   and has been exercised once. `positive_control_phase3` will still
+   reproduce D-9 the moment it closes: issuing its record will be a
+   separate human act under this same AD's mechanism, and nothing here
+   performs or schedules it.
+5. **History rewrite and repository loss** (AD-074 §5.2, §9 item 1,
+   §3 S-4). A squash/rebase merge, a force-push dropping `29553b7` from
+   every ref, a branch deletion plus `gc`, or a shallow clone all make
+   this seal report `UNVERIFIABLE` with no archived byte having changed.
+   That is an accurate "cannot currently verify", never a false
+   `MISMATCH`, and the accompanying test's failure message says so and
+   names the remedies (restore the object, or issue a superseding
+   Register record). No same-repo mechanism defeats this ceiling.
+
+#### 5. Acceptance criteria — AC-75-1 … AC-75-15
+
+- **AC-75-1.** Exactly one record is appended to
+  `docs/archive_seal_register.jsonl`, for `project_id` `reference_h4`,
+  naming `sealed_commit` `29553b7e5d96118b3f38ecc4de27362a07a210d1`, with
+  `schema_version` `1` and `supersedes` `null`.
+- **AC-75-2.** The Register remains canonical JSONL: UTF-8, LF-only,
+  sorted keys, compact separators, exactly one trailing newline, one JSON
+  object per line — the form `archive_seal._latest_register_record`
+  enforces whole-file (hardening item `M-6`).
+- **AC-75-3.** `sealed_by` is an attribution supplied by the repository
+  owner. It is not derived from a git identity, not generated by tooling,
+  and never attributes the act to an AI session.
+- **AC-75-4.** No issuance tooling, CLI command, hook, CI enforcement,
+  automatic Register writer, or new governance gate is introduced.
+  Issuance remains a recorded human act (AD-074 §9 item 3).
+- **AC-75-5.** `verify_archive(research_archive/reference_h4)` reports
+  completeness `COMPLETE`, seal `MATCHED`, and overall `SOUND`, asserted
+  by a test that never skips, never xfails, and never downgrades the
+  failure to a warning.
+- **AC-75-6.** That test's failure message names the three environmental
+  causes that make a *sound* archive `UNVERIFIABLE` — a shallow clone, a
+  sealing commit made unreachable by history rewrite or `gc`, and a
+  non-git working tree — and the two remedies: restore the object, or
+  issue a superseding Register record. It never presents any of them as
+  evidence of tampering (AD-074 §7B D3).
+- **AC-75-7.** Exactly one delegation list exists on the platform:
+  `SEAL_COVERED_ARCHIVE_PREFIXES`, defined once in
+  `tests/test_sealed_archive_integrity.py` and *imported* — never
+  re-declared — by `tests/test_repository_integrity_snapshot.py`.
+- **AC-75-8.** Fixture/Seal disjointness is asserted by test: no key of
+  `protected_file_hashes.json` begins with any delegated prefix.
+- **AC-75-9.** `tests/fixtures/protected_file_hashes.json` is not edited,
+  extended, regenerated, or reordered.
+- **AC-75-10.** `assert current_files == set(EXPECTED_HASHES)` is
+  preserved verbatim and unweakened; the SHA-256 fixture logic, the
+  `positive_control_phase3` rules, and the `maintenance/` rules are
+  unchanged.
+- **AC-75-11.** Nothing under `research_archive/` is created, edited,
+  moved, or deleted: `git diff 29553b7 -- research_archive/reference_h4`
+  is empty (Phase G §8 immutability, AC-74-7).
+- **AC-75-12.** `core/governance/archive_seal.py`,
+  `core/governance/archive_verifier.py`,
+  `core/governance/freeze_verifier.py`,
+  `core/governance/decision_recorder.py`, and
+  `tools/archive_manifest.py` are unmodified. The only source change is
+  one stale docstring sentence in `core/governance/__init__.py`, with no
+  behaviour change.
+- **AC-75-13.** The unsealed residual is exactly
+  `experiments/run_reference_h4_lifecycle.py` and
+  `experiments/validate_h4_kurtosis.py` — pinned by test, disclosed as
+  **R-4b**, open and unassigned.
+- **AC-75-14.** This entry closes R-4/G-5/D-9 for `reference_h4`'s
+  archived bytes only. It claims no closure of R-4b, of Register
+  self-integrity (AD-074 §9 item 9), or of `DatasetIntegrityChecker`
+  (§9 item 6), and it must never be cited as doing so.
+- **AC-75-15.** No review of AD-075 is independent and no Level 3 review
+  was performed or claimed; the full test suite passes, and
+  `tools/check_import_boundaries.py` reports **exactly** the ETF-coupling
+  inventory it reported before this change — 5 violations across the
+  `data -> etf` and `governance -> etf` edges, the pre-existing AD-068 /
+  AD-069 state pinned by `tests/test_import_boundaries.py`'s
+  `test_known_etf_coupling_inventory_is_exactly_as_documented` and its
+  strict `xfail` on `test_real_repository_has_no_boundary_violations`.
+  AD-075 adds no import and creates no new domain edge. *(Stated this way
+  rather than as "the check passes" because the standalone script exits
+  non-zero on that documented inventory today, before and after this
+  work; a criterion asserting otherwise would be false on its face.)*
+
+**Relationship to prior ADs.** AD-075 is subordinate to AD-074 exactly as
+AD-074 is subordinate to AD-073: it adds no mechanism, changes no
+contract, and amends no accepted text. It performs the one act AD-074
+deliberately left to a human, and corrects one instruction in AD-074's
+sequencing that could not have been followed as written. AD-062 (the
+Register is a new artifact class with one writer), AD-063 (no Decision
+Chain authority), AD-059 (no `compose_transition()` participation),
+AD-072 (issuance is not a lifecycle transition and carries no
+authorization floor), and AD-030 (`archive_manifest.json`'s schema) are
+untouched. `tools/check_import_boundaries.py` is itself unmodified and
+its result is unchanged by this work — see AC-75-15, which states what
+that result actually is rather than repeating AD-074's "passes
+unmodified" shorthand.
+
+**Numbering.** AD-070 and AD-071 remain unconsumed, for the reason
+AD-072, AD-073, and AD-074 all record. AD-075 reserves no number for
+R-4b or for the Register self-integrity gap; both are recorded as
+unassigned rather than referred onward to a plan that does not exist.
+
+**Adversarial self-review.**
+
+*What assumption could still be wrong?* That `29553b7` is reachable from
+some ref for the lifetime of the archive. It is today [verified], and the
+seal's honesty under loss is designed for — `UNVERIFIABLE`, never
+`MISMATCH` — but a squash merge of the `reference_h4` branch would break
+this seal silently from the operator's point of view: nothing warns at
+merge time, and the failure surfaces only the next time the test runs.
+That is a real operational hazard of a git-anchored seal, and it is the
+one concrete advantage the rejected candidate (b) held (AD-074 *Rejected
+alternatives*).
+
+*What does issuing this record make worse?* Register self-integrity. An
+empty Register cannot be tampered with; a populated one can, and the Seal
+trusts its latest record at face value. AD-075 converts a theoretical gap
+into a live one, which is stated here rather than left for a reader to
+notice.
+
+*Is re-basing the exclusion clauses a way of appearing to close D-9
+without closing it?* It would be, if the clauses stayed while nothing
+replaced them — which is precisely what D-9 found. The distinguishing
+fact is mechanical, not rhetorical: with the record issued, editing any
+file under `research_archive/reference_h4/` now fails
+`tests/test_sealed_archive_integrity.py`, and before it, nothing failed.
+The two `experiments/` scripts are the part where the objection still
+lands, which is why R-4b is opened rather than absorbed into the closure
+claim.
