@@ -30,15 +30,16 @@ collapsed into a single field:
   project with no concluded outcome yet (e.g. still `ACTIVE`).
 
 `origin_date` intentionally does not claim to be "when the project
-started" -- for the three historical backfill entries, no such date is
+started" -- for a cycle that predates this registry, no such date is
 recorded anywhere in the repository, and inventing one would be a
 governance violation of the same kind
 `docs/RESEARCH_PLATFORM_RETROSPECTIVE.md` catalogs (facts recorded
 retroactively, without disclosure, are exactly what this platform's
 governance discipline exists to prevent). It instead names the earliest
-*already-recorded* evidence date for that project -- see
-`core/research/historical_backfill.py` for what each of the three uses
-and why.
+*already-recorded* evidence date for that project. Which date that is,
+per cycle, is a property of the cycle and is stated where the cycle is
+registered (`research_artifacts/`), not here: this module defines the
+field, never any particular project's value for it.
 """
 
 from __future__ import annotations

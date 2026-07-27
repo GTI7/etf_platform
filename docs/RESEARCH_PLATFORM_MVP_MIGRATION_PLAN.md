@@ -255,7 +255,11 @@ Verified by direct search of `research_archive/`, not assumed:
   beside them.
 - **`config/`, `portfolio/`** — empty placeholders, explicitly not a
   domain to build in this migration (Objective: do not add new
-  domains).
+  domains). *(Both were deleted on 2026-07-27 by the Engine Boundary
+  cleanup, having stayed empty for the whole migration and after it.
+  Recorded here rather than silently dropped: this plan is a historical
+  record of what the migration found, not a description of the tree
+  today.)*
 
 ## 7. Test Strategy
 

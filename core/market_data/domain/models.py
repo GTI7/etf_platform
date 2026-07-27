@@ -4,13 +4,13 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from enum import Enum
 
-from core.shared.ids import ETFId
+from core.shared.ids import InstrumentId
 from core.shared.money import Money
 
 
 @dataclass(frozen=True, slots=True)
 class ETF:
-    etf_id: ETFId
+    etf_id: InstrumentId
     ticker: str
     name: str
     currency: str
@@ -37,7 +37,7 @@ class TradingSession:
 @dataclass(frozen=True, slots=True)
 class PriceBar:
     price_bar_id: str
-    etf_id: ETFId
+    etf_id: InstrumentId
     session_date: date
     open: Money
     high: Money

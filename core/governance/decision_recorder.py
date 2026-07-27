@@ -62,10 +62,10 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from core.governance.archive_identity import ARCHIVE_MANIFEST_FILENAME
 from core.governance.canonical_jsonl import canonical_line, read_canonical_jsonl
 
 TRANSITION_RECORDS_FILENAME = "transition_records.jsonl"
-ARCHIVE_MANIFEST_FILENAME = "archive_manifest.json"
 
 
 class MissingArchiveManifestError(RuntimeError):

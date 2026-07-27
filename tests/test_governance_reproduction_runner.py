@@ -19,7 +19,8 @@ import pytest
 
 from core.governance.canonical_jsonl import sha256_of_file, write_canonical_jsonl
 from core.governance.dataset_manifest import MANIFEST_SCHEMA_VERSION
-from core.governance.dataset_snapshots import etf_to_row
+from core.analytics.persistence.etf_snapshot import etf_to_row
+from core.analytics.persistence.frozen_dataset import load_snapshot_rows, parse_snapshot_row
 from core.governance import reproduction_runner as runner_module
 from core.governance.reproduction_record import ReproductionStatus
 from core.governance.reproduction_runner import UNIVERSE_MODULE_RELATIVE_PATH, run_reproduction
@@ -166,6 +167,8 @@ def test_full_reproduction_verifies(tmp_path: Path) -> None:
         commit_hash=commit_hash,
         scratch_db_path=tmp_path / "scratch.db",
         run_experiment=_run_module,
+        parse_row=parse_snapshot_row,
+        load_rows=load_snapshot_rows,
     )
 
     assert outcome.status is ReproductionStatus.VERIFIED
@@ -196,6 +199,8 @@ def test_experiment_code_runs_from_the_pinned_commit_not_head(tmp_path: Path) ->
         commit_hash=commit_hash,
         scratch_db_path=tmp_path / "scratch.db",
         run_experiment=_run_module,
+        parse_row=parse_snapshot_row,
+        load_rows=load_snapshot_rows,
     )
 
     assert outcome.status is ReproductionStatus.VERIFIED
@@ -216,6 +221,8 @@ def test_network_attempt_during_run_produces_reproduction_failed(tmp_path: Path)
         commit_hash=commit_hash,
         scratch_db_path=tmp_path / "scratch.db",
         run_experiment=_run_module,
+        parse_row=parse_snapshot_row,
+        load_rows=load_snapshot_rows,
     )
 
     assert outcome.status is ReproductionStatus.REPRODUCTION_FAILED
@@ -244,6 +251,8 @@ def test_missing_dependency_on_the_universe_preload_is_unverifiable(tmp_path: Pa
         commit_hash=commit_hash,
         scratch_db_path=tmp_path / "scratch.db",
         run_experiment=_run_module,
+        parse_row=parse_snapshot_row,
+        load_rows=load_snapshot_rows,
     )
 
     assert outcome.status is ReproductionStatus.UNVERIFIABLE
@@ -275,6 +284,8 @@ def test_missing_dependency_during_reconstruction_is_unverifiable(
         commit_hash=commit_hash,
         scratch_db_path=tmp_path / "scratch.db",
         run_experiment=_run_module,
+        parse_row=parse_snapshot_row,
+        load_rows=load_snapshot_rows,
     )
 
     assert outcome.status is ReproductionStatus.UNVERIFIABLE
@@ -300,6 +311,8 @@ def test_operational_failure_during_the_run_is_reproduction_failed(tmp_path: Pat
         commit_hash=commit_hash,
         scratch_db_path=tmp_path / "scratch.db",
         run_experiment=_run_module,
+        parse_row=parse_snapshot_row,
+        load_rows=load_snapshot_rows,
     )
 
     assert outcome.status is ReproductionStatus.REPRODUCTION_FAILED
@@ -331,6 +344,8 @@ def test_artifact_hash_mismatch_is_drifted(tmp_path: Path) -> None:
         commit_hash=commit_hash,
         scratch_db_path=tmp_path / "scratch.db",
         run_experiment=_run_module,
+        parse_row=parse_snapshot_row,
+        load_rows=load_snapshot_rows,
     )
 
     assert outcome.status is ReproductionStatus.DRIFTED
@@ -352,6 +367,8 @@ def test_guard_is_uninstalled_after_the_attempt_completes(tmp_path: Path) -> Non
         commit_hash=commit_hash,
         scratch_db_path=tmp_path / "scratch.db",
         run_experiment=_run_module,
+        parse_row=parse_snapshot_row,
+        load_rows=load_snapshot_rows,
     )
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

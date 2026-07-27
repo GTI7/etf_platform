@@ -12,7 +12,7 @@ from core.market_data.ingestion.price_ingestion import ingest_daily_prices
 from core.market_data.persistence.repository import get_price_bars
 from core.market_data.providers.base import DataProvider
 from core.shared.clock import Clock
-from core.shared.ids import ETFId
+from core.shared.ids import InstrumentId
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,7 +100,7 @@ def run_write_pipeline_for_etfs(
     sma_definition: IndicatorDefinition,
     rsi_definition: IndicatorDefinition,
     scoring_profile: ScoringProfile,
-) -> dict[ETFId, WritePipelineResult | Exception]:
+) -> dict[InstrumentId, WritePipelineResult | Exception]:
     """Run run_write_pipeline() once per ETF in `etfs`, for the same
     session and the same SMA/RSI/scoring methodology.
 
@@ -126,7 +126,7 @@ def run_write_pipeline_for_etfs(
     its own, and a failure on one ETF never touches another's
     already-committed data.
     """
-    results: dict[ETFId, WritePipelineResult | Exception] = {}
+    results: dict[InstrumentId, WritePipelineResult | Exception] = {}
     for etf in etfs:
         try:
             results[etf.etf_id] = run_write_pipeline(

@@ -16,25 +16,45 @@ precedent. Every failure here is a governance-quality error naming the
 specific offending values; a raw ``sqlite3.IntegrityError`` is kept only
 as an independent second line of defense (PRAGMA foreign_keys=ON), never
 the primary failure mode.
+
+**This module constructs no domain object** (Engine Boundary cleanup
+item C4, 2026-07-27). It verifies what a frozen dataset *is* -- the
+manifest's declared hash and row count, canonical JSONL shape, duplicate
+keys, unresolvable references, calendar coverage -- and it reads rows as
+plain dicts. Turning a row into an ``ETF`` or a ``PriceBar``, and
+inserting one, is domain knowledge supplied by the caller as two
+callables, ``parse_row`` and ``load_rows``. Until that change this module
+imported ``ETF`` and ``insert_etf`` through
+``core.governance.dataset_snapshots``, which is why a Governance
+reconstruction could only ever have run against ETFs. The callables are
+**required parameters with no default**: a default would silently
+degrade validation for a caller who forgot one, and this module's whole
+value is that it does not let anything through unchecked.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any, Callable, Mapping, Sequence
+import sqlite3
 
 from core.governance.calendar_definitions import CALENDAR_DEFINITIONS, ensure_calendar
 from core.governance.canonical_jsonl import read_canonical_jsonl, sha256_of_file
 from core.governance.dataset_manifest import DatasetEntry, DatasetManifest, parse_dataset_manifest
-from core.governance.dataset_snapshots import (
-    load_etf_snapshot,
-    load_price_bar_snapshot,
-    load_trading_session_snapshot,
-    row_to_etf,
-    row_to_price_bar,
-    row_to_trading_session,
-)
 from core.store.connection import connect
 from core.store.migrations import run_migrations
+
+# `parse_row(source_table, row)` raises if `row` does not parse into the
+# domain object `source_table` names. It returns nothing: the caller owns
+# the object model, this module only needs to know whether the row is
+# well-formed against it.
+RowParser = Callable[[str, Mapping[str, Any]], None]
+
+# `load_rows(conn, rows_by_source_table)` inserts every verified row into
+# an already-migrated connection, in whatever foreign-key order the
+# caller's schema requires. Called inside this module's transaction, once
+# every pre-flight check has passed.
+SnapshotRowLoader = Callable[[sqlite3.Connection, Mapping[str, Sequence[Mapping[str, Any]]]], None]
 
 
 class ReconstructionValidationError(RuntimeError):
@@ -140,12 +160,19 @@ def preflight_validate(
     manifest: DatasetManifest,
     cycle_dir: Path,
     *,
+    parse_row: RowParser,
     expected_tickers: set[str] | None = None,
-) -> dict[str, Path]:
+) -> dict[str, list[dict[str, Any]]]:
     """Every check in SS D.1, run purely offline against the manifest and
     snapshot files on disk -- never opens or touches any database.
-    Returns the verified snapshot path for each of the three required
-    source tables, keyed by source_table."""
+
+    Returns the verified rows for each of the three required source
+    tables, keyed by source_table. It returns rows rather than the paths
+    it used to return because the rows are what a loader now receives:
+    reading and canonical-shape checking is this module's job, and
+    re-reading the same file downstream would be a second, unverified
+    read of bytes this function already vouched for.
+    """
     paths = {entry.source_table: _verify_dataset_integrity(entry, cycle_dir) for entry in manifest.datasets}
 
     etf_rows = read_canonical_jsonl(paths["ETF"])
@@ -180,7 +207,7 @@ def preflight_validate(
 
     for row in etf_rows:
         try:
-            row_to_etf(row)
+            parse_row("ETF", row)
         except (KeyError, ValueError, TypeError) as exc:
             raise MalformedSnapshotRowError(f"ETF snapshot row {row!r} does not parse: {exc}") from exc
 
@@ -207,7 +234,7 @@ def preflight_validate(
 
     for row in trading_session_rows:
         try:
-            row_to_trading_session(row)
+            parse_row("TradingSession", row)
         except (KeyError, ValueError, TypeError) as exc:
             raise MalformedSnapshotRowError(
                 f"TradingSession snapshot row {row!r} does not parse: {exc}"
@@ -223,11 +250,15 @@ def preflight_validate(
 
     for row in price_bar_rows:
         try:
-            row_to_price_bar(row)
+            parse_row("PriceBar", row)
         except (KeyError, ValueError, TypeError, ArithmeticError) as exc:
             raise MalformedSnapshotRowError(f"PriceBar snapshot row {row!r} does not parse: {exc}") from exc
 
-    return paths
+    return {
+        "ETF": etf_rows,
+        "TradingSession": trading_session_rows,
+        "PriceBar": price_bar_rows,
+    }
 
 
 def reconstruct_database(
@@ -236,15 +267,23 @@ def reconstruct_database(
     cycle_dir: Path,
     manifest_path: Path,
     *,
+    parse_row: RowParser,
+    load_rows: SnapshotRowLoader,
     calendar_id: str = "XNYS",
     expected_tickers: set[str] | None = None,
 ) -> None:
     """Build a fresh scratch database from frozen dataset artifacts:
-    migrations -> Calendar -> ETF -> TradingSession -> PriceBar.
+    migrations -> Calendar -> verified rows.
 
     Every pre-flight check runs and can raise before `db_path` is ever
     created or opened -- including the `db_path`-already-exists check,
     which runs first of all.
+
+    `Calendar` is inserted here rather than by `load_rows` because it is
+    a code-defined literal this domain owns (`calendar_definitions`), not
+    a frozen dataset. Table load *order* belongs to `load_rows`: the
+    foreign keys between the frozen tables are the caller's schema, not
+    this module's knowledge.
     """
     if db_path.exists():
         raise ScratchDatabaseExistsError(
@@ -253,15 +292,15 @@ def reconstruct_database(
         )
 
     manifest = parse_dataset_manifest(manifest_path)
-    snapshot_paths = preflight_validate(manifest, cycle_dir, expected_tickers=expected_tickers)
+    rows_by_source_table = preflight_validate(
+        manifest, cycle_dir, parse_row=parse_row, expected_tickers=expected_tickers
+    )
 
     conn = connect(db_path)
     try:
         run_migrations(conn, migrations_dir)
         with conn:
             ensure_calendar(conn, calendar_id)
-            load_etf_snapshot(conn, snapshot_paths["ETF"])
-            load_trading_session_snapshot(conn, snapshot_paths["TradingSession"])
-            load_price_bar_snapshot(conn, snapshot_paths["PriceBar"])
+            load_rows(conn, rows_by_source_table)
     finally:
         conn.close()

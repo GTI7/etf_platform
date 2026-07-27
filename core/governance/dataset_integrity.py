@@ -82,12 +82,11 @@ from pathlib import Path
 from core.governance import archive_seal
 from core.governance.canonical_jsonl import read_canonical_jsonl, sha256_of_file
 from core.governance.dataset_manifest import (
+    DATASET_MANIFEST_FILENAME,
     DatasetEntry,
     DatasetManifestError,
     parse_dataset_manifest_text,
 )
-
-DATASET_MANIFEST_FILENAME = "dataset_manifest.json"
 
 
 class DatasetIntegrityStatus(str, Enum):

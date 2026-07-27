@@ -7,15 +7,20 @@ Package for the platform's hypothesis-lifecycle orchestration capability
 As of Migration Plan Step 5 / Phase 1D, identity and metadata ownership
 is implemented: ``project.Project``/``ProjectLifecycleState``,
 ``project_id.create_project_id``, ``project_repository.ResearchProjectRepository``
-(+ in-memory implementation), ``project_registry.ProjectRegistry``, and
-``historical_backfill`` (registers the three closed historical cycles:
-REFERENCE v1, REFERENCE v2 H1, REFERENCE H3). "What phase is a project
-in" is now a queryable ``Project.lifecycle_state`` for those three,
-instead of only prose across each cycle's ``decision_log.md`` and
+(+ in-memory implementation), and ``project_registry.ProjectRegistry``.
+"What phase is a project in" is a queryable ``Project.lifecycle_state``
+rather than prose across each cycle's ``decision_log.md`` and
 ``README.md`` -- see docs/RESEARCH_PLATFORM_RETROSPECTIVE.md Section 2.
 ``FreezeManager`` and ``ExperimentOrchestrator`` remain unimplemented;
 no interface for either exists yet, per
 docs/ARCHITECTURE_DECISIONS.md AD-036.
+
+**No individual research cycle is named in this package.** The modules
+that register particular cycles -- the three closed REFERENCE cycles and
+the open ``reference_h4`` -- were moved to the top-level
+``research_artifacts/`` package on 2026-07-27 (Engine Boundary cleanup
+item C5). They import from here; nothing here imports from them. A
+registry that names its own contents is not a registry.
 
 Depends on Data, Statistics, Governance, and Validation -- the only
 domain permitted to depend on all four, since coordinating them across

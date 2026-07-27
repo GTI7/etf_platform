@@ -8,7 +8,7 @@ from enum import Enum
 from typing import NewType
 
 from core.domain.exceptions import DomainError
-from core.shared.ids import ETFId, ScoreId
+from core.shared.ids import InstrumentId, ScoreId
 
 # Defined locally rather than in core/shared/ids.py: these identify
 # analytics-only entities and have no reuse outside this package. ScoreId
@@ -87,7 +87,7 @@ class IndicatorDefinition:
 class IndicatorValue:
     indicator_value_id: IndicatorValueId
     indicator_definition_id: IndicatorDefinitionId
-    etf_id: ETFId
+    etf_id: InstrumentId
     session_date: date
     value: Decimal
     computed_at: datetime
@@ -120,7 +120,7 @@ class ScoringProfile:
 @dataclass(frozen=True, slots=True)
 class Score:
     score_id: ScoreId
-    etf_id: ETFId
+    etf_id: InstrumentId
     scoring_profile_id: ScoringProfileId
     session_date: date
     overall_score: Decimal

@@ -19,6 +19,12 @@ from typing import Any
 
 MANIFEST_SCHEMA_VERSION = 3
 
+# The filename this schema is carried in. Defined here, beside the schema
+# it names, so the two modules that build a repository path to it
+# (`dataset_integrity`, `archive_seal`) share one definition rather than
+# each spelling the literal for itself.
+DATASET_MANIFEST_FILENAME = "dataset_manifest.json"
+
 REQUIRED_SOURCE_TABLES = frozenset({"ETF", "PriceBar", "TradingSession"})
 
 _REQUIRED_ENTRY_FIELDS = (

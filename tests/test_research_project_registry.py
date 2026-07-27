@@ -4,7 +4,7 @@ from datetime import date
 
 import pytest
 
-from core.research.historical_backfill import HISTORICAL_PROJECTS, backfill_historical_projects
+from research_artifacts.historical_backfill import HISTORICAL_PROJECTS, backfill_historical_projects
 from core.research.project import Project, ProjectLifecycleState
 from core.research.project_id import create_project_id
 from core.research.project_registry import ProjectRegistry

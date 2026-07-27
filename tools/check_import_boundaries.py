@@ -45,12 +45,23 @@ Two mechanisms make ETF visible without moving a single file:
    the whole package moves together.)
 2. ``ETF_SYMBOLS_BY_MODULE`` names the ETF-specific symbols that
    physically live in asset-class-neutral modules -- ``ETF`` in
-   ``core.market_data.domain.models``, the ``*_etf`` repository
-   functions, ``ETFId`` in the shared kernel. An import is attributed to
-   the ``etf`` domain by the *symbol* it names, not by the module that
-   currently happens to host it. This is what lets the checker report
-   "governance -> etf" for a line whose module path says
-   ``core.market_data``.
+   ``core.market_data.domain.models`` and the ``*_etf`` repository
+   functions. An import is attributed to the ``etf`` domain by the
+   *symbol* it names, not by the module that currently happens to host
+   it. This is what lets the checker report "governance -> etf" for a
+   line whose module path says ``core.market_data``.
+
+   The shared kernel was a third entry until 2026-07-27, when
+   ``core.shared.ids`` declared ``ETFId``. That entry is gone because
+   **the name is gone**: the alias was renamed to ``InstrumentId``
+   (Engine Boundary cleanup item C1), which is the asset-class-neutral
+   vocabulary docs/PLATFORM_ARCHITECTURE_V1.md Section 4.6 already uses
+   for the same concept (``fetch(self, instrument_id: str, ...)``). It
+   was **not** removed because the symbol was reclassified, exempted, or
+   relocated -- the failure mode AD-068 decision 5 warns about -- and
+   nothing about the kernel's rules changed.
+   ``tests/test_import_boundaries.py::test_no_kernel_module_hosts_an_etf_symbol``
+   now asserts that no kernel module may reappear in this mapping.
 
 No domain may depend on ``etf``: an asset class is a plug-in above the
 platform, never something the platform reaches down into. ``etf`` itself
@@ -129,7 +140,6 @@ DOMAIN_OF_TOPLEVEL: dict[str, str] = {
 # the split is real; it is not an allow-list and nothing is exempted by
 # appearing here.
 ETF_SYMBOLS_BY_MODULE: dict[str, frozenset[str]] = {
-    "core.shared.ids": frozenset({"ETFId"}),
     "core.market_data.domain.models": frozenset({"ETF"}),
     "core.market_data.persistence.repository": frozenset(
         {"insert_etf", "get_etf", "get_etf_by_ticker"}

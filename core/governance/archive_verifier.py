@@ -135,13 +135,16 @@ from pathlib import Path
 from typing import Any
 
 from core.governance import archive_seal
+from core.governance.archive_identity import (
+    ARCHIVE_MANIFEST_FILENAME,
+    LEGACY_ARCHIVE_PROJECT_IDS,
+)
 from core.governance.dataset_integrity import (
     DatasetIntegrityReport,
     DatasetIntegrityStatus,
     verify_dataset_integrity as _verify_dataset_integrity,
 )
 from core.governance.decision_recorder import (
-    ARCHIVE_MANIFEST_FILENAME,
     TRANSITION_RECORDS_FILENAME,
     DecisionRecord,
     read_chain,
@@ -152,14 +155,6 @@ from core.governance.freeze_verifier import (
     VerificationResult,
     verify_freeze as _verify_freeze_claim,
 )
-
-# The three archive directories that predate archive_manifest.json
-# (docs/RESEARCH_ARCHIVE_MANIFEST.md "Applicability"). Duplicated from
-# tools/archive_manifest.py's own LEGACY_ARCHIVE_PROJECT_IDS rather than
-# imported from it: core/ never imports tools/ (the dependency runs the
-# other way), matching how core/governance/decision_recorder.py already
-# duplicates ARCHIVE_MANIFEST_FILENAME instead of reaching into tools/.
-LEGACY_ARCHIVE_PROJECT_IDS = frozenset({"reference_v1", "reference_v2_h1", "reference_h3"})
 
 _ARCHIVE_TERMINAL_PHASE = "Archive"
 

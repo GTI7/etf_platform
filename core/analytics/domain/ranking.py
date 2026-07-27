@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from core.analytics.domain.models import Score
-from core.shared.ids import ETFId
+from core.shared.ids import InstrumentId
 
 
 @dataclass(frozen=True, slots=True)
@@ -16,7 +16,7 @@ class RankedScore:
     session_date, score_id, or computed_at, which are Score's persistence
     identity, not ranking's business meaning."""
 
-    etf_id: ETFId
+    etf_id: InstrumentId
     overall_score: Decimal
     rank: int
 

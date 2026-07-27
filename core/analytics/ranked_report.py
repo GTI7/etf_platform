@@ -15,7 +15,7 @@ from core.analytics.persistence.repository import (
 )
 from core.domain.exceptions import DomainError
 from core.market_data.persistence.repository import get_etf
-from core.shared.ids import ETFId
+from core.shared.ids import InstrumentId
 
 
 class MissingScoreError(DomainError):
@@ -83,7 +83,7 @@ class RankedETFReportEntry:
     ETF/session."""
 
     rank: int
-    etf_id: ETFId
+    etf_id: InstrumentId
     ticker: str
     name: str
     overall_score: Decimal
@@ -174,7 +174,7 @@ class ETFAnalysisReport:
     computed via the same rank_scores() the multi-ETF report uses -- not
     a separate ranking rule."""
 
-    etf_id: ETFId
+    etf_id: InstrumentId
     ticker: str
     name: str
     analysis_date: date

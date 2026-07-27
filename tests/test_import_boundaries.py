@@ -24,6 +24,17 @@ coupling turns the inventory test red; removing one likewise, until the
 last removal makes the xfail pass unexpectedly, fails the suite under
 ``strict=True``, and forces the marker and the baseline below to be
 deleted together with this note.
+
+**Status, 2026-07-27 (Engine Boundary cleanup).** The inventory is down
+from five violations across two edges to **two across one**. The
+``governance -> etf`` edge is empty -- the coupling AD-068 decision 4
+named as the one the step was written to expose -- and the ``data ->
+etf`` edge is all that remains: ``core.market_data`` still declares the
+``ETF`` aggregate and its repository functions, and extracting that
+aggregate is deliberately deferred until a second asset-class workload
+exists to shape it. The xfail therefore still fails, correctly, and the
+marker stays. Each removal is itemized above the baseline tuple with the
+intent that authorized it; none was a test edit.
 """
 
 from __future__ import annotations
@@ -35,6 +46,7 @@ from pathlib import Path
 import pytest
 
 from tools.check_import_boundaries import (
+    DOMAIN_OF_TOPLEVEL,
     ETF_SYMBOLS_BY_MODULE,
     UnmappedPackageError,
     check_repository,
@@ -47,19 +59,50 @@ from tools.check_import_boundaries import (
 # Every entry is an import that was legal only because "ETF" and
 # "generic market data" used to be the same domain to this checker:
 #
-#   governance -> etf   Governance serializes the ETF aggregate itself
-#                       (dataset_snapshots' etf_to_row/row_to_etf), so a
-#                       Governance audit today cannot run against a
-#                       non-ETF asset class. This is the coupling the
-#                       step was written to expose.
 #   data -> etf         core/market_data is not asset-class-neutral: the
-#                       generic ingestion and persistence layers, and the
-#                       shared kernel's id vocabulary, name ETF directly.
+#                       generic ingestion and persistence layers name ETF
+#                       directly.
 #
 # This is a baseline to shrink, never to extend. A new line here needs a
-# recorded decision, not a test edit.
+# recorded decision, not a test edit -- and so does a *removed* line. The
+# ledger below is what makes a shrink auditable: it is not enough that
+# the count went down, it must be visible *how*, because the cheapest way
+# to empty this tuple is to stop attributing the symbols rather than to
+# stop importing them (AD-068 decision 5's false-success mode).
+#
+# Removals so far, each with its recorded intent. All three are from the
+# Engine Boundary cleanup of 2026-07-27; its record, including the
+# prepared AD-068 amendment note, is
+# docs/ENGINE_BOUNDARY_CLEANUP_2026-07-27.md.
+#
+#   item C1 -- kernel identity cleanup:
+#       ("data -> etf", "core/market_data/domain/models.py:7",
+#        "core.shared.ids.ETFId")
+#   discharged by renaming the kernel alias ``ETFId`` -> ``InstrumentId``.
+#   The kernel may hold neutral identity primitives; it may not hold an
+#   asset class's vocabulary. Nothing was exempted, relocated, or
+#   reclassified: the ETF-named symbol ceased to exist, which is the only
+#   way an ETF_SYMBOLS_BY_MODULE entry is allowed to disappear. AD-068
+#   decision 3 names ``ETFId`` explicitly, which is why this reduction
+#   needed an amendment note rather than a test edit.
+#
+#   item C4 -- governance/workload separation:
+#       ("governance -> etf", "core/governance/dataset_snapshots.py:26",
+#        "core.market_data.domain.models.ETF")
+#       ("governance -> etf", "core/governance/dataset_snapshots.py:27",
+#        "core.market_data.persistence.repository.insert_etf")
+#   discharged by deleting ``core.governance.dataset_snapshots``. Its row
+#   /object conversion moved to the workload
+#   (``core.analytics.persistence.etf_snapshot`` for ETF,
+#   ``core.market_data.persistence.snapshot_rows`` for the two neutral
+#   tables); Governance kept canonical serialization, hashing, integrity
+#   verification, and byte comparison, and now receives ``parse_row`` and
+#   ``load_rows`` as caller-supplied callables. The `governance -> etf`
+#   edge is **empty**, which was the coupling AD-068 decision 4 was
+#   written to expose and explicitly deferred to a later step.
+#   `test_governance_does_not_reach_the_etf_domain` below asserts that
+#   emptiness directly, so it cannot regress unnoticed.
 EXPECTED_ETF_COUPLING: tuple[tuple[str, str, str], ...] = (
-    ("data -> etf", "core/market_data/domain/models.py:7", "core.shared.ids.ETFId"),
     (
         "data -> etf",
         "core/market_data/ingestion/price_ingestion.py:7",
@@ -69,16 +112,6 @@ EXPECTED_ETF_COUPLING: tuple[tuple[str, str, str], ...] = (
         "data -> etf",
         "core/market_data/persistence/repository.py:15",
         "core.market_data.domain.models.ETF",
-    ),
-    (
-        "governance -> etf",
-        "core/governance/dataset_snapshots.py:26",
-        "core.market_data.domain.models.ETF",
-    ),
-    (
-        "governance -> etf",
-        "core/governance/dataset_snapshots.py:27",
-        "core.market_data.persistence.repository.insert_etf",
     ),
 )
 
@@ -132,23 +165,36 @@ def test_every_etf_symbol_resolves_in_its_named_module(module_name: str, symbol:
     )
 
 
-def test_governance_to_etf_coupling_is_reported_as_such() -> None:
-    """The specific thing step 1 exists to surface: Governance's reach
-    into the ETF aggregate is reported on the 'governance -> etf' edge,
-    even though every offending line's module path reads
-    ``core.market_data`` and would previously have been blessed as the
-    allowed 'governance -> data' edge."""
-    governance_to_etf = [
+def test_governance_does_not_reach_the_etf_domain() -> None:
+    """The inverse of the test this replaces, and the reason it is a test
+    of its own rather than a line in the inventory tuple above.
+
+    Boundary-hardening step 1 could only *expose* Governance's reach into
+    the ETF aggregate; AD-068 decision 4 deferred discharging it. Cleanup
+    item C4 discharged it on 2026-07-27 by deleting
+    ``core.governance.dataset_snapshots`` and moving row/object
+    conversion to workload-owned modules.
+
+    Asserting emptiness explicitly matters because the inventory tuple
+    cannot: a tuple with no ``governance -> etf`` entry reads identically
+    whether the edge is genuinely gone or the checker merely stopped
+    seeing it. This assertion names the domain rather than any file, so
+    a *new* Governance module reaching into ETF fails here even though it
+    would appear in the inventory as a line nobody recognizes as a
+    regression.
+
+    Governance's warrant for this is not a preference. Section 4.4 of
+    docs/PLATFORM_ARCHITECTURE_V1.md defines Governance as auditing by
+    re-deriving from Data and plain artifacts; an auditor that constructs
+    the asset class it audits cannot audit a second one."""
+    governance_reaching_etf = [
         v for v in check_repository() if v.from_domain == "governance" and v.to_domain == "etf"
     ]
 
-    assert governance_to_etf, "expected the governance -> ETF coupling to be exposed"
-    assert {v.file.as_posix() for v in governance_to_etf} == {
-        "core/governance/dataset_snapshots.py"
-    }
-    assert {v.imported_symbol for v in governance_to_etf} == {"ETF", "insert_etf"}
-    # Reached through an asset-class-neutral module path, attributed by symbol.
-    assert all(v.imported_module.startswith("core.market_data") for v in governance_to_etf)
+    assert governance_reaching_etf == [], (
+        "Governance must not depend on the ETF domain (AD-068 decision 2): "
+        + format_inventory(governance_reaching_etf)
+    )
 
 
 @pytest.mark.xfail(
@@ -367,11 +413,24 @@ def test_neutral_symbols_beside_an_etf_symbol_stay_data(tmp_path: Path) -> None:
     assert [v.imported_symbol for v in violations] == ["ETF"]
 
 
-def test_etf_symbol_hosted_by_the_shared_kernel_is_not_exempt(tmp_path: Path) -> None:
+def test_etf_symbol_hosted_by_the_shared_kernel_is_not_exempt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The kernel is exempt as an import target because the kernel is
-    asset-class-neutral. ``ETFId`` is not, so hosting it in
-    ``core.shared.ids`` must not launder an ETF dependency through the
-    kernel exemption."""
+    asset-class-neutral. An asset-class-specific name is not, so hosting
+    one in ``core.shared.ids`` must not launder an ETF dependency through
+    the kernel exemption.
+
+    The kernel hosted exactly such a name -- ``ETFId`` -- until the
+    2026-07-27 rename to ``InstrumentId`` (cleanup item C1) removed it,
+    so the entry is injected here rather than read from the real mapping.
+    The mechanism is what this test is about and the mechanism is
+    unchanged; deleting the test along with the symbol would have
+    discarded the proof that the kernel exemption is still not a hole.
+    ``test_no_kernel_module_hosts_an_etf_symbol`` below asserts the
+    complementary fact -- that the real mapping has no kernel entry --
+    and neither test substitutes for the other."""
+    monkeypatch.setitem(ETF_SYMBOLS_BY_MODULE, "core.shared.ids", frozenset({"ETFId"}))
     core_root = tmp_path / "core"
     _write(core_root / "__init__.py", "")
     _write(core_root / "shared" / "__init__.py", "")
@@ -388,6 +447,35 @@ def test_etf_symbol_hosted_by_the_shared_kernel_is_not_exempt(tmp_path: Path) ->
     assert violation.from_domain == "data"
     assert violation.to_domain == "etf"
     assert violation.imported_symbol == "ETFId"  # ScoreId stays kernel, exempt
+
+
+def test_no_kernel_module_hosts_an_etf_symbol() -> None:
+    """The state cleanup item C1 established, asserted against the real
+    mapping: no shared-kernel module declares an ETF-domain name.
+
+    The kernel is the one package the checker exempts as an import target
+    for every domain, so an ETF name living there is uniquely damaging --
+    it is reachable from Statistics, which docs/PLATFORM_ARCHITECTURE_V1.md
+    Section 4.3 requires to have "no knowledge that 'ETF' or 'H3' exist".
+    Re-adding a kernel entry to ``ETF_SYMBOLS_BY_MODULE`` fails here,
+    which is deliberately harder to do by accident than noticing that the
+    inventory grew by one line."""
+    kernel_toplevels = {
+        f"core.{toplevel}"
+        for toplevel, domain in DOMAIN_OF_TOPLEVEL.items()
+        if domain == "kernel"
+    }
+    offenders = {
+        module: sorted(symbols)
+        for module, symbols in ETF_SYMBOLS_BY_MODULE.items()
+        if any(module == root or module.startswith(f"{root}.") for root in kernel_toplevels)
+    }
+
+    assert offenders == {}, (
+        f"the shared kernel hosts ETF-domain name(s): {offenders}. The kernel is exempt as "
+        "an import target for every domain, including Statistics, so an asset class's "
+        "vocabulary may not live in it."
+    )
 
 
 def test_relative_import_of_an_etf_symbol_is_detected(tmp_path: Path) -> None:

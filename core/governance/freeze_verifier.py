@@ -11,10 +11,12 @@ dedicated audit pass (see ``docs/H3_GOVERNANCE_COMPLIANCE_AUDIT.md``).
 **Temporary pre-registry interface.** ``docs/PLATFORM_ARCHITECTURE_V1.md``
 Section 4.4 sketches ``FreezeVerifier.verify_freeze(self, freeze_id:
 FreezeId) -> VerificationResult``, where ``FreezeId`` is a Research-domain
-concept backed by a project registry. No such registry exists yet --
-``core/research/`` is still an empty stub (Migration Plan Step 5, not yet
-built), and ``ProjectId``/``ArtifactRef`` are reserved names only (AD-031),
-not a working registry. Building a ``FreezeId`` registry here, ahead of
+concept backed by a project registry. No ``FreezeId`` registry exists --
+``core/research/`` has held a project registry since Migration Plan Step
+5, but it registers *projects*, not freezes, and no ``FreezeId`` type has
+ever been introduced (``ArtifactRef``, reserved for this purpose by
+AD-031, was withdrawn unused on 2026-07-27). Building a ``FreezeId``
+registry here, ahead of
 Research existing, would be exactly the "abstraction ahead of a second
 concrete need" this repository's governance rules rule out. This module
 therefore takes a raw ``commit_ref: str`` plus an explicit list of

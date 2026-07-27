@@ -30,7 +30,7 @@ This module contains no git operations, no freeze verification, no
 archive scaffolding, and no lifecycle-transition logic -- it only
 constructs one `Project` record and calls
 `ProjectRegistry.register_project`, the same scope
-`core/research/historical_backfill.py` keeps for the three historical
+`research_artifacts/historical_backfill.py` keeps for the three historical
 cycles. It introduces no generic registration abstraction: this is a
 single, named function for a single, named cycle, not a reusable
 registry framework.

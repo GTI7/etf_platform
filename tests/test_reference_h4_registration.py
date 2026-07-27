@@ -10,7 +10,7 @@ from core.research.project import ProjectLifecycleState
 from core.research.project_id import create_project_id
 from core.research.project_registry import ProjectRegistry
 from core.research.project_repository import InMemoryResearchProjectRepository
-from core.research.reference_h4_registration import (
+from research_artifacts.reference_h4_registration import (
     REFERENCE_H4_PROJECT,
     register_reference_h4,
 )
@@ -48,7 +48,7 @@ def test_register_reference_h4_twice_raises_value_error(registry: ProjectRegistr
 
 
 def test_registering_reference_h4_does_not_disturb_historical_backfill(registry: ProjectRegistry) -> None:
-    from core.research.historical_backfill import backfill_historical_projects
+    from research_artifacts.historical_backfill import backfill_historical_projects
 
     backfill_historical_projects(registry)
     register_reference_h4(registry)

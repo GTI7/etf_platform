@@ -1,3 +1,9 @@
+"""Asset-class-neutral half of what
+`tests/test_governance_dataset_snapshots.py` used to cover, following its
+subject to `core.market_data.persistence.snapshot_rows` (Engine Boundary
+cleanup item C4). The ETF half is `tests/test_etf_snapshot_rows.py`.
+"""
+
 from __future__ import annotations
 
 import sqlite3
@@ -5,31 +11,22 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 
-from core.governance.canonical_jsonl import write_canonical_jsonl
-from core.governance.dataset_snapshots import (
-    etf_to_row,
-    fetch_all_etfs,
-    fetch_all_price_bars,
-    fetch_all_trading_sessions,
-    load_etf_snapshot,
-    load_price_bar_snapshot,
-    price_bar_to_row,
-    read_etf_snapshot,
-    read_trading_session_snapshot,
-    row_to_etf,
-    row_to_price_bar,
-    row_to_trading_session,
-    trading_session_to_row,
-    write_etf_snapshot,
-    write_price_bar_snapshot,
-    write_trading_session_snapshot,
-)
+from core.governance.canonical_jsonl import read_canonical_jsonl, write_canonical_jsonl
 from core.market_data.domain.models import ETF, Calendar, PriceBar, TradingSession
 from core.market_data.persistence.repository import (
     insert_calendar,
     insert_etf,
     insert_price_bar,
     insert_trading_session,
+)
+from core.market_data.persistence.snapshot_rows import (
+    fetch_all_price_bars,
+    fetch_all_trading_sessions,
+    load_price_bar_rows,
+    price_bar_to_row,
+    row_to_price_bar,
+    row_to_trading_session,
+    trading_session_to_row,
 )
 from core.shared.money import Money
 from core.store.connection import connect
@@ -71,56 +68,14 @@ def _bar(etf_id: str, session_date: date, price_bar_id: str) -> PriceBar:
     )
 
 
-def test_etf_row_round_trip_preserves_etf_id_exactly() -> None:
-    etf = _etf("SPY", "3f2a1b9c4d5e4f6a8b7c9d0e1f2a3b4c")
-
-    row = etf_to_row(etf)
-    restored = row_to_etf(row)
-
-    assert row["etf_id"] == "3f2a1b9c4d5e4f6a8b7c9d0e1f2a3b4c"
-    assert restored == etf
+def _write_trading_session_snapshot(conn: sqlite3.Connection, path: Path) -> None:
+    write_canonical_jsonl(
+        [trading_session_to_row(s) for s in fetch_all_trading_sessions(conn)], path
+    )
 
 
-def test_etf_row_has_exactly_the_six_schema_columns() -> None:
-    row = etf_to_row(_etf("SPY", "abc"))
-
-    assert set(row) == {"etf_id", "ticker", "name", "currency", "calendar_id", "created_at"}
-
-
-def test_write_etf_snapshot_orders_by_ticker(conn: sqlite3.Connection, tmp_path: Path) -> None:
-    insert_calendar(conn, _calendar())
-    insert_etf(conn, _etf("SPY", "id-spy"))
-    insert_etf(conn, _etf("QQQ", "id-qqq"))
-    insert_etf(conn, _etf("ACWI", "id-acwi"))
-
-    path = tmp_path / "etf.jsonl"
-    write_etf_snapshot(conn, path)
-
-    etfs = read_etf_snapshot(path)
-    assert [e.ticker for e in etfs] == ["ACWI", "QQQ", "SPY"]
-
-
-def test_fetch_all_etfs_orders_by_ticker(conn: sqlite3.Connection) -> None:
-    insert_calendar(conn, _calendar())
-    insert_etf(conn, _etf("SPY", "id-spy"))
-    insert_etf(conn, _etf("ACWI", "id-acwi"))
-
-    etfs = fetch_all_etfs(conn)
-
-    assert [e.ticker for e in etfs] == ["ACWI", "SPY"]
-
-
-def test_load_etf_snapshot_preserves_etf_id_never_regenerates(conn: sqlite3.Connection, tmp_path: Path) -> None:
-    insert_calendar(conn, _calendar())
-    frozen_etf_id = "3f2a1b9c4d5e4f6a8b7c9d0e1f2a3b4c"
-    path = tmp_path / "etf.jsonl"
-    write_canonical_jsonl([etf_to_row(_etf("SPY", frozen_etf_id))], path)
-
-    load_etf_snapshot(conn, path)
-
-    loaded = fetch_all_etfs(conn)
-    assert len(loaded) == 1
-    assert loaded[0].etf_id == frozen_etf_id
+def _write_price_bar_snapshot(conn: sqlite3.Connection, path: Path) -> None:
+    write_canonical_jsonl([price_bar_to_row(b) for b in fetch_all_price_bars(conn)], path)
 
 
 def test_trading_session_row_preserves_null_close_time_explicitly() -> None:
@@ -141,9 +96,9 @@ def test_trading_session_snapshot_orders_by_calendar_then_date(conn: sqlite3.Con
     insert_trading_session(conn, TradingSession(CALENDAR_ID, date(2026, 7, 13), True, None))
 
     path = tmp_path / "sessions.jsonl"
-    write_trading_session_snapshot(conn, path)
+    _write_trading_session_snapshot(conn, path)
 
-    restored = read_trading_session_snapshot(path)
+    restored = [row_to_trading_session(row) for row in read_canonical_jsonl(path)]
     assert [s.session_date for s in restored] == [date(2026, 7, 13), date(2026, 7, 15)]
 
 
@@ -175,7 +130,7 @@ def test_price_bar_snapshot_orders_by_etf_then_session_date(conn: sqlite3.Connec
     insert_price_bar(conn, _bar("etf-spy", date(2026, 7, 13), "bar-3"))
 
     path = tmp_path / "pricebar.jsonl"
-    write_price_bar_snapshot(conn, path)
+    _write_price_bar_snapshot(conn, path)
 
     bars = fetch_all_price_bars(conn)
     assert [(b.etf_id, b.session_date) for b in bars] == [
@@ -185,7 +140,7 @@ def test_price_bar_snapshot_orders_by_etf_then_session_date(conn: sqlite3.Connec
     ]
 
 
-def test_load_price_bar_snapshot_round_trips(tmp_path: Path) -> None:
+def test_load_price_bar_rows_round_trips(tmp_path: Path) -> None:
     source_db_path = tmp_path / "source.db"
     source_conn = connect(source_db_path)
     run_migrations(source_conn, MIGRATIONS_DIR)
@@ -194,7 +149,7 @@ def test_load_price_bar_snapshot_round_trips(tmp_path: Path) -> None:
         insert_etf(source_conn, _etf("SPY", "etf-spy"))
         insert_price_bar(source_conn, _bar("etf-spy", date(2026, 7, 13), "bar-1"))
     path = tmp_path / "pricebar.jsonl"
-    write_price_bar_snapshot(source_conn, path)
+    _write_price_bar_snapshot(source_conn, path)
     source_conn.close()
 
     fresh_conn = connect(tmp_path / "fresh.db")
@@ -203,7 +158,7 @@ def test_load_price_bar_snapshot_round_trips(tmp_path: Path) -> None:
         with fresh_conn:
             insert_calendar(fresh_conn, _calendar())
             insert_etf(fresh_conn, _etf("SPY", "etf-spy"))
-            load_price_bar_snapshot(fresh_conn, path)
+            load_price_bar_rows(fresh_conn, read_canonical_jsonl(path))
         loaded = fetch_all_price_bars(fresh_conn)
         assert len(loaded) == 1
         assert loaded[0].price_bar_id == "bar-1"

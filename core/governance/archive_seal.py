@@ -154,22 +154,21 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from core.governance.dataset_manifest import DatasetManifestError, parse_dataset_manifest_text
-from core.governance.decision_recorder import ARCHIVE_MANIFEST_FILENAME
+from core.governance.archive_identity import (
+    ARCHIVE_MANIFEST_FILENAME,
+    LEGACY_ARCHIVE_PROJECT_IDS,
+)
+from core.governance.dataset_manifest import (
+    DATASET_MANIFEST_FILENAME,
+    DatasetManifestError,
+    parse_dataset_manifest_text,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 ARCHIVE_SEAL_REGISTER_RELATIVE_PATH = "docs/archive_seal_register.jsonl"
 PROTECTED_FILE_HASHES_RELATIVE_PATH = "tests/fixtures/protected_file_hashes.json"
 GITATTRIBUTES_FILENAME = ".gitattributes"
-
-# The three archive directories that predate archive_manifest.json
-# (docs/RESEARCH_ARCHIVE_MANIFEST.md "Applicability"). Duplicated rather
-# than imported from `archive_verifier`, which is this module's *caller*
-# -- the dependency runs that way and must not be inverted -- matching
-# `archive_verifier`'s own precedent of duplicating it from
-# `tools/archive_manifest.py` rather than importing across a boundary.
-LEGACY_ARCHIVE_PROJECT_IDS = frozenset({"reference_v1", "reference_v2_h1", "reference_h3"})
 
 # The directory every dataset_manifest.json `snapshot_path` must resolve
 # inside (AD-074 SS5.1 as amended 2026-07-26, hardening item M-1).
@@ -198,13 +197,6 @@ _REGULAR_FILE_MODES = frozenset({"100644", "100755"})
 # for, so it is UNVERIFIABLE rather than read optimistically. Bumping
 # this constant is a schema migration, never a tolerance widening.
 SUPPORTED_REGISTER_SCHEMA_VERSION = 1
-
-# Duplicated as a literal rather than imported from dataset_manifest.py,
-# matching archive_verifier.py's own precedent of hardcoding required
-# item filenames (_REQUIRED_ITEMS) rather than sourcing them from
-# elsewhere -- dataset_manifest.py exposes no "filename" constant to
-# import in the first place.
-_DATASET_MANIFEST_FILENAME = "dataset_manifest.json"
 
 # schema_version, project_id, sealed_commit, sealed_at, sealed_by are
 # never absent from a well-formed record; supersedes is the one field
@@ -1337,7 +1329,7 @@ def _dataset_manifest_exclusion_set(
     An absent or unreadable dataset_manifest.json at the sealing commit
     makes the exclusion set underivable, which must never fall back to
     "exclude nothing" (AC-74-5) -- it is reported as (None, <reason>)."""
-    manifest_repo_path = f"{archive_relative_prefix}/{_DATASET_MANIFEST_FILENAME}"
+    manifest_repo_path = f"{archive_relative_prefix}/{DATASET_MANIFEST_FILENAME}"
     content = _read_blob(sealed_commit, manifest_repo_path, repo_root=repo_root)
     if content is None:
         return None, (

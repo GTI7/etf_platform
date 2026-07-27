@@ -7,9 +7,10 @@ from pathlib import Path
 
 import pytest
 
+from core.analytics.persistence.etf_snapshot import etf_to_row
+from core.analytics.persistence.frozen_dataset import load_snapshot_rows, parse_snapshot_row
 from core.governance.canonical_jsonl import sha256_of_file, write_canonical_jsonl
 from core.governance.dataset_manifest import MANIFEST_SCHEMA_VERSION
-from core.governance.dataset_snapshots import etf_to_row, price_bar_to_row, trading_session_to_row
 from core.governance.reconstruction_loader import (
     DatasetHashMismatchError,
     DatasetRowCountMismatchError,
@@ -23,9 +24,17 @@ from core.governance.reconstruction_loader import (
     reconstruct_database,
 )
 from core.market_data.domain.models import ETF, PriceBar, TradingSession
+from core.market_data.persistence.snapshot_rows import price_bar_to_row, trading_session_to_row
 from core.shared.money import Money
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
+
+# The workload half of a reconstruction, which `reconstruct_database`
+# requires and never supplies (Engine Boundary cleanup item C4). Spelled
+# once here so every call below reads as "the same reconstruction, this
+# particular input", and so a future second workload's tests differ from
+# these in exactly this binding.
+WORKLOAD = {"parse_row": parse_snapshot_row, "load_rows": load_snapshot_rows}
 
 
 def _etf(ticker: str, etf_id: str, calendar_id: str = "XNYS") -> ETF:
@@ -109,7 +118,7 @@ def test_content_hash_mismatch_is_rejected(tmp_path: Path) -> None:
     db_path = tmp_path / "scratch.db"
 
     with pytest.raises(DatasetHashMismatchError):
-        reconstruct_database(db_path, MIGRATIONS_DIR, cycle_dir, manifest_path)
+        reconstruct_database(db_path, MIGRATIONS_DIR, cycle_dir, manifest_path, **WORKLOAD)
 
     assert not db_path.exists()
 
@@ -124,7 +133,7 @@ def test_row_count_mismatch_is_rejected(tmp_path: Path) -> None:
     db_path = tmp_path / "scratch.db"
 
     with pytest.raises(DatasetRowCountMismatchError):
-        reconstruct_database(db_path, MIGRATIONS_DIR, cycle_dir, manifest_path)
+        reconstruct_database(db_path, MIGRATIONS_DIR, cycle_dir, manifest_path, **WORKLOAD)
 
     assert not db_path.exists()
 
@@ -135,7 +144,7 @@ def test_missing_snapshot_file_is_rejected(tmp_path: Path) -> None:
     db_path = tmp_path / "scratch.db"
 
     with pytest.raises(MissingSnapshotArtifactError):
-        reconstruct_database(db_path, MIGRATIONS_DIR, cycle_dir, manifest_path)
+        reconstruct_database(db_path, MIGRATIONS_DIR, cycle_dir, manifest_path, **WORKLOAD)
 
     assert not db_path.exists()
 
@@ -147,7 +156,7 @@ def test_unknown_calendar_id_on_an_etf_row_is_rejected(tmp_path: Path) -> None:
     db_path = tmp_path / "scratch.db"
 
     with pytest.raises(UnknownEtfCalendarError, match="NOT_A_REAL_CALENDAR"):
-        reconstruct_database(db_path, MIGRATIONS_DIR, cycle_dir, manifest_path)
+        reconstruct_database(db_path, MIGRATIONS_DIR, cycle_dir, manifest_path, **WORKLOAD)
 
     assert not db_path.exists()
 
@@ -158,7 +167,7 @@ def test_refuses_to_reconstruct_into_an_existing_scratch_path(tmp_path: Path) ->
     db_path.write_bytes(b"leftover from a previous attempt")
 
     with pytest.raises(ScratchDatabaseExistsError):
-        reconstruct_database(db_path, MIGRATIONS_DIR, cycle_dir, manifest_path)
+        reconstruct_database(db_path, MIGRATIONS_DIR, cycle_dir, manifest_path, **WORKLOAD)
 
 
 def test_successful_reconstruction_follows_the_full_load_order(tmp_path: Path) -> None:
@@ -169,7 +178,7 @@ def test_successful_reconstruction_follows_the_full_load_order(tmp_path: Path) -
     )
     db_path = tmp_path / "scratch.db"
 
-    reconstruct_database(db_path, MIGRATIONS_DIR, cycle_dir, manifest_path)
+    reconstruct_database(db_path, MIGRATIONS_DIR, cycle_dir, manifest_path, **WORKLOAD)
 
     assert db_path.exists()
 
@@ -185,7 +194,7 @@ def test_duplicate_etf_id_in_etf_snapshot_is_rejected(tmp_path: Path) -> None:
     db_path = tmp_path / "scratch.db"
 
     with pytest.raises(DuplicateEtfIdError, match="etf-dup"):
-        reconstruct_database(db_path, MIGRATIONS_DIR, cycle_dir, manifest_path)
+        reconstruct_database(db_path, MIGRATIONS_DIR, cycle_dir, manifest_path, **WORKLOAD)
 
     assert not db_path.exists()
 
@@ -199,7 +208,7 @@ def test_unknown_calendar_id_on_a_trading_session_row_is_rejected(tmp_path: Path
     db_path = tmp_path / "scratch.db"
 
     with pytest.raises(UnknownTradingSessionCalendarError, match="NOT_A_REAL_CALENDAR"):
-        reconstruct_database(db_path, MIGRATIONS_DIR, cycle_dir, manifest_path)
+        reconstruct_database(db_path, MIGRATIONS_DIR, cycle_dir, manifest_path, **WORKLOAD)
 
     assert not db_path.exists()
 
@@ -224,7 +233,7 @@ def test_duplicate_trading_session_key_is_rejected(tmp_path: Path) -> None:
     db_path = tmp_path / "scratch.db"
 
     with pytest.raises(DuplicateTradingSessionError, match="XNYS"):
-        reconstruct_database(db_path, MIGRATIONS_DIR, cycle_dir, manifest_path)
+        reconstruct_database(db_path, MIGRATIONS_DIR, cycle_dir, manifest_path, **WORKLOAD)
 
     assert not db_path.exists()
 
@@ -247,6 +256,6 @@ def test_malformed_pricebar_row_is_rejected_before_db_mutation(tmp_path: Path) -
     db_path = tmp_path / "scratch.db"
 
     with pytest.raises(MalformedSnapshotRowError):
-        reconstruct_database(db_path, MIGRATIONS_DIR, cycle_dir, manifest_path)
+        reconstruct_database(db_path, MIGRATIONS_DIR, cycle_dir, manifest_path, **WORKLOAD)
 
     assert not db_path.exists()

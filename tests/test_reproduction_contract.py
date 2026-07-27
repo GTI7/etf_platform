@@ -22,15 +22,10 @@ from pathlib import Path
 
 import pytest
 
+from core.analytics.persistence.etf_snapshot import etf_to_row, fetch_all_etfs
+from core.analytics.persistence.frozen_dataset import load_snapshot_rows, parse_snapshot_row
 from core.governance.canonical_jsonl import sha256_of_file, write_canonical_jsonl
 from core.governance.dataset_manifest import MANIFEST_SCHEMA_VERSION
-from core.governance.dataset_snapshots import (
-    etf_to_row,
-    fetch_all_etfs,
-    fetch_all_price_bars,
-    price_bar_to_row,
-    trading_session_to_row,
-)
 from core.governance.identity_verification import (
     FrozenIdentityChangedError,
     assert_frozen_identity_unchanged,
@@ -45,11 +40,20 @@ from core.governance.reconstruction_loader import (
 )
 from core.market_data.domain.models import ETF, PriceBar, TradingSession
 from core.market_data.persistence.repository import insert_etf
+from core.market_data.persistence.snapshot_rows import (
+    fetch_all_price_bars,
+    price_bar_to_row,
+    trading_session_to_row,
+)
 from core.shared.money import Money
 from core.store.connection import connect
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 CALENDAR_ID = "XNYS"
+
+# See tests/test_governance_reconstruction_loader.py: `reconstruct_database`
+# takes the workload's row parser and row loader and supplies neither.
+WORKLOAD = {"parse_row": parse_snapshot_row, "load_rows": load_snapshot_rows}
 
 
 def _etf(ticker: str, etf_id: str) -> ETF:
@@ -146,7 +150,7 @@ def test_etf_snapshot_loads_preserving_etf_id_and_pricebar_fk_holds(tmp_path: Pa
     )
     db_path = tmp_path / "scratch.db"
 
-    reconstruct_database(db_path, MIGRATIONS_DIR, cycle_dir, manifest_path)
+    reconstruct_database(db_path, MIGRATIONS_DIR, cycle_dir, manifest_path, **WORKLOAD)
 
     conn = connect(db_path)
     try:
@@ -173,7 +177,7 @@ def test_duplicate_ticker_in_etf_snapshot_is_rejected(tmp_path: Path) -> None:
     db_path = tmp_path / "scratch.db"
 
     with pytest.raises(DuplicateTickerError, match="SPY"):
-        reconstruct_database(db_path, MIGRATIONS_DIR, cycle_dir, manifest_path)
+        reconstruct_database(db_path, MIGRATIONS_DIR, cycle_dir, manifest_path, **WORKLOAD)
 
     assert not db_path.exists()  # must fail before the scratch database is even created
 
@@ -190,7 +194,7 @@ def test_pricebar_referencing_unknown_etf_id_is_rejected(tmp_path: Path) -> None
     db_path = tmp_path / "scratch.db"
 
     with pytest.raises(OrphanPriceBarError, match="etf-does-not-exist"):
-        reconstruct_database(db_path, MIGRATIONS_DIR, cycle_dir, manifest_path)
+        reconstruct_database(db_path, MIGRATIONS_DIR, cycle_dir, manifest_path, **WORKLOAD)
 
     assert not db_path.exists()
 
@@ -204,7 +208,12 @@ def test_missing_expected_ticker_is_rejected(tmp_path: Path) -> None:
 
     with pytest.raises(MissingExpectedTickerError, match="QQQ"):
         reconstruct_database(
-            db_path, MIGRATIONS_DIR, cycle_dir, manifest_path, expected_tickers={"SPY", "QQQ"}
+            db_path,
+            MIGRATIONS_DIR,
+            cycle_dir,
+            manifest_path,
+            expected_tickers={"SPY", "QQQ"},
+            **WORKLOAD,
         )
 
     assert not db_path.exists()
@@ -225,7 +234,7 @@ def test_network_attempt_during_reproduction_is_rejected() -> None:
 def test_derived_tables_are_allowed_to_change_across_a_run(tmp_path: Path) -> None:
     cycle_dir, manifest_path = _build_cycle(tmp_path, etfs=[_etf("SPY", "etf-spy")])
     db_path = tmp_path / "scratch.db"
-    reconstruct_database(db_path, MIGRATIONS_DIR, cycle_dir, manifest_path)
+    reconstruct_database(db_path, MIGRATIONS_DIR, cycle_dir, manifest_path, **WORKLOAD)
 
     conn = connect(db_path)
     try:
@@ -253,7 +262,7 @@ def test_derived_tables_are_allowed_to_change_across_a_run(tmp_path: Path) -> No
 def test_frozen_tables_cannot_change_across_a_run(tmp_path: Path) -> None:
     cycle_dir, manifest_path = _build_cycle(tmp_path, etfs=[_etf("SPY", "etf-spy")])
     db_path = tmp_path / "scratch.db"
-    reconstruct_database(db_path, MIGRATIONS_DIR, cycle_dir, manifest_path)
+    reconstruct_database(db_path, MIGRATIONS_DIR, cycle_dir, manifest_path, **WORKLOAD)
 
     conn = connect(db_path)
     try:

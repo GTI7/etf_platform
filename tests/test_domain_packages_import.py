@@ -10,8 +10,13 @@ the "still empty" check below. Phase 1C (Step 4) populates
 carving that domain out too. Phase 1D (Step 5) populates
 ``core.research`` with its identity/metadata slice
 (``core.research.project``, ``project_id``, ``project_repository``,
-``project_registry``, ``historical_backfill``), carving that domain out
-as well. Migration Plan Step 7 populates ``core.validation`` with its
+``project_registry``), carving that domain out as well. That slice also
+contained ``historical_backfill`` until 2026-07-27, when it and
+``reference_h4_registration`` moved to the top-level
+``research_artifacts/`` package (Engine Boundary cleanup item C5) --
+they register named cycles, which is artifact data rather than domain
+capability. Their import is asserted below from their new home, in a
+test that also asserts they are *gone* from ``core.research``. Migration Plan Step 7 populates ``core.validation`` with its
 minimal gate-result increment (``core.validation.gate_result``,
 ``core.validation.gates.signal_independence``,
 ``core.validation.gates.economic_rationale`` -- see
@@ -89,7 +94,6 @@ def test_research_package_now_exposes_identity_and_metadata_submodules() -> None
     """Phase 1D populates core.research with its identity/metadata slice
     -- callers import each submodule explicitly (``core.research`` itself
     re-exports nothing), and each must expose its public entry point."""
-    import core.research.historical_backfill as historical_backfill
     import core.research.project as project
     import core.research.project_id as project_id
     import core.research.project_registry as project_registry
@@ -101,8 +105,30 @@ def test_research_package_now_exposes_identity_and_metadata_submodules() -> None
     assert hasattr(project_repository, "ResearchProjectRepository")
     assert hasattr(project_repository, "InMemoryResearchProjectRepository")
     assert hasattr(project_registry, "ProjectRegistry")
+
+
+def test_cycle_registrations_live_outside_core_and_still_import() -> None:
+    """Cleanup item C5. The two modules that register named research
+    cycles are importable from ``research_artifacts`` and are no longer
+    importable from ``core.research``.
+
+    Both halves matter. Asserting only the new location would pass while
+    a copy was left behind under ``core/``; asserting only the absence
+    would pass if the modules had simply been deleted."""
+    import research_artifacts.historical_backfill as historical_backfill
+    import research_artifacts.reference_h4_registration as reference_h4_registration
+
     assert hasattr(historical_backfill, "HISTORICAL_PROJECTS")
     assert hasattr(historical_backfill, "backfill_historical_projects")
+    assert hasattr(reference_h4_registration, "REFERENCE_H4_PROJECT")
+    assert hasattr(reference_h4_registration, "register_reference_h4")
+
+    for removed in (
+        "core.research.historical_backfill",
+        "core.research.reference_h4_registration",
+    ):
+        with pytest.raises(ModuleNotFoundError):
+            importlib.import_module(removed)
 
 
 def test_validation_package_now_exposes_step_7_submodules() -> None:

@@ -13,7 +13,7 @@ open cycle, deliberately left unregistered (AD-050 A6-C6: no
 Phase-B-legal registration path for an open cycle existed at the time).
 It stopped being true a second way on 2026-07-23, when `reference_h4`
 was registered via the separate, non-historical registration path
-`core/research/reference_h4_registration.py` -- kept out of this module
+`research_artifacts/reference_h4_registration.py` -- kept out of this module
 because `backfill_historical_projects()` is deliberately non-idempotent
 and scoped, by design, to closed historical cycles only. This correction
 is documentation only: `HISTORICAL_PROJECTS` and

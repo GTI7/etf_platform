@@ -2,12 +2,18 @@
 
 See docs/RESEARCH_ARCHIVE_MANIFEST.md for the schema itself and the
 rationale. This module is tooling, not `core/governance/` business
-logic (that package remains intentionally empty in Phase 0 of
-docs/RESEARCH_PLATFORM_MVP_MIGRATION_PLAN.md) -- it builds and writes
-one small JSON file plus empty evidence directories for a *new*
-project's archive directory, nothing more (AD-038). It never reads or
-interprets an existing manifest, and never implements
-`ArchiveVerifier`.
+logic -- it builds and writes one small JSON file plus empty evidence
+directories for a *new* project's archive directory, nothing more
+(AD-038). It never reads or interprets an existing manifest, and never
+implements `ArchiveVerifier`.
+
+It does *depend* on `core.governance.archive_identity` for the two
+constants that define which directory it may write into and what it
+names the file. Tooling depending on `core/` is the direction that was
+always allowed; the reverse never is. The original of this note said
+`core/governance/` "remains intentionally empty in Phase 0 of
+docs/RESEARCH_PLATFORM_MVP_MIGRATION_PLAN.md", which stopped being true
+at Phase 1C and is corrected here rather than carried forward.
 
 Pure/IO split, matching the rest of this repository's discipline
 (AD-007's injectable `Clock`, `core/analytics/domain/calculations.py`'s
@@ -23,16 +29,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from core.governance.archive_identity import (
+    ARCHIVE_MANIFEST_FILENAME,
+    LEGACY_ARCHIVE_PROJECT_IDS,
+)
 from core.shared.clock import Clock
 
 SCHEMA_VERSION = 1
-
-# The three archive directories that predate this manifest concept.
-# Never modified by this module or any future caller of it -- see
-# docs/RESEARCH_ARCHIVE_MANIFEST.md's "Applicability" note.
-LEGACY_ARCHIVE_PROJECT_IDS = frozenset({"reference_v1", "reference_v2_h1", "reference_h3"})
-
-MANIFEST_FILENAME = "archive_manifest.json"
 
 
 class LegacyArchiveWriteError(RuntimeError):
@@ -83,7 +86,7 @@ def write_manifest(archive_dir: Path, manifest: dict) -> Path:
             f"Refusing to write a manifest into {archive_dir} -- this is a legacy archive "
             "directory that predates the manifest concept (docs/RESEARCH_ARCHIVE_MANIFEST.md)."
         )
-    manifest_path = archive_dir / MANIFEST_FILENAME
+    manifest_path = archive_dir / ARCHIVE_MANIFEST_FILENAME
     if manifest_path.exists():
         raise ManifestAlreadyExistsError(
             f"{manifest_path} already exists -- refusing to overwrite an existing manifest."

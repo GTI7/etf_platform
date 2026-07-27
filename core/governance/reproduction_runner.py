@@ -58,15 +58,22 @@ own load-and-run -- ``ImportError`` included -- is
 ``REPRODUCTION_FAILED``. Remapping a load-time ``ImportError`` there
 would change what ``REPRODUCTION_FAILED`` means and is a separate
 decision (Phase F gate review SS 3.3).
+
+**This module is a library, not an entry point** (Engine Boundary
+cleanup item C4, 2026-07-27). Its ``python -m
+core.governance.reproduction_runner`` CLI moved to
+``tools/reproduce_cycle.py`` and the invocation is now ``python -m
+tools.reproduce_cycle``. Behaviour is unchanged; the reason is that a CLI
+must *choose* the ``parse_row``/``load_rows`` implementations
+``reconstruct_database`` now requires, and choosing the ETF workload's
+implementations inside Governance would reinstate the ``governance ->
+etf`` edge (AD-068 decision 2) that C4 exists to remove.
 """
 
 from __future__ import annotations
 
-import argparse
 import importlib.util
-import json
 import sys
-import tempfile
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
@@ -77,7 +84,7 @@ from core.governance.identity_verification import (
     snapshot_identity_state,
 )
 from core.governance.network_guard import offline_guard
-from core.governance.pinned_worktree import REPO_ROOT, WorktreeError, pinned_worktree
+from core.governance.pinned_worktree import WorktreeError, pinned_worktree
 from core.governance.reconstruction_loader import (
     DatasetHashMismatchError,
     DatasetRowCountMismatchError,
@@ -88,6 +95,8 @@ from core.governance.reconstruction_loader import (
     MissingExpectedTickerError,
     MissingSnapshotArtifactError,
     OrphanPriceBarError,
+    RowParser,
+    SnapshotRowLoader,
     UnknownEtfCalendarError,
     UnknownTradingSessionCalendarError,
     reconstruct_database,
@@ -190,6 +199,8 @@ def run_reproduction(
     commit_hash: str,
     scratch_db_path: Path,
     run_experiment: Callable[[ModuleType, Path], Any],
+    parse_row: RowParser,
+    load_rows: SnapshotRowLoader,
 ) -> ReproductionOutcome:
     """Run one full reproduction attempt end-to-end.
 
@@ -200,6 +211,12 @@ def run_reproduction(
     responsibility; this function's job is guaranteeing the module and
     migrations come from the pinned worktree and every frozen input has
     already been verified, not knowing every script's own parameter shape.
+
+    `parse_row` and `load_rows` are the same kind of parameter for the
+    same kind of reason, added by Engine Boundary cleanup item C4: this
+    function verifies frozen inputs and never constructs the workload's
+    objects. They are passed straight through to `reconstruct_database`
+    -- see `core.governance.reconstruction_loader` for their contracts.
 
     The ETF snapshot's semantic coverage (does it cover the pinned
     commit's own ETF_UNIVERSE, not just hash-match) is always checked --
@@ -228,6 +245,8 @@ def run_reproduction(
                         migrations_dir=worktree_path / migrations_relative_path,
                         cycle_dir=cycle_dir,
                         manifest_path=dataset_manifest_path,
+                        parse_row=parse_row,
+                        load_rows=load_rows,
                         expected_tickers=expected_tickers,
                     )
                 except MissingSnapshotArtifactError as exc:
@@ -276,88 +295,3 @@ def run_reproduction(
     return ReproductionOutcome(
         ReproductionStatus.VERIFIED, "reproduction completed; frozen identities unchanged"
     )
-
-
-def _run_experiment_entrypoint(module: ModuleType, db_path: Path) -> Any:
-    """The one calling convention every pinned experiment script exposes
-    (amendment SS F.2: "Run `run(db_path=<scratch path>, ...)` from the
-    worktree's own copy of the experiment script")."""
-    return module.run(db_path)
-
-
-def _cli_main(argv: list[str] | None = None) -> int:
-    """``python -m core.governance.reproduction_runner <cycle>``: run one
-    reproduction attempt for a ``research_archive/<cycle>`` directory,
-    resolving ``commit_hash`` from its own ``reproduction_record.json``
-    and the dataset manifest from its own ``dataset_manifest.json`` --
-    the two files Standard SS5 already places there. The experiment
-    module's own path isn't part of either schema (and this fix does not
-    add a field to invent one), so it is the one required flag."""
-    parser = argparse.ArgumentParser(
-        prog="python -m core.governance.reproduction_runner",
-        description="Run one end-to-end reproduction attempt for a research_archive/<cycle> directory.",
-    )
-    parser.add_argument(
-        "cycle",
-        type=Path,
-        help="path to the cycle directory (must contain reproduction_record.json and dataset_manifest.json)",
-    )
-    parser.add_argument(
-        "--experiment-module",
-        type=Path,
-        required=True,
-        help="path, relative to --repo-root, to the pinned commit's own experiment script (must expose run(db_path))",
-    )
-    parser.add_argument(
-        "--migrations",
-        type=Path,
-        default=Path("migrations"),
-        help="path, relative to --repo-root, to the migrations directory (default: migrations)",
-    )
-    parser.add_argument(
-        "--repo-root",
-        type=Path,
-        default=REPO_ROOT,
-        help="repository root to resolve commit_hash against (default: this repository)",
-    )
-    parser.add_argument(
-        "--scratch-db",
-        type=Path,
-        default=None,
-        help="scratch database path (default: a fresh path under a new temp directory)",
-    )
-    args = parser.parse_args(argv)
-
-    cycle_dir: Path = args.cycle
-    record_path = cycle_dir / "reproduction_record.json"
-    try:
-        record_raw = json.loads(record_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        print(f"error: cannot read {record_path}: {exc}", file=sys.stderr)
-        return 2
-    commit_hash = record_raw.get("commit_hash")
-    if not commit_hash:
-        print(f"error: {record_path} has no commit_hash", file=sys.stderr)
-        return 2
-
-    scratch_db_path = args.scratch_db
-    if scratch_db_path is None:
-        scratch_db_path = Path(tempfile.mkdtemp(prefix="reproduction_scratch_")) / "scratch.db"
-
-    outcome = run_reproduction(
-        repo_root=args.repo_root,
-        cycle_dir=cycle_dir,
-        dataset_manifest_path=cycle_dir / "dataset_manifest.json",
-        migrations_relative_path=str(args.migrations),
-        experiment_module_relative_path=str(args.experiment_module),
-        commit_hash=commit_hash,
-        scratch_db_path=scratch_db_path,
-        run_experiment=_run_experiment_entrypoint,
-    )
-
-    print(f"{outcome.status.value}: {outcome.detail}")
-    return 0 if outcome.status is ReproductionStatus.VERIFIED else 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(_cli_main())
