@@ -6667,3 +6667,399 @@ file under `research_archive/reference_h4/` now fails
 The two `experiments/` scripts are the part where the objection still
 lands, which is why R-4b is opened rather than absorbed into the closure
 claim.
+
+---
+
+### AD-077: The governance spine is workload-neutral in semantics; the dataset and reproduction path is not. Each claim is stated separately. (accepted 2026-07-27)
+
+**Relationship to AD-076.** This decision **replaces the withdrawn,
+never-accepted AD-076 draft** in `docs/ENGINE_BOUNDARY_CLEANUP_2026-07-27.md`
+§8. It does **not** supersede AD-076, because there is no AD-076 to
+supersede: that draft was never appended to
+`docs/ARCHITECTURE_DECISIONS.md`, never cited by a test, never
+referenced by an accepted decision, and never used to authorize any
+item in the cleanup. **AD-076 remains unconsumed** and is not spent by
+this decision, by the cleanup record, or by the review that carries it.
+"Supersedes AD-076" is the wrong verb and is not used anywhere in this
+entry, because superseding a number consumes it. **"Unconsumed" here means
+"nothing was decided under it" — it does not mean the number is
+available for reuse; see *Numbering* below, which reserves and retires
+AD-076 and starts new numbering at AD-078.**
+
+**Review basis.** **Level 1 — self-review.** One reviewer with
+repository access, working against the branch `master` working tree at
+HEAD `fd7a26c` plus the uncommitted Engine Boundary Cleanup. **Level 3
+is unavailable and no Level 3 review was performed. This is not an
+independent review, and neither this entry nor the review document that
+carries it may be cited as one** (`docs/RESEARCH_GOVERNANCE_STANDARD.md`
+§4). Nothing in this entry asserts organizational independence, a
+distinct accountable party, or an external reviewer, because none exists
+on this platform. This is the same standing AD-068 and AD-069 declare
+for their own basis.
+
+**Numbering.** AD-070 and AD-071 remain unconsumed, for the reason
+AD-072, AD-073, AD-074, and AD-075 all record.
+
+**AD-076 is reserved and retired. It is not available, and it must not
+be described as free, open, or reusable.** The facts and their
+consequence, separately:
+
+- **What happened.** AD-076 was **drafted, withdrawn, and never
+  appended** to `docs/ARCHITECTURE_DECISIONS.md`. It was never cited by
+  a test, never referenced by an accepted decision, and never used to
+  authorize any item in the Engine Boundary cleanup. Nothing was decided
+  under it (`docs/ENGINE_BOUNDARY_CLEANUP_2026-07-27.md` §8, §8.1).
+- **What that does not imply.** "Nothing was decided under it" does
+  **not** make the number recyclable. The number has a public trail: it
+  is named in the cleanup record's status table, in §8's withdrawal
+  notice, and throughout this review. Re-issuing AD-076 for an unrelated
+  decision would give one number two meanings across the written record,
+  which is exactly the ambiguity an append-only decision log exists to
+  prevent.
+- **Where its meaning went.** AD-076's substance is **disclosed and
+  mapped into AD-077**, not discarded: §6.1 of the carrying review
+  (`docs/ENGINE_NEUTRALITY_ARCHITECTURE_REVIEW_2026-07-27.md`)
+  states the three defects that caused the withdrawal, and this entry's
+  clauses 1, 2, and 3 carry forward what survived — the two-part
+  neutrality claim, the three-class axis (corrected on
+  `core/market_data`), and per-rule enforcement (corrected on the
+  enforcement gap AD-076 clause 3 admitted). A reader who follows the
+  number arrives at this entry.
+- **Consequence for numbering.** **New ADR numbering starts from
+  AD-078.** AD-076 is retired in place and AD-077 is this entry.
+
+AD-076 is nonetheless **unconsumed in the append sense** and stays that
+way: withdrawing it spends nothing, and no step in this review appends
+it. "Retired" describes the number; "unconsumed" describes the log.
+Neither licenses reuse.
+
+This entry reserves no number for Phase 1.6's reproduction-shim policy,
+for Phase 2, or for Phase 3; each is recorded as unassigned rather than
+referred onward to a plan that does not exist. Any such number is
+allocated at the time the decision is written, from AD-078 upward.
+
+**Status.** **Accepted, 2026-07-27.** Documentation only: no code,
+test, tooling, fixture, archive, or CI change.
+
+**Context.** Engine Boundary cleanup C1–C6 discharged the `governance -> etf`
+import edge and produced a genuine improvement. It also produced a draft
+decision claiming a neutrality the tree does not have. This decision records
+what is true, in two parts, so that neither part can be cited as the other.
+
+**Decision.**
+
+**1. The neutrality claim is two claims, and they are stated separately.**
+
+- **1a. The governance spine is workload-neutral in semantics.**
+  `archive_identity`, `archive_seal`, `archive_verifier`,
+  `canonical_jsonl`, `dataset_integrity`, `decision_recorder`,
+  `freeze_verifier`, `independence_linter`, `network_guard`,
+  `pinned_worktree`, `reproduction_record`, and all of
+  `core/validation`, `core/research`, `core/store`, and
+  `core/reporting` contain **no workload fact that reaches behaviour** —
+  no **workload schema name** appears in these modules as a constant, a
+  dict key, a comparison, a parameter default, or any other control-flow
+  input.
+
+  **"Workload schema name" is the load-bearing term and is defined
+  here:** a table name, a column name, a domain entity name, or a
+  calendar identifier — the vocabulary of a workload's data model.
+  Identifiers naming a *particular artifact this platform produced* are
+  a different kind and are **not** covered by that term; the one such
+  case in this module set is `LEGACY_ARCHIVE_PROJECT_IDS`, disclosed in
+  full below rather than left implicit in the word "workload".
+
+  **This is a semantics claim, and it is review-derived.** It was
+  established by reading the modules, not by a tool, and **no test
+  currently asserts it.** It is not pinned by test, and no statement in
+  this decision, in `docs/ENGINE_BOUNDARY_CLEANUP_2026-07-27.md`, or in
+  the review that carries this entry may describe it as pinned,
+  enforced, or asserted by test.
+
+  **Lexical mentions exist inside this set and are named here rather
+  than rounded away.** The inventory is **five modules at six
+  locations**:
+
+  | Location | Form of the mention |
+  |---|---|
+  | `core/governance/canonical_jsonl.py:2` | dataset names as an illustrative list |
+  | `core/governance/reproduction_record.py:33` | dataset names in a field's worked description |
+  | `core/governance/dataset_integrity.py:13` | a worked example path (`dataset_hashes/ETF.jsonl`) |
+  | `core/store/__init__.py:8` | names what a *neighbouring* module owns |
+  | `core/research/execution/experiment.py:8` | **negation** — "domain-blind and carries no ETF-specific logic" |
+  | `core/research/execution/experiment.py:51` | **negation** — "No implementation, no ETF-specific logic" |
+
+  Each is prose. None is read by code. The last two are **negations**:
+  they state that the module carries *no* ETF-specific logic, so they
+  are disclaimers of coupling rather than instances of it, and they are
+  listed here only because a lexical scan would return them.
+
+  **Lexical vocabulary presence is not workload semantic coupling.**
+  This decision claims the latter and not the former: 1a is a statement
+  about what reaches behaviour, and a grep count of the string `ETF`
+  neither establishes nor refutes it. Any restatement of 1a as "zero
+  occurrences of the string" is a different — and false — claim.
+
+  The enumeration above is the complete known set **at this
+  working-tree state**; it is a snapshot, not a guarantee of
+  exhaustiveness, and it will go stale as modules change. **This
+  decision introduces no lexical scanner and authorizes none.** A future
+  decision may propose one; that is a separate AD with its own cost
+  argument, and the absence of one here is deliberate, not an oversight.
+
+  **Disclosure — `LEGACY_ARCHIVE_PROJECT_IDS` is a control-flow input
+  inside this set, and is named here rather than left for a reader to
+  find.** Three of the modules 1a lists do compare against a frozen set
+  of literal identifiers:
+
+  | Location | Form |
+  |---|---|
+  | `core/governance/archive_identity.py:54` | `LEGACY_ARCHIVE_PROJECT_IDS = frozenset({"reference_v1", "reference_v2_h1", "reference_h3"})` |
+  | `core/governance/archive_seal.py:1077` | `if identity.project_id in LEGACY_ARCHIVE_PROJECT_IDS` — a legacy archive is never sealed (AC-74-9) |
+  | `core/governance/archive_verifier.py:501` | `if manifest is None and archive_dir.name in LEGACY_ARCHIVE_PROJECT_IDS` — exemption from the v1 layout check, reached only when no `archive_manifest.json` is present |
+
+  These are real comparisons and they really do reach behaviour, so
+  they are disclosed rather than covered by 1a's "no … comparison"
+  phrasing. **They are not a counterexample to 1a**, for a reason that
+  is stated rather than assumed: `reference_v1`, `reference_v2_h1`, and
+  `reference_h3` are **artifact and research-cycle identifiers — the
+  names of three specific archives this platform produced — not
+  workload schema vocabulary.** They are not table names, column names,
+  entity names, or calendar identifiers; they name *instances*, not a
+  *schema*. A second workload's archives get their own identifiers and
+  are unaffected by this set, whereas a second workload is refused
+  outright by `dataset_manifest`'s `REQUIRED_SOURCE_TABLES` (1b). That
+  is the difference 1a and 1b divide on.
+
+  **No artifact classification rule is introduced by this disclosure.**
+  It records what the constant is and what it decides. It does not
+  define a category of "artifact identifier", does not authorize adding
+  to or removing from `LEGACY_ARCHIVE_PROJECT_IDS`, does not rule on
+  whether such identifiers belong in engine modules at all, and does not
+  create an exemption that a future workload name could be admitted
+  under. Should that question need deciding, it is a separate AD.
+- **1b. The dataset and reproduction path is workload-bound.**
+  `dataset_manifest`, `identity_verification`, `reconstruction_loader`,
+  `reproduction_runner`, and `calendar_definitions` encode ETF's table names,
+  column names, foreign-key topology, and calendar. A second workload cannot
+  produce a governed archive without changing them.
+
+Any statement about this platform's neutrality — in documentation, a release
+note, or an external presentation — must name which of 1a and 1b it refers to.
+An unqualified claim of "workload-neutral platform" is false while 1b holds.
+
+**2. Three classes, and this is a second axis — not a re-drawing of the
+domain map.** The axis has exactly three classes — **Engine**,
+**Reference Workload**, and **Artifact** — and they are mutually
+exclusive: a module classified under this axis carries exactly one of
+them, decided at introduction and stated in its own docstring.
+`core/analytics` is Reference Workload. `research_artifacts/`,
+`research_archive/`, and `experiments/*.py` are Artifact.
+
+**A namespace this decision does not name is not classified by it.**
+The three classes are the only values the axis admits; they are not a
+claim that every namespace in the tree has already been assigned one.
+Where this decision is silent, the classification is simply not made
+here — the deferral of `core/market_data` below is the worked case —
+and this entry classifies no such namespace, by implication or
+otherwise.
+
+**AD-068's domain mapping is unchanged by this decision.** AD-068
+decision 1 maps `core.analytics` to `etf` — that is the mapping AD-068
+decision 1 itself makes, and it is the whole of what it makes. The
+`core.market_data → data` mapping is not AD-068 decision 1's: it is
+the boundary checker's `DOMAIN_OF_TOPLEVEL`
+(`tools/check_import_boundaries.py:119`), which predates AD-068 and
+which AD-068 did not change. AD-068 decision 3 separately attributes
+ETF symbols hosted inside `core.market_data` by the name they bind.
+Those mappings, and the `ETF_SYMBOLS_BY_MODULE` mechanism that
+implements decision 3, are **untouched here**. AD-077 adds a **second,
+orthogonal classification axis**
+(Engine / Reference Workload / Artifact) over the same tree; a module
+has a domain under AD-068 *and* a class under AD-077, and neither
+derives from the other.
+
+**`core/market_data` is not classified by this decision, and the split
+is deferred.** Earlier phrasing spoke of "the ETF half of
+`core/market_data`" as though that half were a module with a class.
+It is not: it is two `data -> etf` violations
+(`ingestion/price_ingestion.py:7`, `persistence/repository.py:15`)
+inside a package that is otherwise Data, held under a strict `xfail`.
+**A package cannot carry two classes, and this decision does not
+pretend to assign it one.** Whether `core/market_data` splits, and
+where the boundary falls, remains **deferred** —
+`docs/ENGINE_BOUNDARY_CLEANUP_2026-07-27.md` §9.1 defers it until a
+second workload exists, and nothing here disturbs that deferral or
+pre-decides its outcome. What this decision *does* correct is the
+withdrawn AD-076 draft's placement of `core/market_data` in **Engine**,
+which the repository's own checker refutes; the correction is that the
+package is **not Engine**, not that it is something else.
+
+**3. Enforcement is stated per rule, at the strength it actually has.**
+
+The enforcement facts, stated before the table so they cannot be read
+off it too generously:
+
+- `tools/check_import_boundaries.py` **exists** and implements the
+  `core/` domain-edge check by symbol attribution (AD-068 decision 3).
+- `tests/test_import_boundaries.py` enforces the **pinned coupling
+  inventory** (`test_known_etf_coupling_inventory_is_exactly_as_documented`),
+  **per-symbol resolution** (`test_every_etf_symbol_resolves_in_its_named_module`),
+  the **kernel non-exemption** (`test_no_kernel_module_hosts_an_etf_symbol`),
+  and the **empty governance edge**
+  (`test_governance_does_not_reach_the_etf_domain`). These are real,
+  blocking assertions and they run in the suite.
+- **CI invocation is advisory, not blocking.**
+  `.github/workflows/governance.yml:92` runs
+  `python tools/check_import_boundaries.py || true`. A boundary
+  violation introduced today does **not** fail CI through that step.
+  The blocking pressure comes from the test suite, not from the CI
+  invocation.
+- The strict `xfail` on
+  `test_real_repository_has_no_boundary_violations`
+  (`tests/test_import_boundaries.py:200`, `strict=True`) **remains in
+  place** for the two known deferred `data -> etf` violations. It is
+  the forcing function AD-068 decision 4 installed: it fails the suite
+  if the violations are fixed without removing the marker, and it does
+  not mask new violations of other edges, which the inventory test
+  catches instead.
+
+**This decision changes no CI configuration and authorizes no CI
+change.** The `|| true` is recorded here as a fact about current
+enforcement strength, not as a defect this decision repairs.
+
+| Rule | Enforcement, accurately |
+|---|---|
+| `core/` dependency table | `tools/check_import_boundaries.py` (exists) + suite assertions (blocking); CI step advisory (`\|\| true`) |
+| Engine may not import a workload | same checker + `test_governance_does_not_reach_the_etf_domain` (blocking) |
+| Known `data -> etf` violations stay visible | strict `xfail`, `strict=True`, unchanged |
+| A file may name at most one workload | **not enforced today**; proposed for Phase 1.5, unauthorized by this decision |
+| Artifacts may not live under `core/` | **not enforced today** — the checker scans `core/` only, so `core → research_artifacts` is invisible to it; proposed for Phase 1.5, unauthorized by this decision |
+| Every module declares its class in its docstring | **review only — unenforced, and this is stated, not implied** |
+
+**4. A workload fact reaches the engine as a value, never as a default —
+applying to new and changed engine signatures.** Required tables,
+identity-table specs, row parsers, loaders, seed steps, and coverage
+providers are supplied by the composition root as parameters with no
+default. Precedent: C4's `parse_row`/`load_rows`, adopted here as a
+general rule. A default would let a caller who forgot one silently
+receive ETF's semantics.
+
+**Scope, stated so this decision does not make the current tree
+non-conformant on acceptance.** The rule binds **any engine signature
+introduced or modified after this decision is accepted**. It is **not
+retroactive**, and accepting it does **not** put the tree in violation
+of an accepted decision.
+
+**Known existing non-conformance, recorded rather than discovered
+later:**
+
+| Location | Non-conformance |
+|---|---|
+| `core/governance/reconstruction_loader.py:272` | `reconstruct_database(..., calendar_id: str = "XNYS", ...)` — a workload fact as a parameter **default** in an engine signature |
+
+This is a real instance of exactly what clause 4 forbids going forward,
+and it is named so that clause 4 cannot be read as a claim that no such
+case exists. **No remediation is authorized by this decision.** It
+schedules no fix, sets no deadline, and does not license editing that
+signature; the change is proposed in Phase 1 item 1.3, which is not
+authorized here (see *What this decision does not do*). Should that
+signature be modified for any reason before Phase 1 is authorized, the
+rule binds it at that point, because modifying it makes it a changed
+signature.
+
+**5. A rename in `core/` is a reproduction-compatibility change.** Because
+a pinned commit's scripts resolve `core.*` through HEAD, any public name
+removed or renamed in `core/` that is imported by the `experiments/`
+script at **the pinned commit named by a cycle's
+`reproduction_record.json`** must either (a) keep a permanent shim,
+explicitly classified as a reproduction shim and covered by a test
+asserting a real pinned importer exists, or (b) have every affected
+cycle's reproduction status re-derived and re-recorded. Silent removal
+is prohibited.
+
+**The anchor is the reproduction record's commit, not the Archive
+Seal.** For `reference_h4` the anchor is
+`research_archive/reference_h4/reproduction_record.json`'s
+`commit_hash` (`3d586ded…`), which is the commit
+`run_reproduction()` checks out into a pinned worktree and whose
+scripts therefore do the importing.
+
+**Archive sealing and reproduction compatibility are separate
+mechanisms and are not merged by this clause.** The Archive Seal
+(AD-074, AD-075) witnesses a *different* commit for a *different*
+purpose — it binds archived bytes to a witnessed commit and is verified
+by tree comparison — and the Seal's commit is not the reproduction
+anchor. Wording that speaks of "the sealed commit" in a reproduction
+context conflates the two, and is not used here. A cycle can have a
+reproduction anchor and no seal, or a seal and no reproduction anchor;
+this clause is triggered by the former alone.
+
+**Retroactive application, already measured.** C1's `ETFId` rename and
+C4's deletion of `core.governance.dataset_snapshots` were examined
+under this rule before the cleanup was committed, and the measurement
+is `docs/ENGINE_BOUNDARY_CLEANUP_2026-07-27.md` §11.3: 45 distinct
+`(module, symbol)` pairs across 20 core modules resolved, 0 unresolved,
+and neither removed name is imported by any pinned experiment script.
+Branch (a) and branch (b) are therefore both unnecessary for those two
+removals. That measurement discharges this clause for C1 and C4; it
+does not, by itself, establish the rule, which is what this clause
+does.
+
+**6. Neutrality claims expire at one implementation.** No seam with exactly
+one implementation may be described as workload-neutral. It may be described
+as *parameterized*, which is a different and smaller claim.
+
+**7. Interaction with AD-068, stated explicitly so clause 5 cannot be
+read as an escape hatch.**
+
+- **AD-068 decision 3 remains unchanged.** This decision does not
+  amend, weaken, reinterpret, or grant an exception to it.
+  `ETF_SYMBOLS_BY_MODULE`, symbol attribution, and decision 5's guard
+  test continue exactly as accepted.
+- **A permanent ETF alias or reproduction shim created under clause 5
+  does not bypass AD-068 decision 3's termination logic.** If such a
+  shim binds an ETF-specific name in an asset-class-neutral module, it
+  is an ETF symbol in that module and belongs in
+  `ETF_SYMBOLS_BY_MODULE` like any other — clause 5 supplies a *reason*
+  for a symbol to persist, never a reason for it to be invisible to the
+  checker. Decision 3's termination condition is that symbol
+  attribution ends when the mapping **empties**; a permanent shim that
+  is exempted from the mapping would make it appear to empty while the
+  coupling persists, which is precisely the false-success shape AD-068
+  decision 5 exists to catch.
+- **Conflict is possible and is not resolved here.** A permanent shim
+  that must never be removed and a mapping that must eventually empty
+  are in tension. **Any actual conflict requires a separate AD**,
+  argued on its own terms, with its own number allocated at that time.
+  This decision neither pre-authorizes that resolution nor reserves a
+  number for it, and **AD-068 is not amended by this entry.** Until
+  such an AD exists, clause 5's branch (a) may not be exercised in a
+  way that would remove an entry from `ETF_SYMBOLS_BY_MODULE`.
+
+**What this decision does not do.** It creates no registry, no plugin
+system, no dependency-injection container, and no dynamic discovery.
+
+**It authorizes no implementation work of any kind, and no module
+moves.** Concretely: it authorizes no Phase 1 item (1.1 through 1.6),
+no Phase 2 work, and no Phase 3 work. It moves no module, relocates no
+constant, changes no signature, adds no test, and modifies no CI
+configuration. The phase plan in §5 of
+`docs/ENGINE_NEUTRALITY_ARCHITECTURE_REVIEW_2026-07-27.md`, the review
+that carries this entry, is a **proposal**, not a grant of authority;
+where this entry names a Phase 1 item it does so to identify a
+proposal, never to approve it. Earlier phrasing of this paragraph excepted "those Phase 1
+names" from the no-moves rule — that exception is **removed**, because
+it made an authorization out of a cross-reference. Each phase requires
+its own authorization, recorded separately.
+
+**Known weakness, stated rather than discovered later.** Four things in
+this decision are held by reading alone: **clause 1a's semantics claim**
+(no test asserts it), **clause 2's docstring rule**, and **clause 3's
+last three rows** (one-workload-per-file, artifacts-outside-`core/`,
+and the docstring declaration). A fifth is weaker than it looks:
+clause 3's first row is enforced by the suite but **not** by the CI
+step, which is advisory. And this repository has no independent
+reviewer (`docs/RESEARCH_GOVERNANCE_STANDARD.md` §4 — Level 3
+unavailable; see *Review basis*). The honest claim is that this
+decision makes drift *nameable in review*, not that it prevents drift.
