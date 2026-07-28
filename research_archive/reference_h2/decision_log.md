@@ -502,3 +502,97 @@ determination, and it creates no gate outcome and no lifecycle transition.
 - **No outcome data** (forward return, Information Coefficient, p-value, or
   any other performance figure) has been read, computed, or referenced at
   any point reflected in this log.
+
+---
+
+## Entry 12 — Archived Level 2 review of the ordering exception
+
+- **Date:** 2026-07-28
+- **Decision:** The procedural exception recorded in Entry 11 has now
+  received an independently archived Level 2 governance review:
+  `reviewer_reports/2026-07-28_level2_ordering_exception_review.md`
+  (commit `cdff7b5`). That review — a fresh session with no conversational
+  continuity to the work under review — independently re-verified the
+  chronology underlying Entry 11 and
+  `gate1_ordering_defect_finding_2026-07-28.md` directly against
+  repository evidence (commit timestamps, the artifact's `generated_at`
+  field), confirmed the absence of any Gate 3 artifact at any date prior
+  to or since the Gate 1 measurement, and confirmed that no
+  `reviewer_reports/` artifact existed, prior to itself, supporting Entry
+  11's approval-record claim under
+  `docs/RESEARCH_GOVERNANCE_STANDARD.md` §8 item 3. The review accepted
+  the exception as a narrowly scoped procedural exception, subject to the
+  conditions stated in its own §7 (no expansion of scope beyond Attempt
+  #1's existing Gate 1 evidence; Entry 11's forward commitments remain
+  binding; whoever eventually makes the Gate 1 determination must have
+  Entry 11, the finding, and the review itself before them; a
+  discard-and-rerun of Attempt #1 under correct ordering remains an
+  available alternative and is not foreclosed by this acceptance). This
+  entry records the existence of that archived review and links it to
+  Entry 11. **It does not modify, supersede, or withdraw Entry 11, and it
+  introduces no new governance exception.**
+- **Evidence references:** `decision_log.md` Entry 11 (the exception this
+  entry links to); `gate1_ordering_defect_finding_2026-07-28.md`;
+  `reviewer_reports/2026-07-28_level2_ordering_exception_review.md`
+  (commit `cdff7b5`).
+- **Governance status:** Phase 3, Gate 1 — the §8 item 3 approval-record
+  gap Entry 11 itself disclosed (its claimed Level 2 basis was
+  self-reported and had no archived, independently checkable form) is now
+  closed by the cited review. Entry 11 remains the authoritative record
+  describing the ordering defect and the exception itself; this entry
+  supplies the missing approval artifact, it does not restate or
+  re-adjudicate the underlying finding. The review's conditions are
+  binding on all subsequent Gate 3 and Gate 1 work under this cycle. **No
+  gate outcome is created by this entry; Gate 1 remains undetermined.** No
+  lifecycle transition; `transition_records.jsonl` unchanged at exactly
+  one record, `gate_outcomes: []`. No Methodology Freeze exists.
+  `reference_h2` remains in **PRE_VALIDATION**.
+- **Reviewer level:** Level 2 — AI-assisted adversarial, per the cited
+  review's own tier statement (procedurally independent; **not
+  organizationally independent**). This entry itself, which only records
+  that review's existence and links it to Entry 11 rather than performing
+  new review work, is Level 1.
+- **Known limitations:** This entry does not alter
+  `gate1_ordering_defect_finding_2026-07-28.md` and does not cure the
+  historical sequencing defect, which remains permanent per Entry 11 and
+  the finding's own §6. It does not change the requirement that any
+  future Gate 3 artifact for this cycle must explicitly disclose that it
+  was authored after the Gate 1 measurement already existed. It does not
+  resolve, narrow, or touch the provisional attempt-cap ruling (Entry 6),
+  the unconfirmed-influence residual risk (Entry 6, restated at Entry 11),
+  or the O-1/O-2/O-4/O-5 provenance observations (Entries 7 and 10) — all
+  remain open exactly as previously recorded. No Level 3 review exists or
+  is available on this platform.
+
+---
+
+## Current status (as of Entry 12)
+
+- **Phases 1–2 and the Phase 2 → 3 transition:** unchanged from the Entry
+  10 status block above.
+- **Phase 3 (Pre-validation):** governing plan frozen (Entry 4); Attempt #1
+  construction frozen (Entry 5); attestation corrected (Entry 6); Gate 1
+  ordering requirement violated, recorded, and governed by exception
+  (Entry 11); **the exception's §8 item 3 approval-record gap closed by an
+  archived Level 2 review (Entry 12)**.
+- **Gate 1:** evidence generated and archived (Entry 7); reproduced exactly,
+  483/483 dates at tolerance 0 (Entry 8); ordering defect disclosed and now
+  Level-2-reviewed (Entries 11–12). **Gate 1 itself has still not been
+  determined — no PASS/FAIL/INCONCLUSIVE outcome exists.**
+- **Gate 3:** **not started.** No economic-rationale document and no Gate 3
+  review exists for this cycle at any date.
+- **Gates 2 and 4:** not addressed in this cycle's artifacts to date.
+- **`reference_h2` remains in PRE_VALIDATION.** No Methodology Freeze, no
+  gate outcome, and no lifecycle transition beyond Entry 3 has occurred.
+- **Attempt budget:** Attempt #1 of 3, with two further attempts nominally
+  remaining — **still provisional**, per Entry 11's known limitations,
+  until the Entry 6 cap ruling is independently confirmed; Entry 12 does
+  not confirm it.
+- **Open items carried forward, not resolved by this entry:** the permanent
+  ordering defect (Entry 11); the O-5 script-provenance gap and O-2
+  post-hoc database-identity capture (Entry 7); the unconfirmed-status
+  residual risk from Entry 6; O-4 (evidence package incomplete); no Level 3
+  review exists or is available on this platform for any entry above.
+- **No outcome data** (forward return, Information Coefficient, p-value, or
+  any other performance figure) has been read, computed, or referenced at
+  any point reflected in this log.
