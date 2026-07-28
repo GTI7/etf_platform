@@ -80,3 +80,21 @@ This document is Level 1 self-review only. It does not claim independence, proce
 ---
 
 This document authorizes no implementation, no code change, no ADR, and no lifecycle-phase transition. `core/research/lifecycle.py` recognizes no phase this document could advance on its own; a `DecisionRecord` asserting genesis `from_phase=HYPOTHESIS` remains a separate, later act. No formation window, skip interval, return calculation, ranking method, forecast horizon, or evaluation metric is fixed by this document.
+
+---
+
+## 7. Evidence Chronology Addendum (2026-07-28)
+
+**Purpose.** This addendum records a subsequent Level 1 review finding without altering any ranking, score, or rejected-alternative reasoning recorded in Sections 1–4 above. Later evidence is chronicled here, not applied retroactively to a completed Phase 2 judgment.
+
+**Chronology.**
+1. The candidate ranking and scoring in Sections 1–4 above were sourced from `docs/REFERENCE_RESEARCH_ROADMAP_NEXT_V2.md` and `docs/PHASE5_HYPOTHESIS_SELECTION_REVIEW_2026-07-27.md`, both already accepted and committed before this document was drafted.
+2. `docs/PHASE5_GATE0_PREPARATION_REVIEW_H2_2026-07-28.md` is later evidence: a separate, subsequent Gate 0 preparation review, dated the same day but produced after the two source documents in item 1 and after this proposal's original drafting.
+
+**Finding and its scope.** That later review's read-only database inspection found that the historical-depth extension `reference_h3`'s Gate 2 executed (backfill to 2016-09-13, all 25 ETFs) is already present in the live database, and that H2's raw-data depth requirement is therefore already met without further backfill — a fact not reflected in either source document listed in item 1, both of which describe H2's data feasibility as requiring an extension.
+
+This finding does **not** retroactively alter the Data readiness rating for H2 in Section 2's table ("Needs depth extension"), nor any other candidate's rating, ranking, or rejection rationale in Sections 2–4. Those rows restate what the cited source documents said at the time this proposal consolidated them, and correcting that restatement is not a Phase 2 act. Per `docs/PHASE5_GATE0_PREPARATION_REVIEW_H2_2026-07-28.md` §2, a defensible Gate 2 requires "a fresh, dated data-inventory re-check" of this finding — not a citation of another cycle's snapshot — together with a written decision on ranking-date panel span. That evaluation belongs to, and is deferred to, Phase 3 (Pre-validation) data adequacy validation.
+
+**Future Gate 1 evidence requirement.** `docs/PHASE5_GATE0_PREPARATION_REVIEW_H2_2026-07-28.md` §1 identifies one item of evidence not named in either source document in item 1: a cross-sectional correlation check between `reference_v1`'s `SMA(20)` rank and a trailing-12-1-month-return rank, computed across the same 25-ETF universe and a shared date range. Per that review's own Governance Boundary (§4), producing this check "require[s] new code in `experiments/`... Producing them is Pre-validation-phase evidence, not Gate-0 preparation." This requirement is therefore deferred to Phase 3. It is not decided, scheduled, scoped, weighted, or answered by this document, and it does not change the Section 5 Deferred Decisions Boundary list, the Selection in Section 3, or the Rejected Alternatives in Section 4.
+
+No formation window, skip interval, return calculation basis, ranking method, tie handling, forecast horizon, or evaluation/rejection criterion is fixed by this addendum. No experiment is executed, and no lifecycle-phase transition is made or implied by it.
