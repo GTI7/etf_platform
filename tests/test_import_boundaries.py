@@ -35,12 +35,26 @@ aggregate is deliberately deferred until a second asset-class workload
 exists to shape it. The xfail therefore still fails, correctly, and the
 marker stays. Each removal is itemized above the baseline tuple with the
 intent that authorized it; none was a test edit.
+
+**Second rule, 2026-07-28 — dependency purity (AD-005).** The checker
+now also enforces that every import under ``core/`` names either the
+standard library or something inside this repository. The tests for it
+are in the final section of this file and **none of them is an xfail**:
+the direction rule was inventoried before it was enforced because the
+tree violated it, whereas ``core/`` has always satisfied AD-005 and the
+only thing missing was a mechanism. ``test_real_repository_imports_no_
+third_party_package`` asserts that directly and passes, which is what
+turns a prose constraint into a blocking one. The two rules are checked
+by separate functions returning separate types and neither test group
+constrains the other -- ``test_the_two_rules_are_independent`` asserts
+that separation rather than leaving it to be inferred.
 """
 
 from __future__ import annotations
 
 import ast
 import importlib
+import sys
 from pathlib import Path
 
 import pytest
@@ -49,8 +63,10 @@ from tools.check_import_boundaries import (
     DOMAIN_OF_TOPLEVEL,
     ETF_SYMBOLS_BY_MODULE,
     UnmappedPackageError,
+    check_dependency_purity,
     check_repository,
     format_inventory,
+    format_purity_inventory,
 )
 
 # The complete ETF coupling present in core/ as of boundary-hardening
@@ -781,3 +797,367 @@ def test_relative_import_crossing_domains_is_detected(tmp_path: Path) -> None:
     violation = violations[0]
     assert violation.from_domain == "governance"
     assert violation.to_domain == "validation"
+
+
+# --- Dependency purity: core/ is standard-library-only (AD-005) ----------
+#
+# AD-005 states the constraint -- "the entire codebase is Python standard
+# library only" -- and until 2026-07-28 nothing checked it. The direction
+# checker walked the same ASTs and discarded every import whose top-level
+# name was not ``core``, so a third-party import was not merely
+# unenforced, it was structurally invisible: no test could have caught
+# it, because the tool never produced a fact about it.
+#
+# These tests are the mechanism. Note what they do *not* do: no test here
+# names ``numpy``, ``scipy`` or ``pandas`` as a special case, and neither
+# does the checker. The rule is the complement of two allow-sets (stdlib,
+# repository-local), so a package nobody anticipated fails for the same
+# reason a famous one does. ``test_no_third_party_package_name_is_
+# hardcoded`` asserts that property directly, because an allow-list-
+# shaped implementation would pass every other test in this section while
+# admitting the first dependency nobody thought to name.
+
+_FAKE_THIRD_PARTY = "quantlib_fictional"
+
+
+def test_third_party_import_in_core_is_rejected(tmp_path: Path) -> None:
+    """The base case the rule exists for: a module under ``core/``
+    importing a package that is neither stdlib nor in this repository."""
+    core_root = tmp_path / "core"
+    _write(core_root / "__init__.py", "")
+    _write(
+        core_root / "statistics" / "__init__.py",
+        f"import {_FAKE_THIRD_PARTY}\n",
+    )
+
+    foreign = check_dependency_purity(core_root)
+
+    assert len(foreign) == 1
+    item = foreign[0]
+    assert item.top_level == _FAKE_THIRD_PARTY
+    assert item.imported_module == _FAKE_THIRD_PARTY
+    assert item.lineno == 1
+
+
+def test_from_import_of_a_third_party_submodule_is_rejected(tmp_path: Path) -> None:
+    """Attribution is by *top-level* name, so a deep ``from`` import is
+    caught and is reported against the package a requirements file would
+    have to name, not against the submodule."""
+    core_root = tmp_path / "core"
+    _write(core_root / "__init__.py", "")
+    _write(
+        core_root / "statistics" / "__init__.py",
+        f"from {_FAKE_THIRD_PARTY}.linalg.decomp import svd\n",
+    )
+
+    foreign = check_dependency_purity(core_root)
+
+    assert len(foreign) == 1
+    assert foreign[0].top_level == _FAKE_THIRD_PARTY
+    assert foreign[0].imported_module == f"{_FAKE_THIRD_PARTY}.linalg.decomp"
+
+
+@pytest.mark.parametrize(
+    ("label", "source"),
+    [
+        (
+            "try/except ImportError",
+            f"try:\n    import {_FAKE_THIRD_PARTY}\nexcept ImportError:\n"
+            f"    {_FAKE_THIRD_PARTY} = None\n",
+        ),
+        (
+            "if TYPE_CHECKING",
+            "from typing import TYPE_CHECKING\n\nif TYPE_CHECKING:\n"
+            f"    from {_FAKE_THIRD_PARTY} import Array\n",
+        ),
+        (
+            "function-local",
+            f"def compute():\n    import {_FAKE_THIRD_PARTY}\n"
+            f"    return {_FAKE_THIRD_PARTY}\n",
+        ),
+    ],
+)
+def test_guarded_third_party_import_is_rejected(
+    tmp_path: Path, label: str, source: str
+) -> None:
+    """A guard is not an exemption, and this is the failure mode most
+    likely to be argued as one.
+
+    ``try: import numpy / except ImportError:`` is the standard way to
+    make a dependency *optional*, and the standard argument for it is
+    that the code still runs without the package. That argument does not
+    apply here. AD-005's rationale is reproducibility -- "there are no
+    third-party numerical library versions that could silently change
+    calculation behavior between releases" -- and an optional dependency
+    makes that worse, not better: the calculation then depends on
+    whether the package happened to be installed, which is exactly the
+    silent behavioural difference the decision forbids. The same holds
+    for a deferred function-local import and for an ``if TYPE_CHECKING:``
+    import, which declares that the repository's types are written
+    against a package it does not have.
+
+    Mechanically this needs no special handling -- ``ast.walk`` descends
+    the whole tree -- which is why it is tested rather than coded around:
+    a future rewrite that walked only ``tree.body`` would pass every
+    other test in this section and silently reopen all three holes."""
+    core_root = tmp_path / "core"
+    _write(core_root / "__init__.py", "")
+    _write(core_root / "statistics" / "__init__.py", source)
+
+    foreign = check_dependency_purity(core_root)
+
+    assert [item.top_level for item in foreign] == [_FAKE_THIRD_PARTY], label
+
+
+def test_no_third_party_package_name_is_hardcoded(tmp_path: Path) -> None:
+    """The rule is a complement, not an allow-list of known offenders.
+
+    Three real packages this repository has a standing reason to refuse
+    and three invented names are treated identically. An implementation
+    that blocked only the named ones would satisfy every other test here
+    and would admit the seventh package anyone reached for -- which is
+    the same silent-exemption shape AD-049 part 5 closes on the direction
+    axis."""
+    suspects = ["numpy", "scipy", "pandas", "not_a_real_package", "zzz_unknown", "yfinance"]
+    core_root = tmp_path / "core"
+    _write(core_root / "__init__.py", "")
+    for index, package in enumerate(suspects):
+        _write(core_root / "statistics" / f"m{index}.py", f"import {package}\n")
+
+    foreign = check_dependency_purity(core_root)
+
+    assert sorted(item.top_level for item in foreign) == sorted(suspects)
+
+
+def test_stdlib_imports_are_allowed(tmp_path: Path) -> None:
+    """Everything AD-005 names as permitted, plus the ``__future__``
+    import every module in this repository starts with, must pass. A
+    purity rule that rejected ``sqlite3`` would be discovered instantly;
+    one that rejected ``__future__`` would be discovered on the first
+    real file and is the likelier slip."""
+    core_root = tmp_path / "core"
+    _write(core_root / "__init__.py", "")
+    _write(
+        core_root / "statistics" / "__init__.py",
+        "from __future__ import annotations\n"
+        "import sqlite3\n"
+        "import json\n"
+        "import uuid\n"
+        "import os.path\n"
+        "from decimal import Decimal\n"
+        "from datetime import date, datetime\n"
+        "from urllib.request import urlopen\n"
+        "from typing import Protocol\n"
+        "from collections.abc import Iterator\n",
+    )
+
+    assert check_dependency_purity(core_root) == []
+
+
+def test_repository_local_imports_are_not_third_party(tmp_path: Path) -> None:
+    """A sibling package of ``core/`` is repository-local, so importing
+    it is not a *purity* failure. Whether it is allowed at all is the
+    direction rule's question, and this rule does not answer it -- see
+    ``test_the_two_rules_are_independent``."""
+    core_root = tmp_path / "core"
+    _write(core_root / "__init__.py", "")
+    _write(tmp_path / "adapters" / "__init__.py", "")
+    _write(tmp_path / "experiments" / "run_thing.py", "")  # namespace package, no __init__
+    _write(tmp_path / "top_level_module.py", "")
+    _write(
+        core_root / "statistics" / "__init__.py",
+        "import core.shared.clock\n"
+        "from adapters import sink\n"
+        "from experiments.run_thing import main\n"
+        "import top_level_module\n",
+    )
+
+    assert check_dependency_purity(core_root) == []
+
+
+def test_a_directory_holding_no_python_is_not_repository_local(tmp_path: Path) -> None:
+    """``docs/``, ``migrations/`` and ``research_archive/`` are real
+    directories at this repository's root and none is importable. Being
+    a directory is not the test -- holding Python is -- otherwise any
+    name that happened to match a data folder would launder an unknown
+    import through the local bucket."""
+    core_root = tmp_path / "core"
+    _write(core_root / "__init__.py", "")
+    (tmp_path / "migrations").mkdir()
+    (tmp_path / "migrations" / "0001_init.sql").write_text("", encoding="utf-8")
+    _write(core_root / "statistics" / "__init__.py", "import migrations\n")
+
+    foreign = check_dependency_purity(core_root)
+
+    assert [item.top_level for item in foreign] == ["migrations"]
+
+
+def test_relative_imports_are_never_a_purity_failure(tmp_path: Path) -> None:
+    """A relative import can only name something inside the repository,
+    so it is out of this rule's scope by construction rather than by
+    exemption -- including one that climbs above ``core/``."""
+    core_root = tmp_path / "core"
+    _write(core_root / "__init__.py", "")
+    _write(core_root / "statistics" / "__init__.py", "")
+    _write(core_root / "statistics" / "helpers.py", "")
+    _write(
+        core_root / "statistics" / "significance.py",
+        "from . import helpers\nfrom .. import shared\nfrom ...adapters import sink\n",
+    )
+
+    assert check_dependency_purity(core_root) == []
+
+
+def test_purity_is_checked_in_an_unclassified_package(tmp_path: Path) -> None:
+    """Purity does not depend on the domain map. A package missing from
+    ``DOMAIN_OF_TOPLEVEL`` makes ``check_repository`` raise, and if the
+    purity scan shared that gate an unclassified package would be a blind
+    spot for as long as it stayed unclassified -- which is precisely when
+    a new dependency is most likely to arrive with it."""
+    core_root = tmp_path / "core"
+    _write(core_root / "__init__.py", "")
+    _write(core_root / "mystery_package" / "__init__.py", f"import {_FAKE_THIRD_PARTY}\n")
+
+    with pytest.raises(UnmappedPackageError):
+        check_repository(core_root)
+
+    foreign = check_dependency_purity(core_root)
+
+    assert [item.top_level for item in foreign] == [_FAKE_THIRD_PARTY]
+
+
+def test_the_two_rules_are_independent(tmp_path: Path) -> None:
+    """Neither rule may absorb the other's signal.
+
+    The tree below is clean on direction (``validation -> statistics`` is
+    allowed) and dirty on purity. The direction check must still report
+    nothing -- if a third-party import leaked into ``check_repository``'s
+    output it would break the pinned ETF coupling inventory at the top of
+    this file with a message about ETF that had nothing to do with ETF --
+    and the purity check must report the dependency."""
+    core_root = tmp_path / "core"
+    _write(core_root / "__init__.py", "")
+    _write(core_root / "statistics" / "__init__.py", "")
+    _write(
+        core_root / "validation" / "__init__.py",
+        f"from core.statistics import significance\nimport {_FAKE_THIRD_PARTY}\n",
+    )
+
+    assert check_repository(core_root) == []
+    assert [item.top_level for item in check_dependency_purity(core_root)] == [_FAKE_THIRD_PARTY]
+
+
+def test_existing_direction_violations_are_unaffected_by_purity(tmp_path: Path) -> None:
+    """The mirror of the previous test: a forbidden domain edge is still
+    reported exactly as before when a third-party import sits beside it,
+    and it is reported by ``check_repository``, not swallowed."""
+    core_root = tmp_path / "core"
+    _write(core_root / "__init__.py", "")
+    _write(core_root / "validation" / "__init__.py", "")
+    _write(core_root / "validation" / "gate.py", "")
+    _write(
+        core_root / "governance" / "__init__.py",
+        f"import {_FAKE_THIRD_PARTY}\nfrom core.validation import gate\n",
+    )
+
+    violations = check_repository(core_root)
+
+    assert len(violations) == 1
+    assert violations[0].from_domain == "governance"
+    assert violations[0].to_domain == "validation"
+    assert len(check_dependency_purity(core_root)) == 1
+
+
+def test_real_repository_imports_no_third_party_package() -> None:
+    """The actual tree, and the point of the whole milestone.
+
+    This is **not** an xfail and must never become one. The direction
+    rule was inventoried before it was enforced because ``core/``
+    genuinely violated it (AD-068 decision 4); AD-005 has held since
+    Phase 0 and the only thing missing was a check. A failure here is a
+    new dependency, not inherited debt, and the response is to remove the
+    import -- not to add an exception, a baseline tuple, or a marker."""
+    foreign = check_dependency_purity()
+
+    assert foreign == [], "\n" + format_purity_inventory(foreign)
+
+
+def test_real_repository_core_imports_no_non_core_repository_local_package() -> None:
+    """Regression tripwire for a gap that sits between the two rules
+    rather than inside either one.
+
+    ``check_dependency_purity`` allows *any* repository-local top-level
+    name -- whether the import is allowed at all is rule 1's question,
+    and rule 1 deliberately does not re-litigate it (see the module
+    docstring). ``check_repository`` in turn only resolves a domain for
+    names starting with ``core.``; a sibling top-level package is simply
+    not something it looks at. So ``import tools.something`` or
+    ``from experiments import x`` written inside ``core/`` would pass
+    *both* rules silently today -- a core -> non-core coupling neither
+    rule is positioned to catch, including future accidents such as
+    core -> tools, core -> tests, core -> experiments, core ->
+    maintenance, core -> research_artifacts, or a future core ->
+    workloads.
+
+    This does not add a third rule or change checker semantics. It calls
+    the public purity API to confirm the real tree still has no genuine
+    third-party import, then separately names every top-level import the
+    real tree makes -- the same direct-AST-walk approach
+    ``test_real_tree_statistics_and_kernel_import_no_store`` already uses
+    for ``core.store`` -- and asserts none of them is a repository-local
+    name other than ``core`` itself. Today's tree has no such import, so
+    this test passes now and only starts failing the day one is added."""
+    core_root = Path(__file__).resolve().parent.parent / "core"
+
+    assert check_dependency_purity(core_root) == []
+
+    top_level_importers: dict[str, list[str]] = {}
+    for path in sorted(core_root.rglob("*.py")):
+        if "__pycache__" in path.parts:
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    top_level_importers.setdefault(alias.name.split(".")[0], []).append(
+                        str(path)
+                    )
+            elif isinstance(node, ast.ImportFrom):
+                if node.level == 0 and node.module:
+                    top_level_importers.setdefault(node.module.split(".")[0], []).append(
+                        str(path)
+                    )
+
+    stdlib_names = set(sys.stdlib_module_names)
+    offenders = {
+        name: sorted(set(files))
+        for name, files in top_level_importers.items()
+        if name != "core" and name not in stdlib_names
+    }
+
+    assert offenders == {}, (
+        f"core/ imports repository-local package(s) outside core/ itself: {offenders}. "
+        "Neither check_dependency_purity (which allows any repository-local name) nor "
+        "check_repository (which only resolves domains for 'core.*' names) flags this."
+    )
+
+
+def test_format_purity_inventory_groups_by_package(tmp_path: Path) -> None:
+    core_root = tmp_path / "core"
+    _write(core_root / "__init__.py", "")
+    _write(core_root / "statistics" / "__init__.py", f"import {_FAKE_THIRD_PARTY}\n")
+    _write(
+        core_root / "statistics" / "significance.py",
+        f"from {_FAKE_THIRD_PARTY} import mean\nimport other_fictional_pkg\n",
+    )
+
+    report = format_purity_inventory(check_dependency_purity(core_root))
+
+    assert "3 import(s) of 2 non-standard-library, non-repository package(s)" in report
+    assert f"{_FAKE_THIRD_PARTY}  (2 import(s))" in report
+    assert "other_fictional_pkg  (1 import(s))" in report
+    assert "AD-005" in report
+
+
+def test_format_purity_inventory_of_a_pure_tree_reports_success() -> None:
+    assert "passed" in format_purity_inventory([])
