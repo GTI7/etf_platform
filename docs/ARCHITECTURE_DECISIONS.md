@@ -7469,3 +7469,496 @@ is the same function AD-078 already named, with its existing
 accept/reject boundary tightened by commit
 `bfdca9ceec931eb07fc4588a3793597e57dcb40f` to match the rule AD-078
 already decided, not a new rule of its own.
+
+---
+
+### AD-080: `reproduction_record.json` may carry observational environment metadata (accepted 2026-07-28, after implementation)
+
+#### Review basis
+
+**Level 1 — self-review.** One reviewer with repository access, working
+against `core/governance/reproduction_environment.py` and
+`tests/test_governance_reproduction_environment.py` as added by commit
+`f0a86ae0742ffc2233081c1578ac2297b95dea25`, and against the existing
+`core/governance/reproduction_record.py`, `tools/reproduce_cycle.py`, and
+`research_archive/reference_h4/reproduction_record.json`.
+
+**Level 3 is unavailable and no Level 3 review was performed. This is not
+an independent review, and neither this entry nor any document citing it
+may describe it as one** (`docs/RESEARCH_GOVERNANCE_STANDARD.md` §4).
+This is the same standing AD-068, AD-069, AD-077, AD-078, and AD-079
+declare for their own basis.
+
+**Numbering.** AD-080 is the next number, per AD-077's *Numbering*
+section as continued by AD-078 and AD-079: AD-070 and AD-071 remain
+unconsumed, AD-076 remains retired and unconsumed, and this entry claims
+only the next number in sequence.
+
+**Acceptance basis.** This entry records acceptance against commit
+`f0a86ae0742ffc2233081c1578ac2297b95dea25`, the commit that adds the
+observational helper and its tests. It is recorded **after** the
+implementation it accepts, and says so rather than presenting a tidier
+sequence — the same precedent AD-074 sets and AD-079 follows.
+
+**Status.** **Accepted, 2026-07-28.** Documentation only: this entry
+enacts no code, test, tooling, fixture, archive, or CI change of its own.
+
+---
+
+#### Context
+
+AD-078 *Known weakness* 5 records three unresolved things in one
+sentence: there is no place a dependency could be declared, the
+interpreter version is pinned only in CI, and `reproduction_record.json`
+captures no environment. AD-078 Rationale point 4 states the same fact
+from the other direction — "Environment capture — interpreter version,
+package versions, platform, compiled artifacts — is captured nowhere
+today" — and expressly keeps dependency purity, dataset provenance,
+environment capture, and reproduction semantics as four separate
+concerns, on the ground that conflating any two produces a claim
+stronger than any of them supports.
+
+That separation is the reason this entry exists and the reason it is
+narrow. The question it answers is **not** "should this platform become
+environment-reproducible". It is the much smaller question of **which
+layer a fact about the interpreter that ran one verification attempt
+belongs to**, so that a future decision to record such a fact cannot be
+mistaken for a change to what is being verified.
+
+Commit `f0a86ae0742ffc2233081c1578ac2297b95dea25` supplies an
+observational helper and nothing else. This entry classifies what that
+helper produces and states the one permission that follows from the
+classification. It closes no question AD-078 left open.
+
+---
+
+#### Decision
+
+##### 1. Two layers, and the boundary between them
+
+**Identity layer.** These four things are what a reproduction attempt
+*verifies*. They are the subject of the claim.
+
+- `commit_hash` — the commit pinning code and data together
+  (`ReproductionRecord.commit_hash`).
+- `dataset_content_hashes` — one content hash per frozen-identity
+  dataset: `ETF`, `PriceBar`, `TradingSession`
+  (`ReproductionRecord.dataset_content_hashes`).
+- `result_report_hash` — the report the pinned run must reproduce
+  exactly (`ReproductionRecord.result_report_hash`).
+- `IndicatorDefinition.version` — the plain integer identifying a
+  calculation (AD-021).
+
+  Listing `IndicatorDefinition.version` here restates AD-021's existing
+  classification of it as identity; it does not rewrite, extend, or
+  reinterpret AD-021, which remains the sole authority on that field.
+
+**Observation layer.** These are facts about *one verification run*.
+They are evidence about how an attempt was performed, and are not part
+of what the attempt asserts.
+
+- The reproduction attempt's own context — when it was run
+  (`verified_at`), against which cycle directory, with what outcome
+  narrative (`notes`).
+- Environment metadata about the process that performed the attempt:
+  `python_version`, `python_implementation`, `platform`.
+
+These two lists describe the boundary as it stands today, at this
+entry's acceptance. They are not exhaustive, permanent censuses of every
+field the identity layer or the observation layer will ever contain; a
+later AD may add to either list. What is fixed here is the layer
+boundary itself and the placement of the fields named above, not a
+closed enumeration of all fields either layer could ever hold.
+
+**Environment metadata belongs only to the observation layer.** It is
+never identity. Concretely, and as a decided rule:
+
+- It is **never** an input to any content hash, dataset hash, result
+  report hash, freeze hash, or archive seal digest.
+- It is **never** a component of `IndicatorDefinition.version`, and
+  never a reason to increment it.
+- It is **never** an input to `ReproductionStatus`. No environment value
+  may cause, prevent, or qualify `VERIFIED`, `DRIFTED`,
+  `REPRODUCTION_FAILED`, or `UNVERIFIABLE`. An attempt whose recorded
+  interpreter differs from a previous attempt's is **not** thereby
+  `DRIFTED`; `DRIFTED` means an *input* did not match its claimed hash,
+  and the environment is not an input.
+- It is **never** a matching criterion, precondition, or gate. Nothing
+  compares two environment blocks and derives a verdict from the
+  comparison.
+
+A reader who folds any of these fields into the identity layer has
+changed what the platform claims to verify, not merely what it records.
+
+##### 2. The permission this entry grants, stated exactly
+
+**A `reproduction_record.json` written in future *may* carry exactly
+three environment metadata fields — `python_version`,
+`python_implementation`, and `platform` — belonging to the observation
+layer.** This is the complete authorization AD-080 grants; it extends to
+no other field. Recording any additional observational field —
+hostname, username, an environment variable, CPU information, container
+identity, filesystem state, a dependency set, or lockfile state —
+requires a separate AD. This entry authorizes none of them.
+
+It is a permission and not a requirement. No record is obliged to carry
+one; a record without one is complete, valid, and unaffected by this
+entry. `RESEARCH_GOVERNANCE_STANDARD.md` §5's seven required
+evidence-package items are unchanged and no eighth is added.
+
+The permission is about **content classification**. It grants no
+authority to write, produce, or modify any file — see *Non-goals*.
+
+##### 3. Implementation reality, as of this entry
+
+Stated as fact, not as capability:
+
+- The helper exists at commit `f0a86ae0742ffc2233081c1578ac2297b95dea25`,
+  as `core.governance.reproduction_environment.observe_reproduction_environment`.
+- It is **pure standard library**: its only runtime import is
+  `platform`; `from __future__ import annotations` is also present. It
+  is therefore inside AD-078 Section 3's decided rule for `core/` and
+  inside the enforcement AD-079 records, and it required no dependency,
+  exception, or grant of any kind.
+- It **writes nothing**. It has no file I/O, opens no path, touches no
+  archive, and returns a `dict[str, str]` to its caller.
+- It returns **exactly three keys** — `python_version`,
+  `python_implementation`, `platform` — and deliberately captures no
+  hostname, username, environment variable, CPU, container, filesystem,
+  dependency set, or lockfile state.
+- **No `reproduction_record.json` writer exists anywhere in this
+  repository.** `tools/reproduce_cycle.py` *reads* the file to resolve
+  `commit_hash`; nothing writes it. The one archived record was authored
+  by hand.
+- **No archived record currently contains an environment block.**
+  `research_archive/reference_h4/reproduction_record.json` holds
+  `commit_hash`, `dataset_content_hashes`, `notes`,
+  `reproduction_status`, `result_report_hash`, and `verified_at`, and
+  nothing else.
+- **No sealed archive is modified.** `reference_h4` is sealed
+  (`docs/archive_seal_register.jsonl`, sealed commit
+  `29553b7e5d96118b3f38ecc4de27362a07a210d1`, AD-075) and its
+  `reproduction_record.json` is under seal byte-for-byte — it is not a
+  dataset snapshot and carries no protected-file exclusion. Adding a
+  block to it would be a seal `MISMATCH`, and this entry neither does
+  that nor authorizes anyone to.
+- **The helper has no production caller.** Only
+  `tests/test_governance_reproduction_environment.py` imports it. It is
+  reachable code with no reachable use, and this entry does not create
+  one.
+
+Every fact in this section is a measured fact about commit
+`f0a86ae0742ffc2233081c1578ac2297b95dea25`, true as of the observation
+that produced it. None of them is a permanent guarantee or a governance
+rule: a later commit could add a caller, a writer, or an import, and
+doing so would not itself violate this entry. What this entry binds is
+the layer classification in Decision 1, not the specific, current shape
+of the tree recorded here.
+
+##### 4. `ReproductionRecord` is unchanged
+
+`core.governance.reproduction_record.ReproductionRecord` still carries
+exactly three fields — `commit_hash`, `dataset_content_hashes`,
+`result_report_hash`. This entry adds no field to that dataclass and
+does not require that a future environment block be represented on it.
+The archived JSON already carries keys the dataclass does not model
+(`notes`, `reproduction_status`, `verified_at`); an environment block
+would sit in the same position, and reconciling the dataclass with the
+on-disk shape is a separate, unaddressed question.
+
+---
+
+#### Non-goals
+
+This decision does **not**:
+
+- **Authorize a writer.** AD-080 grants no writer authority: nothing in
+  this entry permits any code to create, emit, or update a
+  `reproduction_record.json`. AD-080 equally creates no prohibition on
+  such a writer existing; it takes no position either way. The
+  permission in Decision 2 is about what such a file *may contain*, not
+  about who may produce it, and writer ownership — who may write one,
+  when, and under what authority — remains undecided by this entry.
+- **Change archive ownership.** No module gains write authority over
+  `research_archive/`, and the Phase 4 single-writer and
+  machine-artifact-location rulings are untouched.
+- **Introduce a `schema_version`.** Not on `reproduction_record.json`,
+  not on the environment block, not anywhere. `archive_manifest.json`'s
+  and the seal register's existing `schema_version: 1` values are
+  unchanged and are not extended to this file.
+- **Capture dependencies.** No package set, no version listing, no
+  import inventory, no `pip freeze` equivalent.
+- **Introduce a lockfile.** No `requirements.txt`, no lock file, no
+  `[project.dependencies]` table. `pyproject.toml` is unchanged.
+- **Require a container.** No Dockerfile, no Nix expression, no image,
+  no runtime pinning of any kind.
+- **Add CI enforcement.** No workflow is added or edited. Nothing in CI
+  checks, compares, or requires an environment block, and the advisory
+  `|| true` on the boundary checker recorded by AD-078 and AD-079 is
+  untouched.
+- **Change `ReproductionStatus`.** Its four members and their meanings
+  are exactly as `core/governance/reproduction_record.py` defines them.
+- **Affect any hash.** No content hash, dataset hash, result report
+  hash, freeze hash, seal digest, or protected-file hash changes or
+  gains an input.
+- **Affect `IndicatorDefinition.version`.** It remains a plain integer
+  under AD-021.
+- **Authorize a workload.** No `workloads/` directory is created,
+  defined, or classified; AD-078 Section 5 and AD-079's non-goal on the
+  same point stand unchanged.
+- **Authorize a biomedical workload,** an ML workload, or any other
+  domain. This entry chooses between none of them and takes no position
+  on the choice.
+
+It **amends no prior entry** — not AD-005, AD-021, AD-068, AD-069,
+AD-073, AD-074, AD-075, AD-077, AD-078, or AD-079. Every fact, grant
+list, classification, and known weakness those entries record stands
+exactly as accepted.
+
+---
+
+#### Relationship to AD-021
+
+**AD-021 concerns calculation identity.** It decides that
+`IndicatorDefinition.version` is a plain integer, that a logic change is
+always a new version, and it rejects a separate `CalculationEnvironment`
+concept for tracking the runtime that produced a value. Its subject is
+what makes two computed values the same computation.
+
+**AD-080 concerns the observation of one verification run.** Its subject
+is what may be recorded *about an attempt to check* a claim whose
+identity AD-021's model already fixes. The two operate on different
+layers of Decision 1 and do not meet.
+
+**AD-021's revisit condition has not fired.** That condition is: "revisit
+only if a numeric dependency with real version-behavior differences is
+ever introduced." No numeric dependency has been introduced. `numpy`,
+`scipy`, `pandas`, and every other such name are exactly as absent after
+this entry as before it; the helper accepted here imports `platform`
+from the standard library. Nothing in this entry triggers, partially
+triggers, or anticipates AD-021's revisit, and nothing here may be cited
+as having done so.
+
+Note in particular that AD-080 does **not** reintroduce
+`CalculationEnvironment` under another name. What AD-021 rejected was an
+environment concept attached to *calculation identity*. What this entry
+classifies is an environment observation attached to *a verification
+attempt*, explicitly barred from identity by Decision 1.
+
+---
+
+#### Relationship to AD-078 Known Weakness 5
+
+AD-078 Known Weakness 5 reads: "Dependency declaration and environment
+capture remain unresolved. There is no place a dependency could be
+declared, the interpreter version is pinned only in CI, and
+`reproduction_record.json` captures no environment."
+
+**This entry partially addresses only the third clause, and only its
+future possibility.** It decides which layer an environment observation
+would belong to if one were ever recorded, and it accepts a helper that
+can produce one. It does not record one.
+
+**It does not close:**
+
+- **The dependency declaration question.** There is still no place a
+  dependency could be declared, and this entry creates none.
+- **The interpreter pinning question.** The interpreter is still pinned
+  only in CI. Observing a version is not pinning one, and a recorded
+  `python_version` constrains no future run.
+- **The producer/writer question.** Nothing writes
+  `reproduction_record.json`. Who may write one, when, and under what
+  authority is untouched by this entry and remains open.
+
+**AD-078 Known Weakness 5 therefore remains open.** It is narrowed in
+description, not discharged. AD-078's other open known weaknesses (1, 3,
+4, 6) are untouched; item 2 was closed by AD-079.
+
+---
+
+#### Claims this entry does not make
+
+Stated explicitly because each is a plausible misreading:
+
+- **This entry does not claim that "environment capture is implemented in
+  archives."** No archive contains an environment block, and no code path
+  puts one there.
+- **This entry does not claim that "reproduction is now environment
+  reproducible."** Reproduction semantics are exactly
+  `ReproductionStatus`'s four states, unchanged. Recording what an
+  interpreter was is not a guarantee that a different interpreter would
+  produce the same result — the platform still has no mechanism that
+  would detect or prevent that, and `REPRODUCTION_FAILED`'s own
+  documentation already names "a real non-determinism or environment
+  bug" as a thing that can happen.
+- **This entry does not claim "platform neutrality achieved."** AD-077
+  clause 6 holds that neutrality claims expire at one implementation;
+  the helper here has zero production callers, so no neutrality of any
+  kind is demonstrated by it.
+
+---
+
+#### Rationale
+
+1. **The classification is the cheap half of the problem, and doing it
+   first is what keeps the expensive half honest.** If an environment
+   block were ever added without the layer boundary decided in advance,
+   the natural next question — "should a changed interpreter make this
+   `DRIFTED`?" — would be answered by whoever happened to write the
+   writer. Decision 1 answers it now, while nothing depends on the
+   answer.
+
+2. **A permission with no writer is a deliberately weak thing to record,
+   and that is the point.** AD-078 Rationale point 1 holds that a claim
+   stated at a scope the tree does not satisfy is a liability. The
+   converse discipline applies here: this entry records the smallest
+   claim the tree actually supports — a helper exists, and its output
+   would be observation, not identity — rather than the larger claim
+   about environment reproducibility that the same commit could be made
+   to look like it supports.
+
+3. **Keeping AD-078's four concerns separate required saying so
+   explicitly.** Dependency purity, dataset provenance, environment
+   capture, and reproduction semantics touch each other at exactly this
+   file. Naming the identity/observation split is how the file can carry
+   an environment fact without the fact leaking into the other three.
+
+---
+
+#### Consequences
+
+**Positive.**
+
+- The layer a future environment block belongs to is decided before any
+  writer exists to place one.
+- `ReproductionStatus`, every hash, and `IndicatorDefinition.version`
+  are explicitly walled off from environment metadata, by decision
+  rather than by absence of implementation.
+- AD-078 Known Weakness 5's third clause is narrowed from "unresolved"
+  to "classified but unrecorded", with the two other clauses left
+  visibly open rather than absorbed into a claim of closure.
+
+**Negative.**
+
+- The permission is unexercised and untested in practice. No record has
+  ever carried an environment block, so the on-disk shape, its
+  interaction with the seal, and its reconciliation with
+  `ReproductionRecord`'s three-field dataclass are all undesigned.
+- The helper is dead code at this commit: reachable, tested, and called
+  by nothing outside its own test module. It will stay that way until a
+  separately authorized writer exists.
+- `platform.platform()` returns a free-form, platform-dependent string
+  with no stable grammar. It is human-readable evidence, not a parseable
+  value, and nothing here makes it one.
+
+---
+
+#### Known weakness
+
+Stated here rather than discovered later.
+
+1. **The permission has no mechanism.** Nothing prevents a future writer
+   from folding an environment value into a hash or a status in
+   violation of Decision 1. That rule is held by reading, exactly as
+   most of AD-078 is.
+2. **The identity/observation split is not enforced by any test.** No
+   test asserts that `ReproductionStatus` is independent of environment
+   input, because no code exists that could take such an input.
+3. **`reference_h4`'s sealed record cannot carry a block under its
+   current seal.** Any environment metadata for that cycle would have to
+   live in a new, dated artifact under the supersession convention
+   (`RESEARCH_GOVERNANCE_STANDARD.md` §5), or reach the sealed record
+   itself only through a re-seal. Neither a supersession artifact nor a
+   re-seal is proposed, scheduled, or authorized here.
+4. **The dataclass/JSON divergence is left as found.**
+   `ReproductionRecord` already fails to model three keys the archived
+   file carries; this entry contemplates a fourth without addressing the
+   divergence.
+5. **This entry is held by reading in every part.** This repository has
+   no independent reviewer.
+
+---
+
+#### Acceptance criteria
+
+Each is testable against the tree at commit
+`f0a86ae0742ffc2233081c1578ac2297b95dea25`, by the stated check.
+
+- **AC-1 — the helper exists as described.**
+  `core/governance/reproduction_environment.py` exists and defines
+  exactly one public function, `observe_reproduction_environment`.
+- **AC-2 — the helper is pure standard library.** The module's only
+  runtime import is `platform`; `from __future__ import annotations` is
+  also present. `python -m tools.check_import_boundaries` reports
+  no dependency-purity violation for it, and
+  `tests/test_import_boundaries.py::test_real_repository_imports_no_third_party_package`
+  passes. (The checker's non-zero exit is the pre-existing `data -> etf`
+  direction violation recorded under AD-068, not a purity failure.)
+- **AC-3 — the helper writes nothing.** Checked against the module's
+  executable body only — its `import` statements and function code,
+  excluding the module and function docstrings, which discuss writing in
+  prose and are not executable: the executable body contains no `open(`,
+  no `Path`, no `json`, no `write(`, and no import of any I/O module.
+- **AC-4 — the helper returns exactly three observational keys.**
+  `python -m pytest tests/test_governance_reproduction_environment.py`
+  passes 4 tests, including
+  `test_returns_exactly_the_three_observational_keys`.
+- **AC-5 — the helper has no production caller.** A search for
+  `reproduction_environment` across `*.py` files, outside `.claude/`,
+  matches only the module itself and
+  `tests/test_governance_reproduction_environment.py`. Matches in
+  `docs/ARCHITECTURE_DECISIONS.md` itself, within this AD-080 entry, are
+  expected — this is documentation naming the helper, not a production
+  caller — and are outside this criterion's `*.py` search scope in any
+  case.
+- **AC-6 — no writer exists.** A repository-wide search for
+  `reproduction_record.json` in `*.py` outside `.claude/` finds read
+  sites and string literals only; `tools/reproduce_cycle.py` reads the
+  file (`record_path.read_text`) and no file writes it.
+- **AC-7 — no archived record carries an environment block.**
+  `research_archive/reference_h4/reproduction_record.json` has exactly
+  the keys `commit_hash`, `dataset_content_hashes`, `notes`,
+  `reproduction_status`, `result_report_hash`, `verified_at`. Its
+  SHA-256 is
+  `edd01776a107f8cf856038568302c0e54d53dd62cd17fd123c0dbcd1badf6725`.
+- **AC-8 — no sealed archive is modified.**
+  `docs/archive_seal_register.jsonl` still contains exactly one record,
+  for `reference_h4`, sealed at
+  `29553b7e5d96118b3f38ecc4de27362a07a210d1`, and
+  `tests/fixtures/protected_file_hashes.json` is unchanged and contains
+  no `reproduction_record` key.
+- **AC-9 — `ReproductionStatus` and `ReproductionRecord` are unchanged.**
+  `ReproductionStatus` has exactly four members (`VERIFIED`, `DRIFTED`,
+  `REPRODUCTION_FAILED`, `UNVERIFIABLE`) and `ReproductionRecord` has
+  exactly three fields (`commit_hash`, `dataset_content_hashes`,
+  `result_report_hash`).
+- **AC-10 — no dependency, lockfile, container, or `schema_version` was
+  introduced.** `pyproject.toml` is unchanged and declares no runtime
+  dependency; no `requirements*.txt`, lock file, `Dockerfile`, or Nix
+  expression exists at the repository root; no `schema_version` key
+  appears in `reproduction_record.json` or in the helper.
+- **AC-11 — no CI change.** Commit
+  `f0a86ae0742ffc2233081c1578ac2297b95dea25`'s diff is exactly two new
+  files: `core/governance/reproduction_environment.py` (32 lines) and
+  `tests/test_governance_reproduction_environment.py` (28 lines). No
+  workflow file is added or modified.
+- **AC-12 — the suite passes on a clean checkout.** `python -m pytest -q`
+  reports 1019 passed, 3 skipped, 1 xfailed, with the four new tests
+  included and none marked `xfail`. This is the acceptance criterion,
+  and it is stated for a clean checkout: no extraneous copy of the
+  repository nested inside the tracked tree.
+  `tests/test_store_extraction.py::test_legacy_shim_importers_are_exactly_the_frozen_files`
+  is known to fail in a working copy that has a leftover agent worktree
+  under `.claude/worktrees/`, because that test's `_python_files()` walk
+  is not scoped away from such a copy and reports its own
+  `experiments/` and `tests/` files as unprotected legacy-shim
+  importers. That failure is a property of *that* working copy, not of
+  this commit or of the repository: every path it reports is under
+  `.claude/worktrees/`, and no path in the tracked tree is implicated.
+  It is disclosed here as a known, environment-specific hazard — it is
+  **not** claimed to be passing, and it is **not** treated as part of
+  what this entry accepts as the repository's test posture; this entry
+  does not claim the suite is green in every possible working copy, only
+  on a clean checkout. The walk-scope defect that produces the failure
+  is itself pre-existing, disclosed here, and **not fixed, proposed, or
+  authorized by this entry**.
