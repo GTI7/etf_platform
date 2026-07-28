@@ -25,7 +25,7 @@ These criteria were stated before the six candidates were scored against them an
 
 ## 2. Candidates Considered
 
-Restated from `docs/REFERENCE_RESEARCH_ROADMAP_NEXT_V2.md`'s ranking summary (all six remaining candidates) and, for H2/H5/H6/H7/H8, `docs/PHASE5_HYPOTHESIS_SELECTION_REVIEW_2026-07-27.md` §3–§4, using the same five criteria for every candidate, including the one selected — no candidate was scored on criteria the others were not also scored on. Note on sourcing: `docs/PHASE5_HYPOTHESIS_SELECTION_REVIEW_2026-07-27.md` §1 and §3 frame the field as "five remaining candidates (H2, H5, H6, H7, H8)" and does not mention H4 anywhere in that document. H4's row below is therefore restated from `docs/REFERENCE_RESEARCH_ROADMAP_NEXT_V2.md` alone, preserving that document's original rank (4 of 6), not from the Phase 5 review.
+Restated from `docs/REFERENCE_RESEARCH_ROADMAP_NEXT_V2.md`'s ranking summary (all six remaining candidates) and, for H2/H5/H6/H7/H8, `docs/PHASE5_HYPOTHESIS_SELECTION_REVIEW_2026-07-27.md` §3–§4, using the same five criteria for every candidate, including the one selected — no candidate was scored on criteria the others were not also scored on. Note on sourcing: `docs/PHASE5_HYPOTHESIS_SELECTION_REVIEW_2026-07-27.md` §3 frames the field as a five-candidate shortlist (H2, H5, H6, H7, H8) without H4, and §1 discusses the remaining alternatives likewise without mentioning H4 anywhere. H4's row below is therefore sourced from `docs/REFERENCE_RESEARCH_ROADMAP_NEXT_V2.md` alone, preserving that document's original rank (4 of 6), not from the Phase 5 review.
 
 | Rank | Candidate | Economic rationale | Overlap w/ closed cycles | Data readiness | Degrees-of-freedom risk | Expected research value |
 |---|---|---|---|---|---|---|
@@ -85,7 +85,7 @@ This document authorizes no implementation, no code change, no ADR, and no lifec
 
 ## 7. Evidence Chronology Addendum (2026-07-28)
 
-**Purpose.** This addendum corrects a chronology error in its own prior text and records what that correction implies, without altering any ranking, score, or rejected-alternative reasoning recorded in Sections 1–4 above. A Level 2 review (2026-07-28, separate session, no conversational continuity to this document's drafting) found that this addendum's original text mischaracterized when `docs/PHASE5_GATE0_PREPARATION_REVIEW_H2_2026-07-28.md` was produced relative to this proposal. The chronology below is verified directly against git commit timestamps, not reconstructed from session memory or narrative.
+**Purpose.** This addendum corrects a chronology error in its own prior text and records what that correction implies, without altering any ranking, score, or rejected-alternative reasoning recorded in Sections 1–4 above. This addendum's original text mischaracterized when `docs/PHASE5_GATE0_PREPARATION_REVIEW_H2_2026-07-28.md` was produced relative to this proposal. The chronology below is verified directly against git commit timestamps, not reconstructed from session memory or narrative.
 
 **Chronology (corrected).**
 1. The candidate ranking and scoring in Sections 1–4 above were sourced from `docs/REFERENCE_RESEARCH_ROADMAP_NEXT_V2.md` and `docs/PHASE5_HYPOTHESIS_SELECTION_REVIEW_2026-07-27.md`, both committed in `76382b5` (2026-07-28 00:03), before this document was drafted.
