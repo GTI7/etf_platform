@@ -21,7 +21,7 @@ Per `docs/REFERENCE_RESEARCH_ROADMAP_NEXT_V2.md` ("Remaining Candidates"), the *
 4. **Degrees-of-freedom risk** — how much researcher choice exists, and whether methodology can be frozen before results are seen.
 5. **Expected research value** — what a positive or negative result would teach the platform.
 
-These criteria were stated before the six candidates were scored against them and were not reweighted afterward. No criterion here is new; none was added, dropped, or adjusted after any candidate's score was seen.
+These criteria are fixed for this cycle's own scoring pass in `docs/REFERENCE_RESEARCH_ROADMAP_NEXT_V2.md` — Section 2's table below applies all five uniformly to all six candidates — and were not reweighted afterward. Whether criterion 5 ("Expected research value") existed in an earlier, unrecorded criteria set or was introduced for this cycle cannot be established from the repository: `docs/REFERENCE_RESEARCH_ROADMAP_NEXT.md` (v1) scored these candidates on 4 of a disclosed-but-unrecovered 8-dimension original framework (v1 line 158), and that original framework is not present in this repository (`research_archive/reference_h3/decision_log.md`, Entry 1).
 
 ## 2. Candidates Considered
 
