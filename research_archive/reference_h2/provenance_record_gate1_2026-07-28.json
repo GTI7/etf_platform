@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "project_id": "reference_h2",
+  "record_type": "provenance_disclosure",
+  "created_at": "2026-07-28T14:11:35Z",
+  "created_at_basis": "This record's own file modification time at authoring (2026-07-28 16:11:35 +0200 = 14:11:35Z). It replaces a placeholder value of 2026-07-28T00:00:00Z, which was never a real timestamp; the correction was made before this file was ever committed, and changes no historical fact, figure, or conclusion recorded below.",
+
+  "artifact": {
+    "filename": "gate1_independence_analysis_2026-07-28.json",
+    "archive_path": "research_archive/reference_h2/gate1_independence_analysis_2026-07-28.json",
+    "sha256": "b021ed4461e81f36c5947f3b04c9975aafff5f8c4eceed8f100638fe88996197",
+    "archived_on": "2026-07-28",
+    "byte_identical_to_original_root_copy": true
+  },
+
+  "repository_provenance": {
+    "archiving_commit": null,
+    "archiving_commit_note": "Permanently null by construction, not pending. This record is committed in the same commit as the artifact it describes, so the archiving commit hash cannot be written into this file: this file is part of that commit's own tree, so the commit hash depends on this file's content, and writing the hash in would change the content it was computed from. The reference is self-referential and unresolvable, not merely unknown-for-now. The archiving commit is established externally instead, and is recoverable exactly, by: (a) research_archive/reference_h2/decision_log.md Entry 11, which names this file among those first placed under version control by that commit; and (b) git log --diff-filter=A -- research_archive/reference_h2/gate1_independence_analysis_2026-07-28.json, which returns that commit directly. This field should not be populated by a later edit; doing so would break the archived artifact's own immutability discipline for no provenance gain.",
+    "original_report_metadata": {
+      "repository_commit": "a7d0938c66ab86e0bfb46b643698f67229b224a2",
+      "generated_at": "2026-07-28T11:58:46.383050+00:00"
+    }
+  },
+
+  "o5_disclosure": {
+    "finding_source": "research_archive/reference_h2/reviewer_reports/2026-07-28_level2_gate1_confirming_reproduction.md, Section 6, O-5",
+    "claim_in_artifact": "The archived JSON's own repository_commit field states a7d0938c66ab86e0bfb46b643698f67229b224a2.",
+    "limitation": "The script that produced this artifact, experiments/validate_h2_gate1_independence.py, was untracked (not committed) at commit a7d0938c. It was subsequently modified on disk 67 minutes after the report was generated, and first committed afterward at a different commit (c771355) in its modified form. The exact bytes of the script version that actually produced this artifact were never committed and no longer exist in the working tree or in git history.",
+    "conclusion": "The repository_commit field in this artifact identifies the repository state (tracked files) at generation time. It does not, and cannot, identify the exact executed script version, because that version was untracked and has since been overwritten with no preserved copy.",
+    "characterization": "This is a provenance-chain limitation (report-to-producing-code traceability), not a numerical reproducibility failure. Independent reproduction (see reproduction_linkage below) was performed from the frozen written specification, not from the since-modified script, and is unaffected by this gap.",
+    "repairable": false,
+    "repair_note": "This gap cannot be repaired retroactively; it is disclosed here as a permanent, accepted limitation attached to this artifact."
+  },
+
+  "o2_disclosure": {
+    "finding_source": "research_archive/reference_h2/reviewer_reports/2026-07-28_level2_gate1_confirming_reproduction.md, Section 6, O-2 (database identity established independently at Section 2.2)",
+    "limitation": "The archived artifact's own provenance block records generated_at and repository_commit only; it does not record database identity (hash, size, or row counts) contemporaneously with its own generation run.",
+    "database_identity_available": {
+      "path": "experiments_etf_universe.db",
+      "size_bytes": 85446656,
+      "sha256": "cd4fd53d2032fbc87364adc578bcab4fc5ad1a1a779ce72c62697a037a148103",
+      "mtime_utc": "2026-07-18T23:23:48Z",
+      "wal_shm_sidecars": "none present (fully checkpointed)"
+    },
+    "capture_characterization": "post-hoc capture, not contemporaneous capture. This hash/size/mtime was established independently by the Level 2 confirming reviewer after the fact (report Section 2.2), by hashing the database as it existed at reproduction time and reasoning from mtime (which precedes both the submitted run's generated_at and the reproduction run) plus the absence of WAL/SHM sidecars that it was unchanged since before the submitted run. It is not a hash taken at, or logged by, the original report's own generation run.",
+    "conclusion": "The database is bounded as unchanged between the submitted run and the reproduction run by mtime-and-sidecar-absence evidence, not by a hash contemporaneous with the submitted run itself."
+  },
+
+  "reproduction_linkage": {
+    "reviewer_report": "research_archive/reference_h2/reviewer_reports/2026-07-28_level2_gate1_confirming_reproduction.md",
+    "reproduction_commit": "f879d9e40a5ea5cd115b63b838786e9f87b3d743",
+    "reproduction_run_timestamp": "2026-07-28T13:42:41Z",
+    "reproduction_source": "frozen written specification (attempt_001_specification.md Section 2), not the since-modified producing script",
+    "result": {
+      "component_1_rank_correlation": {
+        "dates_compared": 483,
+        "dates_bitwise_identical": 483,
+        "tolerance": 0,
+        "verdict": "MATCH"
+      },
+      "component_2_top_bottom_overlap": {
+        "dates_compared": 483,
+        "dates_bitwise_identical": 483,
+        "tolerance": 0,
+        "verdict": "MATCH"
+      }
+    },
+    "note": "Reproduction verdict is unaffected by the O-5 gap: the match derives from independently re-implementing the frozen specification, not from re-running the original (since-modified) script."
+  },
+
+  "scope_note": "This record discloses provenance limitations only. It makes no Gate 1 determination, no PASS/FAIL/INCONCLUSIVE ruling, no lifecycle transition, and does not modify transition_records.jsonl, attempt_001_addendum_2026-07-28.md, or the archived JSON artifact itself."
+}
