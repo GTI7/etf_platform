@@ -13,7 +13,7 @@ This document consolidates already-existing candidate-selection evidence into th
 
 ## 1. Ranking Criteria
 
-Per `docs/REFERENCE_RESEARCH_ROADMAP_NEXT_V2.md` ("Remaining Candidates"), the five candidates under live consideration for the next REFERENCE research cycle — H2, H5, H6, H7, H8 — were ranked against criteria **fixed before any candidate was scored**:
+Per `docs/REFERENCE_RESEARCH_ROADMAP_NEXT_V2.md` ("Remaining Candidates"), the **six** candidates under live consideration for the next REFERENCE research cycle — H2, H6, H7, H4, H5, H8, in that document's own ranking order — were ranked against criteria **fixed before any candidate was scored**:
 
 1. **Economic rationale** — is there a plausible mechanism, and is it distinct from the platform's closed hypotheses?
 2. **Overlap with closed tests** — independence from `reference_v1` (MOMENTUM/VALUE), `reference_v2_h1` (low volatility), and `reference_h3` (relative strength).
@@ -21,19 +21,20 @@ Per `docs/REFERENCE_RESEARCH_ROADMAP_NEXT_V2.md` ("Remaining Candidates"), the f
 4. **Degrees-of-freedom risk** — how much researcher choice exists, and whether methodology can be frozen before results are seen.
 5. **Expected research value** — what a positive or negative result would teach the platform.
 
-These criteria were stated before the five candidates were scored against them and were not reweighted afterward. No criterion here is new; none was added, dropped, or adjusted after any candidate's score was seen.
+These criteria were stated before the six candidates were scored against them and were not reweighted afterward. No criterion here is new; none was added, dropped, or adjusted after any candidate's score was seen.
 
 ## 2. Candidates Considered
 
-Restated from `docs/REFERENCE_RESEARCH_ROADMAP_NEXT_V2.md`'s ranking summary and `docs/PHASE5_HYPOTHESIS_SELECTION_REVIEW_2026-07-27.md` §3–§4, using the same five criteria for every candidate, including the one selected — no candidate was scored on criteria the others were not also scored on.
+Restated from `docs/REFERENCE_RESEARCH_ROADMAP_NEXT_V2.md`'s ranking summary (all six remaining candidates) and, for H2/H5/H6/H7/H8, `docs/PHASE5_HYPOTHESIS_SELECTION_REVIEW_2026-07-27.md` §3–§4, using the same five criteria for every candidate, including the one selected — no candidate was scored on criteria the others were not also scored on. Note on sourcing: `docs/PHASE5_HYPOTHESIS_SELECTION_REVIEW_2026-07-27.md` §1 and §3 frame the field as "five remaining candidates (H2, H5, H6, H7, H8)" and does not mention H4 anywhere in that document. H4's row below is therefore restated from `docs/REFERENCE_RESEARCH_ROADMAP_NEXT_V2.md` alone, preserving that document's original rank (4 of 6), not from the Phase 5 review.
 
 | Rank | Candidate | Economic rationale | Overlap w/ closed cycles | Data readiness | Degrees-of-freedom risk | Expected research value |
 |---|---|---|---|---|---|---|
 | 1 | **H2** — Momentum (return-based, formation-period-with-skip construction) | High | Weakest — needed a written overlap argument against `reference_v1` MOMENTUM | Needs depth extension | Low — literature-fixed construction | High, conditional on clearing the overlap gate |
 | 2 | H6 — Long-horizon reversal | High | Strongest | Poor, worsened at longer horizons | Low in principle, undermined by sample size | Medium — real risk of repeating `reference_h3`'s H3-A failure shape |
 | 3 | H7 — Correlation-regime / idiosyncrasy | Medium–Low | Strong | Best — no data extension needed | High — sign-selection risk | Medium — fast to run, but Pre-validation gate risk is real |
-| 4 | H5 — Carry / yield | High | Strong | Poor — new external data source required | Low | Medium long-term, low near-term (new provenance work required) |
-| 5 | H8 — Macro-conditional beta exposure | High | Strongest | Poor — new data source and new statistical infrastructure required | Highest of the five | Low near-term — largest scope of any candidate |
+| 4 | H4 — Volume / flow acceleration | Medium | Strong | Uncertain — measurement validity, not fixable by more data | Medium | Low near-term — needs a data-quality sub-investigation first |
+| 5 | H5 — Carry / yield | High | Strong | Poor — new external data source required | Low | Medium long-term, low near-term (new provenance work required) |
+| 6 | H8 — Macro-conditional beta exposure | High | Strongest | Poor — new data source and new statistical infrastructure required | Highest of the six | Low near-term — largest scope of any candidate |
 
 ## 3. Selection
 
@@ -43,7 +44,9 @@ The selection was based on the pre-existing ranking process, not on any result p
 
 ## 4. Rejected Alternatives
 
-Restated individually, preserving the specific reasoning already recorded in `docs/PHASE5_HYPOTHESIS_SELECTION_REVIEW_2026-07-27.md` §4 — not rewritten into generic "lower priority" language.
+Restated individually, preserving the specific reasoning already recorded in `docs/PHASE5_HYPOTHESIS_SELECTION_REVIEW_2026-07-27.md` §4 for H5/H6/H7/H8, and in `docs/REFERENCE_RESEARCH_ROADMAP_NEXT_V2.md` for H4 (see sourcing note in §2 above) — not rewritten into generic "lower priority" language.
+
+**H4 — Volume / flow acceleration.** Not addressed in `docs/PHASE5_HYPOTHESIS_SELECTION_REVIEW_2026-07-27.md` §4 — that document frames the field as only five remaining candidates (H2, H5, H6, H7, H8) and omits H4 from consideration entirely; this entry is restated instead from `docs/REFERENCE_RESEARCH_ROADMAP_NEXT_V2.md`'s "Remaining Candidates" §H4 (rank 4 of 6), not from the Phase 5 review like the other four entries below. Rejected on data readiness, specifically a measurement-validity problem rather than a data-volume problem: ETF-level volume is "contaminated by creation/redemption mechanics," which does not improve with more historical depth or a different forecast horizon. Data readiness is rated "Uncertain" — whether ETF-reported volume measures what the hypothesis needs is itself unverified, and resolving that would be a pre-validation research task of its own before any hypothesis-specific work could begin. Economic rationale was assessed as "Medium" (plausible order-flow-driven price-pressure mechanism, weaker literature grounding than H2 or H6) and independence from the three closed cycles as "High" (none of the closed cycles used volume/flow data). Expected near-term research value was rated "Low ... needs a data-quality sub-investigation first."
 
 **H5 — Carry / yield.** Rejected on data readiness. No yield field exists in the current schema (`ETF`, `TradingSession`, `PriceBar`, indicators); a new external data source, with its own provenance and hash-tracking obligations under `docs/RESEARCH_GOVERNANCE_STANDARD.md` §6, would be required before any Phase 1–2 work could begin. Universe fit — whether the platform's curated sector/theme/regional universe exhibits meaningful, comparable yield dispersion — is unverified and not verifiable without that data. Economic rationale and degrees-of-freedom profile were both assessed favorably; readiness was the disqualifying factor.
 
