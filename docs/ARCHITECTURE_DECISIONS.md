@@ -7063,3 +7063,202 @@ step, which is advisory. And this repository has no independent
 reviewer (`docs/RESEARCH_GOVERNANCE_STANDARD.md` §4 — Level 3
 unavailable; see *Review basis*). The honest claim is that this
 decision makes drift *nameable in review*, not that it prevents drift.
+
+---
+
+### AD-078: The dependency boundary is stated per top-level namespace, at the strength each namespace is enforced (accepted 2026-07-28)
+
+#### Review basis
+
+**Level 1 — self-review.** One reviewer with repository access, working against branch `master` plus the uncommitted dependency-boundary checker and test changes to `tools/check_import_boundaries.py` and `tests/test_import_boundaries.py`.
+
+**Level 3 is unavailable and no Level 3 review was performed. This is not an independent review, and neither this entry nor the review documents that carry it may be cited as one** (`docs/RESEARCH_GOVERNANCE_STANDARD.md` §4). Nothing here asserts organizational independence or a distinct accountable party, because neither exists on this platform. This is the same standing AD-068, AD-069, and AD-077 declare for their own basis.
+
+**Numbering.** AD-078 is the next number, per AD-077's *Numbering* section: AD-070 and AD-071 remain unconsumed, AD-076 is reserved and retired, and new numbering starts at AD-078.
+
+**Acceptance.** This entry records acceptance only against commit `a38089ae4f4bb1d7cb057e9f3fe04e5d91d2317b`, the commit carrying the dependency-boundary checker and test changes described below. Acceptance against a working tree is not acceptance: the tooling this entry describes was uncommitted when the entry was drafted, and the named commit is what fixes the state the entry speaks about.
+
+---
+
+#### Context
+
+AD-005 records two rules in one entry:
+
+1. **A dependency rule** — "the entire codebase is Python standard library only."
+2. **An abstraction rule** — no ORM, no dependency-injection container, no `UnitOfWork`, no event bus, no CQRS, no generic repository base class; the fix for a multi-write transaction is the `with conn:` boundary (AD-001), not a new abstraction.
+
+**AD-005 is not edited. It remains in the decision log exactly as accepted. The split between dependency wording and abstraction wording below is AD-078's reading for AD-078's own scope; it is not a restatement, amendment, or replacement of AD-005.**
+
+The two rules are independent. The later entries listed here — AD-025, AD-028, AD-040, AD-044, and the Step 9 and Phase F resolutions — cite AD-005 for **abstraction** restraint. That list is illustrative and not exhaustive. **AD-005 is also cited elsewhere in this log for dependency-related reasoning** — AD-016 refuses `requests` and `yfinance` on it, and AD-021 rests its rejection of a `CalculationEnvironment` concept partly on the codebase having zero external numerical dependencies. That the same entry is cited on two different axes is part of why this entry records its own namespace-scoped dependency boundary rather than relying on a citation trail to disambiguate them.
+
+**This entry states a dependency boundary of its own, per namespace.** AD-005's abstraction rule is unchanged, unweakened, and remains the authority it already is.
+
+AD-005's dependency sentence is written at whole-codebase scope. Two namespaces carry documented non-standard-library imports: `pytest` in `tests/`, and `exchange_calendars` in one `experiments/` setup utility. **Each is documented in an accepted decision or in its own module documentation, and neither was undisclosed** — AD-068 decision 4 states that AD-005 is unaffected because pytest is the runner, not a framework added to the platform; `experiments/seed_trading_calendar.py`'s own module docstring, and Phase 4 Architecture Amendment v1.0 §A.2.1, record the other. What was absent was a single place stating the boundary **per namespace**, at the strength each namespace is actually held to.
+
+The dependency-boundary checker and test changes supplied the missing half of that: `core/`'s dependency boundary is now measured by a checker rule and asserted by a blocking test rather than held in prose. This decision records the boundary that enforcement establishes, and records — as separate columns — what is merely measured and what is merely written down.
+
+---
+
+#### Decision
+
+##### 1. The dependency policy is keyed by top-level namespace, and by nothing else
+
+This is a **third classification axis** over the same tree.
+
+- It is **not** keyed by AD-068's domains. `check_dependency_purity` does not consult `DOMAIN_OF_TOPLEVEL`, and this decision does not either.
+- It is **not** keyed by AD-077's Engine / Reference Workload / Artifact classes. AD-077 declines to classify `core/market_data`, and nothing here classifies it, by implication or otherwise.
+- **A package under `core/` carries the same dependency rule regardless of which domain it belongs to.** `core/statistics`, `core/governance`, `core/store`, and `core/shared` are held identically. No per-domain dependency grant, exemption, or gradation is created.
+
+A namespace this decision does not name is not classified by it.
+
+**Terminology.** "Purity" in this entry always means **dependency purity** — whether an imported top-level name is standard library or repository-local. AD-069 uses "purity" for a different property: I/O purity, the ground on which `statistics -> store` is refused. The two rules are unrelated and the collision is disclosed rather than resolved.
+
+##### 2. Scope table — measured state, decided rule, and enforcement are separate columns
+
+| Namespace | Measured at this commit (fact) | Rule decided here (normative) | Enforcement today |
+|---|---|---|---|
+| `core/` | imports `core` and standard library only | **No third-party dependency. No non-`core` repository-local import.** | third-party: checker rule + blocking test; sibling-local: **tripwire test only** (see 3) |
+| `adapters/` | imports `core`, `adapters` only | **None decided here.** No permission granted | none — `check_repository` does not scan `adapters/` (the tool currently operates on the core tree only) |
+| `tools/` | imports `core` only | **None decided here.** No permission granted | none |
+| `maintenance/` | imports `core` only | **None decided here.** No permission granted | none |
+| `research_artifacts/` | imports `core` only | **None decided here.** No permission granted | none |
+| `experiments/` | imports `core`, `experiments`, and `exchange_calendars` in one file | **None decided here.** See 4 | none |
+| `tests/` | imports `pytest` (61 files) and repository-local packages | **None decided here.** `pytest` is the test runner, per AD-068 decision 4 | none — CI installs `pytest` only |
+| `migrations/` | contains no Python | **Not applicable** — a dependency rule over SQL files would be vacuous | n/a (AD-004 governs it) |
+| `workloads/` | does not exist | see 5 | n/a |
+
+"None decided here" means exactly that: this decision states the measured fact and **grants no permission and imposes no new prohibition**. A third-party import in one of those namespaces would be governed by whatever decision introduces it, and no such decision exists.
+
+##### 3. `core/`
+
+**Decided rule.** `core/` imports the Python standard library and `core.*` only. No third-party package. No repository-local package other than `core` itself.
+
+**Enforcement, at the strength it has:**
+
+- **Third-party:** `check_dependency_purity` classifies every absolute import under `core/` as standard library, repository-local, or violation, with no fourth bucket; `tests/test_import_boundaries.py::test_real_repository_imports_no_third_party_package` asserts the result is empty. It carries **no `xfail`** and must never acquire one. This is the strongest rule in this entry.
+- **Non-`core` repository-local:** enforced by **`test_real_repository_core_imports_no_non_core_repository_local_package` alone.** The checker permits it: `check_dependency_purity` allows any repository-local name, and `check_repository` resolves a domain only for names beginning `core.`. **`python -m tools.check_import_boundaries` reporting no purity failure is therefore a weaker statement than the suite passing, and the two must not be quoted interchangeably.**
+
+**Three properties of the mechanism, stated rather than left to be found:**
+
+- **Repository-local discovery is filesystem-derived, not declared.** `_repository_local_toplevel_names` reads the repository root and admits any directory holding an `__init__.py` or a direct `*.py` child. It is not a reviewed list, and it widens automatically when a new top-level Python directory appears.
+- **Dynamic imports are outside the analysis.** `importlib.import_module(name)` and `__import__` are invisible to any AST check. Known and unclosed limit, not an exemption.
+- **`sys.stdlib_module_names` is interpreter-version-bound.** It is the interpreter's own answer to "is this standard library", chosen deliberately over a hand-kept list, and its verdict can differ between Python versions.
+
+A package placed under `core/` that is absent from `DOMAIN_OF_TOPLEVEL` raises `UnmappedPackageError` from the direction rule. That behaviour is unchanged by this decision.
+
+##### 4. The one existing `exchange_calendars` use, recorded as a fact
+
+**This decision creates no exception template, no qualifying criteria, and no procedure by which a further dependency could be admitted.** What follows is a record of one existing thing.
+
+- There is **one** documented third-party use outside `tests/`: `exchange_calendars`, imported by `experiments/seed_trading_calendar.py`.
+- That file is a setup utility, not a research runner. It is **not imported by any reproduction path**: `reproduction_runner` pins `experiments/daily_etf_universe_update.py` as the universe module, and `reference_h4` reproduces through `experiments/validate_h4_kurtosis.py` (`docs/ENGINE_BOUNDARY_CLEANUP_2026-07-27.md` §11.2). Neither imports the package.
+- **The containment claim was verified two ways, and the distinction matters:** (i) a repository-wide import search finds exactly **one** `import exchange_calendars` site, at `experiments/seed_trading_calendar.py`; and (ii) **no module in the repository imports `experiments/seed_trading_calendar.py`** — every other reference to it is prose in a docstring or comment. The "not imported by any reproduction path" statement is therefore **transitive, not merely a direct-import observation**: no execution path reaches the package through an intermediate module either. The claim is not strengthened beyond this, and it is a statement about the tree at this commit, not a guarantee about future ones.
+- Its `TradingSession` output **is** a frozen dataset — one of the three tables in `dataset_manifest`'s required set, hash-verified through `reference_h4`'s `dataset_content_hashes`.
+- Its `Calendar` values are **not** snapshot-frozen. `core/governance/calendar_definitions.py` holds the `XNYS` values as committed module literals that mirror the script's own constants, specifically so that reconstruction never invokes the package.
+
+**The protection is layered, and all four layers are load-bearing:**
+
+- **(a)** the frozen, hash-verified `TradingSession` dataset;
+- **(b)** the committed `Calendar` literal duplication in `calendar_definitions.py`;
+- **(c)** exclusion of the producing script from every reproduction execution path;
+- **(d)** `network_guard`, under which any network call during reproduction is an automatic `REPRODUCTION_FAILED`.
+
+**A second dependency exception requires its own decision, argued on its own terms, with its own number allocated at that time.** This record is an inventory of one existing fact. **It is not an allow-list, and nothing is exempted by appearing in it** — the same standing `ETF_SYMBOLS_BY_MODULE` carries under AD-068 decision 5.
+
+`docs/RESEARCH_GOVERNANCE_STANDARD.md` §8 governs research-cycle exceptions and is **not** imported here — not its record form and not its Level 2 approval requirement. §8 does not govern architecture decisions, and borrowing it would manufacture a requirement this platform cannot satisfy.
+
+##### 5. `workloads/` — conditional pre-commitment only
+
+- **`workloads/` does not exist.**
+- **This decision creates none.**
+- **This decision authorizes none**, and classifies nothing that would live inside one.
+- `core/`'s decided rule in 3 already forbids `core/` importing any repository-local package other than `core` itself. That covers a future `workloads/` by name-independence, and requires no new mechanism.
+- **Should a future decision permit a third-party dependency inside a workload, that permission would not extend to `core/`, `adapters/`, `tools/`, `maintenance/`, `research_artifacts/`, or any other namespace.**
+- **This decision takes no position on whether such permission should ever be granted.** It neither pre-authorizes that outcome nor forecloses it.
+
+Per AD-077 clause 6 — neutrality claims expire at one implementation — this clause describes a namespace with **zero** implementations and may not be described as a general, neutral, or proven policy.
+
+##### 6. AD-021 is not touched
+
+- **This decision does not amend, reinterpret, restate, or rewrite AD-021**, including its rejection of a `CalculationEnvironment` concept, its stated rationale, and its revisit condition. `IndicatorDefinition.version` remains a plain integer.
+- **This decision records its own dependency boundary and nothing more.** The boundary in 1–5 is AD-078's; AD-021's trigger is AD-021's and is untouched by it.
+- Any tension between the presence of a third-party dependency anywhere in the tree and this platform's reproducibility claims is **not resolved here**. It is noted in *Known weakness* and left for whatever decision introduces such a dependency.
+
+---
+
+#### Rationale
+
+1. **A claim stated at a scope the tree does not satisfy is a liability on a governance platform.** AD-005's dependency sentence is written at whole-codebase scope while `tests/` and one `experiments/` file carry documented non-standard-library imports. Any reader can establish that in one grep. AD-077 exists because a *drafted* completeness claim that review could falsify is a worse finding than the coupling it misdescribes; the same argument applies to scope. Stating a boundary where it is true and enforced is a stronger position than relying on a broader wording to cover it.
+
+2. **The checker and test changes altered what is possible to record.** Before them, "`core/` is standard-library-only" was prose and nothing else — `import numpy` in `core/statistics` was invisible to every tool and every test. It is now measured by a checker rule and asserted by a blocking test. The claim did not change; the ability to hold it did.
+
+3. **The remaining gap is documentary, not mechanical.** A reader can now run the checker and learn what `core/` does. No single document told them what `tools/`, `experiments/`, or `tests/` are held to, or which of those statements a mechanism backs. This entry is that document, and it adds no mechanism.
+
+4. **Four concerns are separate and are kept separate.** Dependency purity is about which top-level names a namespace may import. Dataset provenance is about immutable, hash-verified snapshots (`RESEARCH_GOVERNANCE_STANDARD.md` §6). Environment capture — interpreter version, package versions, platform, compiled artifacts — is captured nowhere today; `reproduction_record.json` holds fields including commit hash, dataset hashes, reproduction status, result hash, notes, and verification timestamp, but no environment field. Reproduction semantics are `ReproductionStatus`'s four states. Conflating any two of these produces a claim stronger than any of them supports.
+
+5. **The `exchange_calendars` case is protected by four mechanisms, not by one principle.** The layered account in 4 is what the tree actually implements, and it is recorded that way deliberately. A single-mechanism summary would be inaccurate for the `Calendar` values, which are protected by committed duplication rather than by a snapshot.
+
+---
+
+#### Consequences
+
+**Positive.**
+
+- AD-078 states the dependency boundary at a scope that is both true and, for `core/`, enforced, without altering AD-005.
+- A future reader cannot mistake `core/`'s dependency purity for a platform-wide reproducibility guarantee: the two are separated here, and AD-077 clause 1b already holds that the dataset and reproduction path is workload-bound.
+- The dependency policy has a named boundary — the top-level namespace — that is independent of AD-068's domains and AD-077's classes, so a change to either of those axes does not silently move this one.
+- The single `exchange_calendars` use is recorded in the decision log rather than only in a module docstring and a Phase 4 amendment section.
+
+**Negative.**
+
+- Most namespaces have a measured state and no enforcement. `adapters/`, `tools/`, `maintenance/`, `research_artifacts/`, and `experiments/` are clean today and nothing prevents that from changing.
+- The repository-local bucket is permissive by construction and widens automatically as top-level Python directories appear.
+- Dynamic imports remain outside the analysis entirely.
+- The `Calendar` literal duplication across `calendar_definitions.py` and `seed_trading_calendar.py` is covered by a **one-sided pin, not a mirror test**. `tests/test_governance_calendar_definitions.py::test_xnys_matches_seed_trading_calendar_literals` asserts `core/governance/calendar_definitions.XNYS`'s four field values against literals hardcoded in the test body; it does not import, parse, or compare against `experiments/seed_trading_calendar.py`. Drift in `calendar_definitions.py` is detected; drift in `seed_trading_calendar.py` is not.
+
+---
+
+#### What this decision does not do
+
+It **adds no dependency**. No package is permitted, installed, declared, vendored, or pinned. `numpy`, `scipy`, `pandas`, and every other name are exactly as absent after this decision as before it.
+
+It **creates no dependency declaration file or mechanism** — no `[project]` table, no requirements file, no lock file, no Dockerfile, no Nix expression, no environment capture. `pyproject.toml` is unchanged.
+
+It **creates no `workloads/` directory** and **authorizes no workload implementation**. It **does not authorize a biomedical workload**. It **does not authorize an ML workload**. It chooses between none of them and takes no position on the choice.
+
+It **creates no `WorkloadProfile`**, no registry, no plugin system, no dependency-injection container, and no dynamic discovery.
+
+It **modifies no phase plan.** No Phase 1 item (1.1 through 1.6), no Phase 2 work, and no Phase 3 work in `docs/ENGINE_NEUTRALITY_ARCHITECTURE_REVIEW_2026-07-27.md` §5 is authorized, altered, or endorsed. That plan remains a proposal; where this entry names a fact it also names, it does so to describe the tree, never to approve a phase.
+
+It **changes no reproduction record** — not `ReproductionRecord`'s field set, not `ReproductionStatus`'s four states, not any archived `reproduction_record.json`.
+
+It **changes no archive** — no sealed bytes, no `dataset_manifest.json`, no `schema_version`, no `archive_seal_register.jsonl`, no protected-file fixture.
+
+It **modifies no CI configuration.** The advisory `|| true` on the boundary-checker step is recorded as a fact about enforcement strength, not repaired.
+
+It **adds no checker rule, no test, and no tooling.** Extending the checker to scan outside `core/` is proposed elsewhere and is authorized neither by AD-077 nor by this entry.
+
+It **does not edit or amend AD-005**, and in particular does not amend AD-005's abstraction clause. No framework, no ORM, no DI container, no event bus, no CQRS, no generic repository base class.
+
+It **does not amend AD-021.**
+
+It **does not amend AD-068, AD-069, AD-073, AD-074, AD-075, or AD-077.** `ETF_SYMBOLS_BY_MODULE`, symbol attribution and its termination condition, the `store` grant list and its demand-driven growth rule, archive integrity verification, the Archive Seal, `reference_h4`'s seal, and AD-077's two-part neutrality claim and three-class axis all stand exactly as accepted.
+
+---
+
+#### Known weakness
+
+Stated here rather than discovered later.
+
+1. **The checker's repository-local bucket expands automatically.** It is derived from the filesystem, not from a reviewed list, so a new top-level Python directory becomes a name the checker will accept from `core/` on the day it appears, with no edit and no review.
+2. **`core/`'s sibling-import rule rests on a single tripwire test.** The checker permits what the test forbids. If that test were ever removed or relaxed while fixing something unrelated, the rule would have no mechanism at all. The checker CLI is not a fallback and its exit status settles the question in neither direction: it can still exit non-zero because of the unrelated direction violations `core/` already carries, and it reports no sibling import today and would report none then. The point is narrow and is only this — the sibling-import rule has no checker enforcement of its own, so removing or relaxing the tripwire test leaves it with no mechanism at all.
+3. **Most namespaces in the scope table have a measured state and no enforcement**, and four of them have no decided rule either. This entry makes drift nameable in review; it does not prevent drift.
+4. **The `Calendar` literal duplication is protected on one side only.** `tests/test_governance_calendar_definitions.py::test_xnys_matches_seed_trading_calendar_literals` exists and pins the four field values of `core/governance/calendar_definitions.XNYS` against literals hardcoded in the test body. It does **not** import, parse, or compare against `experiments/seed_trading_calendar.py`, so nothing compares the two files to each other. It is a one-sided pin, not a mirror test: a drift in `calendar_definitions.py` fails the test, and a drift in `seed_trading_calendar.py` is detected by nothing. **No remediation is proposed, scheduled, or authorized here; this is a record of the current state.**
+5. **Dependency declaration and environment capture remain unresolved.** There is no place a dependency could be declared, the interpreter version is pinned only in CI, and `reproduction_record.json` captures no environment. These are open questions, not gaps this decision closes.
+6. **This entry is held by reading in every part except `core/`'s third-party rule**, and this repository has no independent reviewer.
+
+---
+
+#### Status
+
+**Accepted against commit `a38089ae4f4bb1d7cb057e9f3fe04e5d91d2317b` (2026-07-28).** Documentation only: no code, test, tooling, fixture, archive, or CI change.
