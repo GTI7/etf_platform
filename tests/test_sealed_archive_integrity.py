@@ -99,6 +99,12 @@ _OPEN_CYCLE_PILOT_SCRIPT = "experiments/positive_control_phase3_pilot.py"
 # scripts" assertion below can be exact rather than approximate.
 _OPEN_CYCLE_H2_SCRIPT = "experiments/validate_h2_gate1_independence.py"
 
+# `reference_h2`'s cycle orchestration/lifecycle-transition script, same
+# still-open cycle and same reasoning as `_OPEN_CYCLE_H2_SCRIPT` above --
+# named separately because it is a distinct file, not folded into one
+# constant, to keep this list a literal enumeration rather than a pattern.
+_OPEN_CYCLE_H2_LIFECYCLE_SCRIPT = "experiments/run_reference_h2_lifecycle.py"
+
 SEALED_ARCHIVE_DIR = REPO_ROOT / "research_archive" / "reference_h4"
 
 
@@ -238,9 +244,10 @@ def test_reference_h4_unsealed_tooling_is_exactly_two_known_scripts() -> None:
     assert unprotected_scripts == _REFERENCE_H4_UNSEALED_TOOLING | {
         _OPEN_CYCLE_PILOT_SCRIPT,
         _OPEN_CYCLE_H2_SCRIPT,
+        _OPEN_CYCLE_H2_LIFECYCLE_SCRIPT,
     }, (
         f"the set of experiments/*.py scripts covered by no Phase-0 fixture entry has changed.\n"
-        f"expected: {sorted(_REFERENCE_H4_UNSEALED_TOOLING | {_OPEN_CYCLE_PILOT_SCRIPT, _OPEN_CYCLE_H2_SCRIPT})}\n"
+        f"expected: {sorted(_REFERENCE_H4_UNSEALED_TOOLING | {_OPEN_CYCLE_PILOT_SCRIPT, _OPEN_CYCLE_H2_SCRIPT, _OPEN_CYCLE_H2_LIFECYCLE_SCRIPT})}\n"
         f"actual:   {sorted(unprotected_scripts)}\n"
         f"A new unprotected script is a new integrity gap. If it belongs to a cycle that has "
         f"closed and been sealed, it still cannot be sealed (the Seal covers research_archive/ "

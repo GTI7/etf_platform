@@ -118,6 +118,24 @@ def test_no_protected_directory_gained_or_lost_files() -> None:
     **R-4b** in AD-075 §4, open and unassigned. Their residual is bounded
     by `test_reference_h4_unsealed_tooling_is_exactly_two_known_scripts`,
     which pins the set at exactly those two so it cannot grow silently.
+
+    `reference_h2` addendum: by the same reasoning as the Positive Control
+    Phase 3 addendum above (not the `reference_h4` re-basing, since
+    `reference_h2` has no issued Archive Seal), `research_archive/reference_h2/`
+    and its two `experiments/` scripts
+    (`experiments/run_reference_h2_lifecycle.py`, the cycle's lifecycle-
+    transition tooling, and `experiments/validate_h2_gate1_independence.py`,
+    its Gate 1 evidence-generation script) are excluded: this is a new,
+    currently open Pre-validation cycle (PRE_VALIDATION per
+    `research_archive/reference_h2/transition_records.jsonl`, sequence 1),
+    not historical closed-cycle evidence the Phase 0 snapshot was meant to
+    freeze. Both scripts are additionally bounded by
+    `test_reference_h4_unsealed_tooling_is_exactly_two_known_scripts`'s
+    literal set in `tests/test_sealed_archive_integrity.py`, so a further
+    unaccounted-for script still fails loudly there even though this test
+    excludes the directory and these two specific files. This exclusion is
+    scoped narrowly to `reference_h2`'s own directory and these two named
+    scripts, not to `research_archive/` or `experiments/` generally.
     """
     current_files = set()
     for base in ("research_archive", "experiments", "maintenance"):
@@ -140,6 +158,13 @@ def test_no_protected_directory_gained_or_lost_files() -> None:
                     "experiments/validate_h4_kurtosis.py",
                 ):
                     continue  # unsealed, uncovered residual R-4b -- see re-basing above
+                if relative_path.startswith("research_archive/reference_h2/"):
+                    continue  # new, open Pre-validation cycle -- see reference_h2 addendum above
+                if relative_path in (
+                    "experiments/run_reference_h2_lifecycle.py",
+                    "experiments/validate_h2_gate1_independence.py",
+                ):
+                    continue  # new, open Pre-validation cycle -- see reference_h2 addendum above
                 current_files.add(relative_path)
 
     assert current_files == set(EXPECTED_HASHES)
