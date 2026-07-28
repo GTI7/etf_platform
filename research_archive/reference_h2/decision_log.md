@@ -596,3 +596,131 @@ determination, and it creates no gate outcome and no lifecycle transition.
 - **No outcome data** (forward return, Information Coefficient, p-value, or
   any other performance figure) has been read, computed, or referenced at
   any point reflected in this log.
+
+---
+
+## Entry 13 — Clarification of Entry 12's closure language and provenance limitation
+
+- **Date:** 2026-07-28
+- **Decision:** This entry records a governance **clarification** identified
+  by a follow-up audit of Entry 12. It is **not** a correction, a reversal,
+  a new exception, a gate decision, or a lifecycle transition, and it
+  changes no prior entry. Two points are recorded:
+  - **(a) Status of Entry 12's "closed."** The Level 2 review Entry 12
+    cites,
+    `reviewer_reports/2026-07-28_level2_ordering_exception_review.md`,
+    disposed of the matter **conditionally and prospectively**: its §7
+    accepts the exception "subject to §5.3's approval-record gap being
+    closed rather than left open," and offers the report "as the missing
+    artifact that closes the §5.3 gap **going forward**, on the following
+    conditions," the first of which is that "a future decision-log entry
+    must record that this review exists and cite it." Entry 12 is that
+    entry, and its citation of the review **discharged that explicit
+    condition**. Accordingly, the word "closed" in Entry 12 is to be
+    understood as **closed as of Entry 12's archival record** — the point
+    at which the §8 item 3 approval record acquired an archived,
+    citable form — and **not** as a statement that the approval-record
+    gap never existed. The gap existed and was disclosed by Entry 11
+    itself; it was open for the whole interval between Entry 11 and Entry
+    12. Nothing in Entry 12 is retroactive.
+  - **(b) Remaining provenance limitation.** The cited review's Level 2
+    tier remains a **self-attested, session-level claim** in exactly the
+    sense `docs/RESEARCH_GOVERNANCE_STANDARD.md` §4 describes: the same
+    model family and vendor perform both the work and its review, no
+    incentive separation or persistent accountable reviewer role exists,
+    and "no conversational memory of the work under review" is
+    self-reported and not verifiable by a third party from outside the
+    session. What Entries 11 → 12 improved is **the form of the record,
+    not the tier of the independence**: where Entry 11 carried an
+    unarchived, self-reported Level 2 basis with no checkable artifact,
+    there now exists a dated, archived, readable review with its
+    reasoning disclosed and each §8 element assessed on its merits. That
+    is a real and material gain in auditability. It does **not** convert
+    a session-level claim into externally verified organizational
+    independence, and no entry in this log should be read as claiming
+    that it does. Further: the review artifact **itself** supplied the
+    approval record that Entry 11 was missing, and the decision-log entry
+    discharging that review's own first condition was produced within the
+    same governance pass rather than by a separate party. That is a
+    **documented self-referential limitation** in the provenance chain
+    and is recorded here as such. It is a **limitation to transparency,
+    not a §8 violation**: §8 item 3 forbids an exception being
+    self-approved by the same party requesting it, and the exception at
+    Entry 11 was assessed by a procedurally separate Level 2 pass, not by
+    its requester.
+- **Evidence references:** `decision_log.md` Entries 11 and 12 (neither
+  edited by this entry); `reviewer_reports/2026-07-28_level2_ordering_exception_review.md`
+  §7 (conditions 1–6) and §8 (explicit non-claims), commit `cdff7b5`;
+  `docs/RESEARCH_GOVERNANCE_STANDARD.md` §4 (Level 2 limitations, stated
+  without qualification) and §8 items 1–3; commit `febe9f6` (Entry 12).
+- **Governance status:** Phase 3, Gate 1 — **unchanged in every respect by
+  this entry.** No gate outcome is created; **Gate 1 remains undetermined**
+  and no Gate 1 result is stated, implied, or reserved here. No Gate 3
+  result is stated or implied; Gate 3 remains not started. No lifecycle
+  transition; `transition_records.jsonl` unchanged at exactly one record
+  with `gate_outcomes: []`. No Methodology Freeze exists or is created. The
+  Entry 11 ordering exception is **not reinterpreted** — its scope, its
+  reason, its impact assessment, and its time-box stand exactly as
+  recorded. Every condition binding under the cited review's §7 and under
+  Entry 11(4) remains binding at full strength; nothing here weakens,
+  narrows, or discharges any of them beyond condition 1, which Entry 12
+  already discharged. `reference_h2` remains in **PRE_VALIDATION**.
+- **Reviewer level:** Level 1 (self-directed clarification of existing
+  archived records). This entry performs no new review work, reproduces no
+  figure, and adjudicates nothing; it states how two already-archived
+  records are to be read. It does not upgrade, downgrade, or re-certify the
+  tier of the review cited at Entry 12, which remains Level 2 —
+  procedurally independent, **not organizationally independent**. No Level
+  3 review exists or is available on this platform.
+- **Known limitations:**
+  - This entry cures nothing. The historical sequencing defect remains
+    **permanent** per Entry 11 and the finding's §6; the interval during
+    which Entry 11's approval record had no archived form is a historical
+    fact that no entry can undo.
+  - The self-referential limitation recorded at (b) **cannot be closed at
+    Level 2 by any further entry in this log**, since any such entry would
+    reproduce the same structure. Closing it would require a Level 3
+    review, which does not exist and is not available on this platform.
+  - This entry does not resolve, narrow, or touch the provisional
+    attempt-cap ruling (Entry 6), the unconfirmed-influence residual risk
+    (Entry 6, restated at Entry 11), O-4, or the O-1/O-2/O-5 provenance
+    observations (Entries 7 and 10) — all remain open exactly as recorded.
+
+---
+
+## Current status (as of Entry 13)
+
+- **Phases 1–2 and the Phase 2 → 3 transition:** unchanged from the Entry
+  10 status block above.
+- **Phase 3 (Pre-validation):** governing plan frozen (Entry 4); Attempt #1
+  construction frozen (Entry 5); attestation corrected (Entry 6); Gate 1
+  ordering requirement violated, recorded, and governed by exception
+  (Entry 11); the exception's §8 item 3 approval-record gap closed by an
+  archived Level 2 review (Entry 12), **that closure clarified as
+  prospective from Entry 12's record and its residual provenance
+  limitation documented (Entry 13)**.
+- **Gate 1:** evidence generated and archived (Entry 7); reproduced exactly,
+  483/483 dates at tolerance 0 (Entry 8); ordering defect disclosed and
+  Level-2-reviewed (Entries 11–12). **Gate 1 itself has still not been
+  determined — no PASS/FAIL/INCONCLUSIVE outcome exists, and Entry 13
+  creates none.**
+- **Gate 3:** **not started.** No economic-rationale document and no Gate 3
+  review exists for this cycle at any date; Entry 13 creates no Gate 3
+  result.
+- **Gates 2 and 4:** not addressed in this cycle's artifacts to date.
+- **`reference_h2` remains in PRE_VALIDATION.** No Methodology Freeze, no
+  gate outcome, and no lifecycle transition beyond Entry 3 has occurred.
+- **Attempt budget:** Attempt #1 of 3, with two further attempts nominally
+  remaining — **still provisional**, per Entry 11's known limitations,
+  until the Entry 6 cap ruling is independently confirmed; neither Entry 12
+  nor Entry 13 confirms it.
+- **Open items carried forward, not resolved by this entry:** the permanent
+  ordering defect (Entry 11); the O-5 script-provenance gap and O-2
+  post-hoc database-identity capture (Entry 7); the unconfirmed-status
+  residual risk from Entry 6; O-4 (evidence package incomplete); the
+  self-referential approval-record provenance limitation (Entry 13(b)); no
+  Level 3 review exists or is available on this platform for any entry
+  above.
+- **No outcome data** (forward return, Information Coefficient, p-value, or
+  any other performance figure) has been read, computed, or referenced at
+  any point reflected in this log.
