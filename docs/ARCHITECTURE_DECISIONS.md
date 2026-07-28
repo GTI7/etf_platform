@@ -7262,3 +7262,210 @@ Stated here rather than discovered later.
 #### Status
 
 **Accepted against commit `a38089ae4f4bb1d7cb057e9f3fe04e5d91d2317b` (2026-07-28).** Documentation only: no code, test, tooling, fixture, archive, or CI change.
+
+---
+
+### AD-079: core/'s sibling-import rule (AD-078 Section 3) is now enforced by the checker, closing AD-078 Known Weakness 2 (accepted 2026-07-28, after implementation)
+
+#### Review basis
+
+**Level 1 — self-review.** One reviewer with repository access, working
+against `tools/check_import_boundaries.py` and
+`tests/test_import_boundaries.py` as changed by commit
+`bfdca9ceec931eb07fc4588a3793597e57dcb40f`. **Level 3 is unavailable and
+no Level 3 review was performed. This is not an independent review, and
+neither this entry nor any document citing it may describe it as one**
+(`docs/RESEARCH_GOVERNANCE_STANDARD.md` §4). This is the same standing
+AD-068, AD-069, and AD-078 declare for their own basis.
+
+**Numbering.** AD-079 is the next number, per AD-077's *Numbering*
+section as continued by AD-078: unconsumed numbers stay unconsumed, and
+this entry claims only the next one in sequence.
+
+**Acceptance basis.** This entry accepts, and records the closure
+effected by, commit `bfdca9ceec931eb07fc4588a3793597e57dcb40f` — the
+commit that changed `tools/check_import_boundaries.py`'s
+`check_dependency_purity` and the corresponding tests in
+`tests/test_import_boundaries.py`. It is recorded **after** the
+implementation it accepts, and says so rather than presenting a tidier
+sequence, following the precedent AD-074 sets for the same situation.
+
+**Status.** **Accepted, 2026-07-28.** This entry is documentation only:
+it enacts no code, test, fixture, or archive change of its own. The
+implementation it describes already exists at commit
+`bfdca9ceec931eb07fc4588a3793597e57dcb40f` and is unmodified by this
+acceptance.
+
+---
+
+#### Context
+
+**AD-078 Section 3 is not reopened, reinterpreted, or restated here.**
+The decided rule remains exactly what AD-078 recorded: *"`core/` imports
+the Python standard library and `core.*` only. No third-party package.
+No repository-local package other than `core` itself."* This entry
+touches none of that wording and grants no new permission.
+
+What AD-078 also recorded, in its *Enforcement* subsection and in
+*Known weakness* item 2, was the **strength** at which that rule was
+held:
+
+> "Non-`core` repository-local: enforced by
+> `test_real_repository_core_imports_no_non_core_repository_local_package`
+> alone. The checker permits it: `check_dependency_purity` allows any
+> repository-local name, and `check_repository` resolves a domain only
+> for names beginning `core.`."
+
+> Known weakness 2: "`core/`'s sibling-import rule rests on a single
+> tripwire test. The checker permits it. If that test were ever removed
+> or relaxed while fixing something unrelated, the rule would have no
+> mechanism at all."
+
+That description was accurate at AD-078's acceptance commit and is
+preserved here verbatim, not corrected in place — AD-078 is append-only
+and this entry does not amend it. What follows records that the
+described gap has since been closed by implementation, and updates
+nothing else.
+
+---
+
+#### Decision
+
+**1. Enforcement state before this commit.** `check_dependency_purity`
+accepted any top-level name resolvable to a real package or module
+directly under the repository root (`adapters`, `experiments`, a bare
+top-level module, etc.), not only `core`. The only mechanism refusing a
+non-`core` sibling import from `core/` was
+`tests/test_import_boundaries.py::test_real_repository_core_imports_no_non_core_repository_local_package`,
+which replicated the AST walk independently rather than exercising the
+checker's own accept/reject path.
+
+**2. Implementation change, at commit
+`bfdca9ceec931eb07fc4588a3793597e57dcb40f`.** `check_dependency_purity`
+in `tools/check_import_boundaries.py` now accepts a repository-local
+top-level name only when it equals `core_root`'s own name (`"core"` on
+the real tree). Every other repository-local sibling is rejected by the
+same function that already rejected genuine third-party packages, and
+reported through the existing `ForeignImport` type, extended with a
+boolean flag that distinguishes, for message purposes only, a real
+sibling package from a name that resolves to nothing in this repository
+— never used to admit either case.
+
+**3. Enforcement state after this commit.**
+`check_dependency_purity` is now the enforcement mechanism for both
+halves of AD-078 Section 3's `core/` rule — third-party rejection and
+non-`core` repository-local rejection alike — asserted directly by
+`tests/test_import_boundaries.py::test_real_repository_imports_no_third_party_package`
+and the synthetic-tree tests in that file's dependency-purity section,
+none of which is an `xfail`.
+`test_real_repository_core_imports_no_non_core_repository_local_package`
+is retained, not because it is still the only mechanism, but as an
+**independent cross-check**: it re-derives the same fact by a separate
+AST walk over the real tree, using a different code path than
+`check_dependency_purity` itself — the same role
+`test_real_tree_statistics_and_kernel_import_no_store` already plays for
+`core.store` — so a defect specific to the production checker's own
+logic would still be caught. It is no longer the sole enforcement
+mechanism, and this entry is what changes that description from AD-078's.
+
+**AD-078 Known Weakness 2 is closed as of commit
+`bfdca9ceec931eb07fc4588a3793597e57dcb40f`; this entry is the record of
+that closure.** AD-078's other four known weaknesses are untouched and
+remain open exactly as AD-078 recorded them.
+
+---
+
+#### Non-goals
+
+This decision does not:
+
+- Add enforcement to `adapters/`, `experiments/`, `tools/`,
+  `maintenance/`, `research_artifacts/`, `tests/`, or any namespace
+  outside `core/`. AD-078 Section 2's scope table stands unchanged for
+  every namespace other than the one enforcement-strength cell this
+  entry corrects.
+- Authorize, define, or take any position on a `workloads/` directory or
+  any workload architecture. AD-078 Section 5 stands unchanged.
+- Create a dependency-exception mechanism, allow-list, or procedure by
+  which a further dependency could be admitted to `core/`. AD-078
+  Section 4's `exchange_calendars` record is the only such fact in the
+  log and is untouched.
+- Alter AD-077's Engine / Reference Workload / Artifact classification,
+  or reclassify `core/market_data`.
+- Amend AD-005 or AD-021 in any respect.
+- Amend AD-078 itself, in wording, scope, or intent.
+
+---
+
+#### Known limitations
+
+Carried forward from AD-078 Section 3 and unchanged by this decision:
+
+- **Dynamic imports remain outside the analysis.**
+  `importlib.import_module(name)` and `__import__` are invisible to any
+  AST-based check, here as everywhere else in this checker. Known and
+  unclosed, not an exemption.
+- **Repository-local discovery remains filesystem-derived, not
+  declared.** `_repository_local_toplevel_names` still reads the
+  repository root at one directory level and widens automatically when a
+  new top-level Python directory appears; this decision changes what the
+  checker *does* with that discovery for `core/`, not how the discovery
+  itself works.
+- **CI enforcement status is unchanged.** The advisory `|| true` on
+  `tools/check_import_boundaries.py` in CI, recorded as a fact (not a
+  defect) by AD-078, is untouched by this entry. Making the checker
+  blocking in CI, if ever done, is a separate decision.
+- **`sys.stdlib_module_names` remains interpreter-version-bound**, exactly
+  as AD-078 recorded.
+
+---
+
+#### Rationale
+
+An accepted decision entry that states a mechanism's strength goes stale
+the moment that strength changes, and AD-078's own Rationale point 1
+names exactly this failure mode: "a claim stated at a scope the tree does
+not satisfy is a liability on a governance platform." AD-078 cannot be
+edited to prevent that staleness without violating the append-only
+principle it and every other entry in this log observe. Recording the
+change as its own entry is the only way to keep AD-078 readable as a
+snapshot of its own acceptance commit while keeping the current
+enforcement state discoverable from the log.
+
+---
+
+#### Consequences
+
+**Positive.**
+
+- **AD-078 Known Weakness 2 is closed as of commit
+  `bfdca9ceec931eb07fc4588a3793597e57dcb40f`: the sibling-import rule is
+  now enforced by the checker itself, not by a single test that could be
+  weakened or deleted without the rule noticing.**
+- The tripwire test's role is now correctly described as independent
+  verification rather than sole enforcement, matching the pattern already
+  used for `core.store`.
+- A future reader consulting AD-078 for the *decided rule* still gets an
+  accurate answer; a reader consulting it for *enforcement strength* is
+  directed here by this entry rather than misled by a stale sentence.
+
+**Negative.**
+
+- None identified beyond the known limitations above, all of which
+  predate this decision and are unchanged by it.
+
+---
+
+#### What this decision does not do
+
+It **adds no dependency rule** beyond what AD-078 Section 3 already
+decided. It **grants no permission** to any namespace. It **creates no
+`workloads/` directory** and **authorizes no workload**. It **does not
+amend AD-005, AD-021, AD-068, AD-069, AD-073, AD-074, AD-075, AD-077, or
+AD-078** — every fact, grant list, and classification those entries
+record stands exactly as accepted. It **modifies no CI configuration**.
+It **adds no new checker rule or mechanism**: `check_dependency_purity`
+is the same function AD-078 already named, with its existing
+accept/reject boundary tightened by commit
+`bfdca9ceec931eb07fc4588a3793597e57dcb40f` to match the rule AD-078
+already decided, not a new rule of its own.
