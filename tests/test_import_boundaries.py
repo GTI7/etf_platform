@@ -38,16 +38,29 @@ intent that authorized it; none was a test edit.
 
 **Second rule, 2026-07-28 — dependency purity (AD-005).** The checker
 now also enforces that every import under ``core/`` names either the
-standard library or something inside this repository. The tests for it
-are in the final section of this file and **none of them is an xfail**:
-the direction rule was inventoried before it was enforced because the
-tree violated it, whereas ``core/`` has always satisfied AD-005 and the
-only thing missing was a mechanism. ``test_real_repository_imports_no_
+standard library or ``core`` itself. The tests for it are in the final
+section of this file and **none of them is an xfail**: the direction
+rule was inventoried before it was enforced because the tree violated
+it, whereas ``core/`` has always satisfied AD-005 and the only thing
+missing was a mechanism. ``test_real_repository_imports_no_
 third_party_package`` asserts that directly and passes, which is what
 turns a prose constraint into a blocking one. The two rules are checked
 by separate functions returning separate types and neither test group
 constrains the other -- ``test_the_two_rules_are_independent`` asserts
 that separation rather than leaving it to be inferred.
+
+**Same-day tightening — AD-078 Section 3, closing Known Weakness 2.**
+``check_dependency_purity`` originally accepted *any* repository-local
+top-level name, not just ``core``, on the reasoning that whether a
+``core/`` import is allowed at all is the direction rule's question.
+AD-078 Section 3 states a narrower rule directly for ``core/``: no
+repository-local package other than ``core`` itself, full stop. Until
+this change that half of the rule was enforced by exactly one test,
+``test_real_repository_core_imports_no_non_core_repository_local_
+package``, with no checker mechanism behind it. It now shares the same
+mechanism as the third-party half: ``test_non_core_repository_local_
+import_in_core_is_rejected`` is the new synthetic-tree test for it, and
+**it too carries no xfail.**
 """
 
 from __future__ import annotations
@@ -954,11 +967,32 @@ def test_stdlib_imports_are_allowed(tmp_path: Path) -> None:
     assert check_dependency_purity(core_root) == []
 
 
-def test_repository_local_imports_are_not_third_party(tmp_path: Path) -> None:
-    """A sibling package of ``core/`` is repository-local, so importing
-    it is not a *purity* failure. Whether it is allowed at all is the
-    direction rule's question, and this rule does not answer it -- see
-    ``test_the_two_rules_are_independent``."""
+def test_core_dotted_imports_are_not_purity_violations(tmp_path: Path) -> None:
+    """``core.*`` is the one repository-local namespace ``core/`` may
+    import (AD-078 Section 3), so a dotted ``core`` import at any depth
+    is not a purity failure. Whether a *particular* ``core.<domain>``
+    target is allowed is the direction rule's question, and this rule
+    does not answer it -- see ``test_the_two_rules_are_independent``."""
+    core_root = tmp_path / "core"
+    _write(core_root / "__init__.py", "")
+    _write(
+        core_root / "statistics" / "__init__.py",
+        "import core.shared.clock\nfrom core.shared import clock\n",
+    )
+
+    assert check_dependency_purity(core_root) == []
+
+
+def test_non_core_repository_local_import_in_core_is_rejected(tmp_path: Path) -> None:
+    """AD-078 Section 3: ``core/`` may import no repository-local package
+    other than ``core`` itself. A sibling package -- ``adapters``,
+    ``experiments``, a bare top-level module -- is a real, importable
+    package in this repository, but it is not ``core``, so it is now
+    rejected by the checker itself rather than only by
+    ``test_real_repository_core_imports_no_non_core_repository_local_package``'s
+    tripwire (AD-078 Known Weakness 2, closed 2026-07-28). Each is
+    reported with ``repository_local=True``, distinguishing it from a
+    genuinely unresolvable name."""
     core_root = tmp_path / "core"
     _write(core_root / "__init__.py", "")
     _write(tmp_path / "adapters" / "__init__.py", "")
@@ -972,7 +1006,14 @@ def test_repository_local_imports_are_not_third_party(tmp_path: Path) -> None:
         "import top_level_module\n",
     )
 
-    assert check_dependency_purity(core_root) == []
+    foreign = check_dependency_purity(core_root)
+
+    assert sorted(item.top_level for item in foreign) == [
+        "adapters",
+        "experiments",
+        "top_level_module",
+    ]
+    assert all(item.repository_local for item in foreign)
 
 
 def test_a_directory_holding_no_python_is_not_repository_local(tmp_path: Path) -> None:
@@ -1083,30 +1124,34 @@ def test_real_repository_imports_no_third_party_package() -> None:
 
 
 def test_real_repository_core_imports_no_non_core_repository_local_package() -> None:
-    """Regression tripwire for a gap that sits between the two rules
-    rather than inside either one.
+    """Regression tripwire for a gap that used to sit between the two
+    rules rather than inside either one -- AD-078 Known Weakness 2,
+    closed 2026-07-28.
 
-    ``check_dependency_purity`` allows *any* repository-local top-level
-    name -- whether the import is allowed at all is rule 1's question,
-    and rule 1 deliberately does not re-litigate it (see the module
-    docstring). ``check_repository`` in turn only resolves a domain for
-    names starting with ``core.``; a sibling top-level package is simply
-    not something it looks at. So ``import tools.something`` or
-    ``from experiments import x`` written inside ``core/`` would pass
-    *both* rules silently today -- a core -> non-core coupling neither
-    rule is positioned to catch, including future accidents such as
-    core -> tools, core -> tests, core -> experiments, core ->
+    Before that date, ``check_dependency_purity`` allowed *any*
+    repository-local top-level name, and ``check_repository`` only
+    resolved a domain for names starting with ``core.``; a sibling
+    top-level package was simply not something either rule looked at.
+    ``import tools.something`` or ``from experiments import x`` written
+    inside ``core/`` would have passed *both* rules silently -- a
+    core -> non-core coupling neither rule was positioned to catch,
+    including core -> tools, core -> tests, core -> experiments, core ->
     maintenance, core -> research_artifacts, or a future core ->
-    workloads.
+    workloads. This test was the only mechanism that caught it, by
+    replicating rule 2's own AST walk independently and refusing to let
+    a repository-local name other than ``core`` through.
 
-    This does not add a third rule or change checker semantics. It calls
-    the public purity API to confirm the real tree still has no genuine
-    third-party import, then separately names every top-level import the
-    real tree makes -- the same direct-AST-walk approach
-    ``test_real_tree_statistics_and_kernel_import_no_store`` already uses
-    for ``core.store`` -- and asserts none of them is a repository-local
-    name other than ``core`` itself. Today's tree has no such import, so
-    this test passes now and only starts failing the day one is added."""
+    ``check_dependency_purity`` now enforces this directly (see the
+    module docstring and ``ForeignImport``), so the first assertion below
+    is no longer merely a sanity check for the *third-party* half of rule
+    2 -- it is the mechanized form of this test's own rule. The manual
+    walk that follows is kept as an independent cross-check using a
+    different code path than the production checker
+    (``test_real_tree_statistics_and_kernel_import_no_store`` uses the
+    same direct-AST-walk approach for ``core.store``), not because a gap
+    remains. Today's tree has no such import, so this test passes now and
+    only starts failing the day one is added -- through either
+    assertion."""
     core_root = Path(__file__).resolve().parent.parent / "core"
 
     assert check_dependency_purity(core_root) == []
@@ -1137,8 +1182,8 @@ def test_real_repository_core_imports_no_non_core_repository_local_package() -> 
 
     assert offenders == {}, (
         f"core/ imports repository-local package(s) outside core/ itself: {offenders}. "
-        "Neither check_dependency_purity (which allows any repository-local name) nor "
-        "check_repository (which only resolves domains for 'core.*' names) flags this."
+        "check_dependency_purity should already have failed the assertion above; if this "
+        "line is what caught it instead, that regressed."
     )
 
 
@@ -1153,10 +1198,10 @@ def test_format_purity_inventory_groups_by_package(tmp_path: Path) -> None:
 
     report = format_purity_inventory(check_dependency_purity(core_root))
 
-    assert "3 import(s) of 2 non-standard-library, non-repository package(s)" in report
+    assert "3 import(s) of 2 non-standard-library, non-'core' package(s)" in report
     assert f"{_FAKE_THIRD_PARTY}  (2 import(s))" in report
     assert "other_fictional_pkg  (1 import(s))" in report
-    assert "AD-005" in report
+    assert "AD-078" in report
 
 
 def test_format_purity_inventory_of_a_pure_tree_reports_success() -> None:

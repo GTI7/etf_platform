@@ -7,19 +7,23 @@ Two independent passes over ``core/`` each check one rule:
    ``format_inventory``. This is the "Import-direction lint" the
    architecture document itself specifies as one of the two enforcement
    mechanisms for domain boundaries (Section 5, "Enforcement", item 1).
-2. **Purity.** A dependency-purity rule motivated by AD-005 --
-   ``check_dependency_purity`` / ``format_purity_inventory``. What this
-   checker actually enforces is narrower than AD-005's own text: ``core/``
-   may import standard-library modules *or* repository-local modules, not
-   "standard library only" in the literal sense AD-005 states for the
-   whole codebase. AD-005 is this rule's motivation, not a claim that this
-   checker fully enforces AD-005 as written -- dependency direction
-   (rule 1, above) is a separate concern this rule does not fold in. Until
-   2026-07-28 even the narrower purity constraint was prose in a decision
-   record and nothing else; every import whose top-level name was not
-   ``core`` was simply not looked at, so ``import numpy`` inside
-   ``core/statistics`` would have been invisible to this tool and to the
-   suite.
+2. **Purity.** A dependency-purity rule motivated by AD-005 and stated at
+   ``core/``'s scope by AD-078 Section 3 -- ``check_dependency_purity`` /
+   ``format_purity_inventory``. What this checker actually enforces is
+   narrower than AD-005's own text: ``core/`` may import standard-library
+   modules *or* ``core.*`` modules, not "standard library only" in the
+   literal sense AD-005 states for the whole codebase. AD-005 is this
+   rule's motivation, not a claim that this checker fully enforces AD-005
+   as written -- dependency direction (rule 1, above) is a separate
+   concern this rule does not fold in. Until 2026-07-28 even the
+   narrower purity constraint was prose in a decision record and nothing
+   else; every import whose top-level name was not ``core`` was simply
+   not looked at, so ``import numpy`` inside ``core/statistics`` would
+   have been invisible to this tool and to the suite. A same-day second
+   change closed a narrower gap AD-078 Section 3 named directly: a
+   repository-local sibling of ``core`` (``import adapters`` inside
+   ``core/``) was accepted by this rule until then, checked only by a
+   single test rather than by this checker (AD-078 Known Weakness 2).
 
 The two rules are deliberately separate functions returning separate
 types. A third-party import has no domain and therefore no ``edge``;
@@ -125,19 +129,40 @@ into exactly one of three buckets, and there is no fourth:
   stdlib", which is why it is used instead of a hand-kept list: a
   hand-kept list is a thing to forget to update, and forgetting would
   reject a legal import rather than admit an illegal one only by luck.
-* **Repository-local** -- the name resolves to a package or module
-  directly under the repository root (``core_root``'s parent). Allowed
-  *here*; whether the import is allowed *at all* is rule 1's question,
-  and for ``core.*`` names rule 1 answers it against AD-068/AD-069.
-  Rule 2 deliberately does not re-litigate that.
-* **Everything else** -- a violation. This bucket is not "third-party
-  packages we thought of"; it is the complement of the first two, so an
-  unrecognized top-level name fails rather than falling through. No
-  package name is hardcoded anywhere in this module, and adding one
-  would be the bug: ``numpy``, ``scipy`` and ``pandas`` are rejected by
-  the same clause that rejects a name nobody has heard of. This is
-  AD-049 part 5's "resolved or rejected, never silently skipped"
-  applied to the dependency axis.
+* **``core`` itself** -- the top-level name equals ``core_root``'s own
+  name (``"core"`` on the real tree). Allowed *here*; whether a
+  particular ``core.<domain>`` target is allowed is rule 1's question,
+  and rule 1 answers it against AD-068/AD-069. Rule 2 deliberately does
+  not re-litigate that.
+* **Everything else** -- a violation, including a repository-local
+  sibling of ``core`` (``adapters``, ``experiments``, a future
+  ``workloads``, ...). This bucket is not "third-party packages we
+  thought of"; it is the complement of the first two, so an unrecognized
+  top-level name fails rather than falling through. No package name is
+  hardcoded anywhere in this module, and adding one would be the bug:
+  ``numpy``, ``scipy`` and ``pandas`` are rejected by the same clause
+  that rejects a name nobody has heard of. This is AD-049 part 5's
+  "resolved or rejected, never silently skipped" applied to the
+  dependency axis. ``ForeignImport.repository_local`` records, for
+  message purposes only, whether the rejected name is a real sibling
+  package (found by the same repository-local discovery used to resolve
+  rule 1's relative imports) or resolves to nothing in this repository
+  at all -- both are rejected identically; AD-078 Section 3 draws no
+  distinction between them.
+
+  Until 2026-07-28 this bucket held only genuinely unresolvable names: a
+  repository-local sibling of ``core`` was accepted here, on the
+  reasoning above that rule 1 was the place to police it. AD-078 Section
+  3 states the narrower rule directly -- "no repository-local package
+  other than ``core`` itself" -- and until this change that half of the
+  rule had exactly one enforcement mechanism, a single test
+  (`tests/test_import_boundaries.py::
+  test_real_repository_core_imports_no_non_core_repository_local_package`),
+  with no checker rule behind it (AD-078 Known Weakness 2). This is the
+  same purity flow, extended to answer rule 1's question after all for
+  this one case, not a second mechanism: repository-local discovery and
+  classification still happen in ``_repository_local_toplevel_names``,
+  called once, from this function alone.
 
 ``ast.walk`` descends the entire module body, so a *guarded* import
 (``try: import numpy / except ImportError:``), an ``if TYPE_CHECKING:``
@@ -498,7 +523,7 @@ def format_inventory(violations: list[Violation]) -> str:
 @dataclass(frozen=True)
 class ForeignImport:
     """One import in ``core/`` whose top-level name is neither standard
-    library nor repository-local.
+    library nor ``core`` itself (AD-078 Section 3).
 
     Distinct from ``Violation`` on purpose: this has no ``from_domain``,
     no ``to_domain`` and no ``edge``, because a package outside the
@@ -506,20 +531,34 @@ class ForeignImport:
     domain so it could share ``Violation`` would have put a name that is
     not a domain into ``format_inventory``'s edge grouping and into the
     ETF coupling inventory that ``tests/test_import_boundaries.py``
-    pins."""
+    pins.
+
+    ``repository_local`` distinguishes the two ways a name can land in
+    this bucket: a real sibling package under the repository root
+    (``adapters``, ``experiments``, a future ``workloads``, ...) versus a
+    name that resolves to nothing in this repository at all (a genuine
+    third-party package, or a typo). Both are AD-078 Section 3
+    violations for ``core/`` either way -- the flag only changes the
+    message, it never changes the verdict."""
 
     file: Path
     lineno: int
     imported_module: str
     top_level: str
+    repository_local: bool = False
 
     def __str__(self) -> str:
+        if self.repository_local:
+            return (
+                f"{self.file}:{self.lineno}: '{self.imported_module}' imports the "
+                f"repository-local package '{self.top_level}', not 'core' -- core/ imports "
+                "only the standard library and core.* (AD-078 Section 3)"
+            )
         return (
             f"{self.file}:{self.lineno}: '{self.imported_module}' is not importable from "
-            f"the standard library or from this repository -- top-level name "
-            f"'{self.top_level}' is neither in sys.stdlib_module_names nor a package or "
-            "module under the repository root. core/ imports only standard-library or "
-            "repository-local modules (AD-005)"
+            f"the standard library or from 'core' itself -- top-level name "
+            f"'{self.top_level}' is neither in sys.stdlib_module_names nor 'core'. "
+            "core/ imports only standard-library or core.* modules (AD-078 Section 3)"
         )
 
 
@@ -541,6 +580,15 @@ def _repository_local_toplevel_names(local_root: Path) -> frozenset[str]:
     third-party dependency the day it appears; it is also what makes the
     rule behave identically over a synthetic tree in ``tmp_path``, where
     `local_root` is the temporary directory, not this repository.
+
+    Since 2026-07-28 (AD-078 Section 3) this set no longer gates
+    ``check_dependency_purity``'s accept/reject decision for imports made
+    from inside ``core/`` -- only the name ``"core"`` itself does that
+    now. This function still runs and its result is still used, to mark
+    a rejected sibling import as ``ForeignImport.repository_local=True``
+    so the reported message can say "this is a real package next door,
+    just not the one core/ may import" instead of treating it exactly
+    like a typo or an uninstalled third-party name.
 
     Boundary, by design and not by oversight: only one level is examined.
     A directory qualifies as a package (``__init__.py``) or as a
@@ -584,24 +632,36 @@ def _absolute_imported_modules(tree: ast.AST) -> Iterator[tuple[str, int]]:
 
 def check_dependency_purity(core_root: Path = DEFAULT_CORE_ROOT) -> list[ForeignImport]:
     """Scan every ``.py`` file under `core_root` and return every import
-    that AD-005 forbids: one whose top-level name is neither standard
-    library nor resolvable inside this repository. Empty list means
-    ``core/`` depends on nothing but Python itself and its own tree.
+    that AD-078 Section 3 forbids: one whose top-level name is neither
+    standard library nor `core_root`'s own name (``"core"`` on the real
+    tree). Empty list means ``core/`` depends on nothing but Python
+    itself and ``core.*``.
 
     The repository root is taken to be `core_root`'s parent, which is
-    true of the real tree and of any synthetic one.
+    true of the real tree and of any synthetic one. A repository-local
+    sibling package (``adapters``, ``experiments``, ...) is *not*
+    accepted here even though ``_repository_local_toplevel_names`` finds
+    it -- that discovery is still used, but only to mark a violation as
+    ``repository_local`` for an accurate message, not to admit it.
+    AD-078 Section 3: "No repository-local package other than `core`
+    itself." Before 2026-07-28 this function accepted any repository-
+    local name, which left that half of the rule enforced by a single
+    test (`tests/test_import_boundaries.py::
+    test_real_repository_core_imports_no_non_core_repository_local_package`)
+    with no checker mechanism behind it -- AD-078 Known Weakness 2.
 
     Unlike ``check_repository`` this does not consult
     ``DOMAIN_OF_TOPLEVEL`` and so never raises ``UnmappedPackageError``:
     an unclassified package is a direction-rule error, and it must not
     also escape the purity rule while it stays unclassified."""
     local_names = _repository_local_toplevel_names(core_root.parent)
+    core_name = core_root.name
     foreign: list[ForeignImport] = []
     for file in _iter_python_files(core_root):
         tree = ast.parse(file.read_text(encoding="utf-8"), filename=str(file))
         for module, lineno in _absolute_imported_modules(tree):
             top_level = module.split(".")[0]
-            if top_level in _STDLIB_TOPLEVEL_NAMES or top_level in local_names:
+            if top_level in _STDLIB_TOPLEVEL_NAMES or top_level == core_name:
                 continue
             foreign.append(
                 ForeignImport(
@@ -609,6 +669,7 @@ def check_dependency_purity(core_root: Path = DEFAULT_CORE_ROOT) -> list[Foreign
                     lineno=lineno,
                     imported_module=module,
                     top_level=top_level,
+                    repository_local=top_level in local_names,
                 )
             )
     return foreign
@@ -622,7 +683,7 @@ def format_purity_inventory(foreign: list[ForeignImport]) -> str:
     if not foreign:
         return (
             "Dependency purity check passed: core/ imports only the standard "
-            "library and repository-local modules."
+            "library and core.* modules."
         )
 
     by_package: dict[str, list[ForeignImport]] = defaultdict(list)
@@ -631,8 +692,8 @@ def format_purity_inventory(foreign: list[ForeignImport]) -> str:
 
     lines = [
         f"Dependency purity check FAILED: {len(foreign)} import(s) of "
-        f"{len(by_package)} non-standard-library, non-repository package(s) -- "
-        "core/ imports only standard-library or repository-local modules (AD-005).",
+        f"{len(by_package)} non-standard-library, non-'core' package(s) -- "
+        "core/ imports only standard-library or core.* modules (AD-078 Section 3).",
         "",
     ]
     for package in sorted(by_package, key=lambda p: (-len(by_package[p]), p)):
