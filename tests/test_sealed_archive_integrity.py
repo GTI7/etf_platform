@@ -91,6 +91,14 @@ _REFERENCE_H4_UNSEALED_TOOLING = frozenset(
 # be exact rather than approximate.
 _OPEN_CYCLE_PILOT_SCRIPT = "experiments/positive_control_phase3_pilot.py"
 
+# `reference_h2` is likewise a different, still-open cycle (PRE_VALIDATION,
+# no logged construction attempt yet): its Gate 1 evidence-generation script
+# is excluded from the Phase-0 snapshot for the same reason as
+# `_OPEN_CYCLE_PILOT_SCRIPT` above, and it is not part of AD-075's boundary
+# either. Named here only so the "exactly two unprotected `reference_h4`
+# scripts" assertion below can be exact rather than approximate.
+_OPEN_CYCLE_H2_SCRIPT = "experiments/validate_h2_gate1_independence.py"
+
 SEALED_ARCHIVE_DIR = REPO_ROOT / "research_archive" / "reference_h4"
 
 
@@ -227,9 +235,12 @@ def test_reference_h4_unsealed_tooling_is_exactly_two_known_scripts() -> None:
         if path.relative_to(REPO_ROOT).as_posix() not in fixture_keys
     }
 
-    assert unprotected_scripts == _REFERENCE_H4_UNSEALED_TOOLING | {_OPEN_CYCLE_PILOT_SCRIPT}, (
+    assert unprotected_scripts == _REFERENCE_H4_UNSEALED_TOOLING | {
+        _OPEN_CYCLE_PILOT_SCRIPT,
+        _OPEN_CYCLE_H2_SCRIPT,
+    }, (
         f"the set of experiments/*.py scripts covered by no Phase-0 fixture entry has changed.\n"
-        f"expected: {sorted(_REFERENCE_H4_UNSEALED_TOOLING | {_OPEN_CYCLE_PILOT_SCRIPT})}\n"
+        f"expected: {sorted(_REFERENCE_H4_UNSEALED_TOOLING | {_OPEN_CYCLE_PILOT_SCRIPT, _OPEN_CYCLE_H2_SCRIPT})}\n"
         f"actual:   {sorted(unprotected_scripts)}\n"
         f"A new unprotected script is a new integrity gap. If it belongs to a cycle that has "
         f"closed and been sealed, it still cannot be sealed (the Seal covers research_archive/ "

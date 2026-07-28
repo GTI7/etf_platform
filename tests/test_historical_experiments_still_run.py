@@ -66,6 +66,33 @@ def test_validate_h3_gate1_independence_imports_and_computes_score_overlap() -> 
     assert result["n_etfs"] == 10
 
 
+def test_validate_h2_gate1_independence_imports_and_computes_h2_scores() -> None:
+    from datetime import date, timedelta
+
+    from experiments.validate_h2_gate1_independence import (
+        FORMATION_TRADING_DAYS,
+        SKIP_TRADING_DAYS,
+        compute_h2_scores,
+    )
+
+    synthetic_days = [date(2020, 1, 1) + timedelta(days=i) for i in range(300)]
+    synthetic_closes = {
+        "AAA": {d: 100.0 + i * 0.1 for i, d in enumerate(synthetic_days)},
+        "BBB": {d: 100.0 + i * 0.2 for i, d in enumerate(synthetic_days)},
+        "CCC": {d: 100.0 for i, d in enumerate(synthetic_days) if i > 100},
+    }
+
+    h2_scores = compute_h2_scores(synthetic_days, synthetic_closes)
+    last_day = synthetic_days[-1]
+
+    assert last_day in h2_scores
+    assert "AAA" in h2_scores[last_day] and "BBB" in h2_scores[last_day]
+    assert "CCC" not in h2_scores[last_day]  # missing formation-start close -- excluded
+    assert h2_scores[last_day]["BBB"] > h2_scores[last_day]["AAA"]
+    assert synthetic_days[0] not in h2_scores
+    assert synthetic_days[FORMATION_TRADING_DAYS + SKIP_TRADING_DAYS - 1] not in h2_scores
+
+
 def test_validate_h3_phase6_economic_validation_imports_and_computes_leg_returns() -> None:
     from experiments.validate_h3_phase6_economic_validation import _leg_returns
 
